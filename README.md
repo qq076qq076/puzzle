@@ -2,6 +2,10 @@
 
 遊戲入口頁與 2048 響應式網頁遊戲，支援桌面瀏覽器與手機瀏覽器。
 
+## Demo
+
+[開啟 GitHub Pages Demo](https://qq076qq076.github.io/puzzle/)
+
 ## 頁面
 
 - `index.html`：遊戲入口，目前列出 2048。
