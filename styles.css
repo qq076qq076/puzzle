@@ -675,33 +675,6 @@ h1 {
   line-height: 1.9;
 }
 
-.home-art {
-  position: relative;
-  display: grid;
-  width: min(100%, 470px);
-  aspect-ratio: 1.1;
-  place-items: center;
-  justify-self: end;
-}
-
-.home-art::before {
-  position: absolute;
-  width: 85%;
-  height: 85%;
-  border: 1px solid rgba(217, 81, 87, 0.17);
-  border-radius: 50%;
-  content: "";
-}
-
-.home-art-glow {
-  position: absolute;
-  width: 72%;
-  height: 72%;
-  border-radius: 50%;
-  background: rgba(248, 191, 164, 0.35);
-  filter: blur(8px);
-}
-
 .mini-board {
   position: relative;
   z-index: 1;
@@ -794,19 +767,6 @@ h1 {
   border-color: rgba(243, 107, 95, 0.22);
   box-shadow: 0 20px 42px rgba(95, 67, 75, 0.12);
   transform: translateY(-4px);
-}
-
-.game-card-visual {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 7px;
-  width: clamp(142px, 19vw, 186px);
-  aspect-ratio: 1;
-  flex: 0 0 auto;
-  padding: 10px;
-  border-radius: 18px;
-  background: var(--board);
-  transform: rotate(4deg);
 }
 
 .card-tile {
@@ -937,10 +897,6 @@ h1 {
     min-height: 0;
     gap: 27px;
     padding: 23px 20px 26px;
-  }
-
-  .game-card-visual {
-    width: min(180px, 54vw);
   }
 
   .game-card-index {
@@ -1335,30 +1291,6 @@ h1 {
 .one-a-two-b-footer-note span {
   color: var(--coral);
   font-size: 0.8rem;
-}
-
-.game-card-visual-clues {
-  grid-template-columns: repeat(3, 1fr);
-  background: #e5d5d0;
-}
-
-.clue-tile {
-  display: grid;
-  place-items: center;
-  border-radius: 8px;
-  color: var(--coral-deep);
-  background: #f8d9cc;
-  font-size: clamp(0.72rem, 1.5vw, 0.98rem);
-  font-weight: 850;
-}
-
-.clue-tile-b {
-  color: #75649b;
-  background: var(--lavender);
-}
-
-.clue-tile-empty {
-  background: rgba(255, 253, 249, 0.44);
 }
 
 @media (max-width: 800px) {
