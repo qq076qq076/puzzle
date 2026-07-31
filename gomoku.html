@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#fff7ed" />
+    <meta name="description" content="15×15 本機雙人五子棋，黑棋先手，連成五子即可獲勝。" />
+    <title>五子棋 · 連成五子</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="gomoku-page">
+    <main class="page-shell gomoku-shell">
+      <a class="back-link" href="index.html"><span aria-hidden="true">←</span> 所有遊戲</a>
+
+      <section class="gomoku-layout" aria-labelledby="gomoku-title">
+        <header class="gomoku-intro">
+          <div class="eyebrow"><span class="eyebrow-dot"></span> BOARD GAME · LOCAL TWO PLAYER</div>
+          <h1 id="gomoku-title">五子棋<span class="title-period">.</span></h1>
+          <p class="tagline">黑棋先行，<br />連成五子就贏。</p>
+          <p class="intro-copy">在 15×15 棋盤上輪流落子，封鎖對手的同時，為自己連出一條勝利的線。</p>
+
+          <div class="gomoku-rule-chips" aria-label="五子棋重點規則">
+            <div class="gomoku-rule-chip"><span class="gomoku-stone-dot stone-dot-black" aria-hidden="true"></span><span>黑棋先手</span></div>
+            <div class="gomoku-rule-chip"><span class="gomoku-stone-dot stone-dot-white" aria-hidden="true"></span><span>連成五子獲勝</span></div>
+          </div>
+        </header>
+
+        <section class="gomoku-panel" aria-label="五子棋遊戲">
+          <div class="gomoku-toolbar">
+            <div class="gomoku-turn-box">
+              <span class="score-label">TURN</span>
+              <strong id="current-player-label">黑棋</strong>
+            </div>
+            <div class="gomoku-toolbar-actions">
+              <span class="gomoku-move-count" id="move-count">0 手</span>
+              <button class="button button-primary" id="new-gomoku-game" type="button">重新開始 <span aria-hidden="true">↗</span></button>
+            </div>
+          </div>
+
+          <p class="gomoku-status is-black" id="gomoku-status" role="status" aria-live="polite">黑棋回合，請落子。</p>
+
+          <div class="gomoku-board-shell">
+            <div class="gomoku-board" id="gomoku-board" role="grid" aria-label="五子棋 15×15 棋盤"></div>
+          </div>
+
+          <div class="gomoku-board-meta">
+            <span>15 × 15 BOARD</span>
+            <span>BLACK FIRST</span>
+          </div>
+
+          <div class="gomoku-how-to">
+            <div class="how-to-icon" aria-hidden="true">●</div>
+            <div>
+              <strong>輪流落子</strong>
+              <span>點擊棋盤空位；橫、直、斜線皆可連成五子</span>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <footer class="page-footer">
+        <span>PLAY YOUR LINE</span>
+        <span class="footer-rule" aria-hidden="true"></span>
+        <span>每一步都在布局</span>
+      </footer>
+    </main>
+
+    <script src="gomoku.js"></script>
+  </body>
+</html>
