@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#fff7ed" />
+    <meta name="description" content="射飛刀：找準旋轉靶的空隙，完成每一關的挑戰。" />
+    <title>射飛刀 · Puzzle Club</title>
+    <link rel="stylesheet" href="../../styles.css" />
+  </head>
+  <body class="knife-throw-page">
+    <main class="page-shell knife-throw-shell">
+      <a class="back-link" href="../../index.html"><span aria-hidden="true">←</span> 回到遊戲列表</a>
+
+      <section class="knife-throw-layout" aria-labelledby="knife-throw-title">
+        <header class="knife-throw-intro">
+          <div class="eyebrow"><span class="eyebrow-dot"></span> TIMING GAME · FIND THE GAP</div>
+          <h1 id="knife-throw-title">射飛刀<span class="title-period">.</span></h1>
+          <p class="tagline">見縫插針，<br />一把都不能碰。</p>
+          <p class="intro-copy">把每一把飛刀插進旋轉靶，避開已經插上的刀。找準節奏，讓最後一把也安全落點。</p>
+
+          <div class="knife-throw-rule-chips" aria-label="遊戲規則摘要">
+            <div class="knife-throw-rule-chip"><strong>01</strong><span>每關 8 把飛刀</span></div>
+            <div class="knife-throw-rule-chip"><strong>02</strong><span>碰撞就要重來</span></div>
+          </div>
+        </header>
+
+        <section class="knife-throw-panel" aria-label="射飛刀遊戲">
+          <div class="knife-throw-toolbar">
+            <div class="knife-level-box"><span class="score-label">LEVEL</span><strong id="level-number">01</strong></div>
+            <div class="knife-score-box"><span class="score-label">SCORE</span><strong id="score">0</strong></div>
+            <button class="button button-quiet knife-restart-button" id="restart-level" type="button">重來</button>
+          </div>
+
+          <p class="knife-status is-ready" id="knife-status" role="status" aria-live="polite">找準空隙，點擊靶面或按 Space 發射。</p>
+
+          <div class="knife-stage" id="knife-stage" tabindex="0" role="application" aria-label="射飛刀遊戲區域">
+            <div class="knife-target" id="knife-target" aria-hidden="true">
+              <div class="knife-target-art"></div>
+              <div class="stuck-knives" id="stuck-knives"></div>
+            </div>
+            <div class="knife-flying-layer" id="knife-flying-layer" aria-hidden="true"></div>
+
+            <div class="knife-message" id="knife-message" hidden>
+              <div class="knife-message-card">
+                <span class="message-kicker" id="knife-message-kicker">NICE THROW</span>
+                <h2 id="knife-message-title">關卡完成！</h2>
+                <p id="knife-message-description">所有飛刀都安全插入了。</p>
+                <div class="knife-message-actions">
+                  <button class="button button-primary" id="knife-next-level" type="button">下一關 <span aria-hidden="true">↗</span></button>
+                  <button class="button button-quiet" id="knife-retry" type="button">再試一次</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="knife-tray-heading"><span class="section-kicker">KNIVES LEFT</span><strong id="knives-remaining">8 把</strong></div>
+          <div class="knife-tray" id="knife-tray" aria-label="剩餘飛刀"></div>
+          <button class="button button-primary knife-throw-button" id="throw-knife" type="button">射出飛刀 <span aria-hidden="true">↑</span></button>
+          <p class="knife-control-hint"><span aria-hidden="true">✦</span> 點擊靶面、按按鈕，或使用 Space／Enter</p>
+        </section>
+      </section>
+
+      <footer class="page-footer"><span>PUZZLE CLUB</span><span>FIND THE GAP · ONE THROW AT A TIME</span></footer>
+    </main>
+    <script src="script.js"></script>
+  </body>
+</html>
