@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#fff7ed" />
+    <meta name="description" content="單機版 1A2B 猜數字遊戲，找出電腦設定的四位數。" />
+    <title>1A2B · 找出電腦的數字</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="one-a-two-b-page">
+    <main class="page-shell one-a-two-b-shell">
+      <a class="back-link" href="index.html"><span aria-hidden="true">←</span> 所有遊戲</a>
+
+      <section class="one-a-two-b-layout" aria-labelledby="one-a-two-b-title">
+        <header class="one-a-two-b-intro">
+          <div class="eyebrow"><span class="eyebrow-dot"></span> LOGIC PUZZLE · 4 DIGITS</div>
+          <h1 id="one-a-two-b-title">1A2B<span class="title-period">.</span></h1>
+          <p class="tagline">猜出電腦藏起來的四位數。<br />每一次回答，都會留下線索。</p>
+          <p class="intro-copy">電腦已經準備好一組不重複的數字。根據 A 與 B 的提示，慢慢縮小答案範圍。</p>
+
+          <div class="one-a-two-b-rules" aria-label="1A2B 提示說明">
+            <div class="rule-chip"><strong>A</strong><span>數字與位置都正確</span></div>
+            <div class="rule-chip"><strong>B</strong><span>數字正確但位置不同</span></div>
+          </div>
+        </header>
+
+        <section class="one-a-two-b-panel" aria-label="1A2B 遊戲">
+          <div class="round-header">
+            <div class="round-number-box">
+              <span class="score-label">ROUND</span>
+              <strong id="round-number">01</strong>
+            </div>
+            <div class="round-status"><span class="status-dot" aria-hidden="true"></span><span id="round-status">題目已準備好</span></div>
+          </div>
+
+          <div class="guess-area">
+            <form id="guess-form" novalidate>
+              <label class="guess-label" for="guess-input">輸入你的猜測</label>
+              <div class="guess-controls">
+                <input class="guess-input" id="guess-input" name="guess" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="0000" autocomplete="off" aria-describedby="guess-help guess-status" />
+                <button class="button button-primary" type="submit">送出回答 <span aria-hidden="true">↗</span></button>
+              </div>
+              <p class="guess-help" id="guess-help">4 位數字不可重複，可使用 0 作為第一位</p>
+            </form>
+            <p class="guess-status" id="guess-status" role="status" aria-live="polite">電腦已出題，開始猜吧。</p>
+
+            <div class="number-pad" aria-label="數字鍵盤">
+              <span class="number-pad-label">NUMBER PAD</span>
+              <div class="number-pad-grid">
+                <button class="number-key" type="button" data-digit="1">1</button>
+                <button class="number-key" type="button" data-digit="2">2</button>
+                <button class="number-key" type="button" data-digit="3">3</button>
+                <button class="number-key" type="button" data-digit="4">4</button>
+                <button class="number-key" type="button" data-digit="5">5</button>
+                <button class="number-key" type="button" data-digit="6">6</button>
+                <button class="number-key" type="button" data-digit="7">7</button>
+                <button class="number-key" type="button" data-digit="8">8</button>
+                <button class="number-key" type="button" data-digit="9">9</button>
+                <button class="number-key number-key-clear" id="clear-guess" type="button">清除</button>
+                <button class="number-key" type="button" data-digit="0">0</button>
+              </div>
+            </div>
+
+            <button class="button button-quiet next-round-button" id="next-round" type="button" hidden>開始下一題 <span aria-hidden="true">↗</span></button>
+          </div>
+
+          <div class="record-heading">
+            <div>
+              <span class="section-kicker">YOUR CLUES</span>
+              <h2>回答紀錄</h2>
+            </div>
+            <span class="record-count" id="record-count">0 次</span>
+          </div>
+
+          <ol class="record-list" id="record-list" aria-label="回答紀錄">
+            <li class="record-empty" id="record-empty">還沒有回答，先猜一組 4 位數字吧。</li>
+          </ol>
+
+          <div class="one-a-two-b-footer-note"><span aria-hidden="true">✦</span> 答對後保留紀錄，按下按鈕再開始下一題</div>
+        </section>
+      </section>
+
+      <footer class="page-footer">
+        <span>KEEP THINKING</span>
+        <span class="footer-rule" aria-hidden="true"></span>
+        <span>每一個提示都重要</span>
+      </footer>
+    </main>
+
+    <script src="1a2b.js"></script>
+  </body>
+</html>
