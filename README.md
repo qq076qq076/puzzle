@@ -15,7 +15,7 @@
 - `games/knife-throw/`：單機射飛刀／見縫插針遊戲、素材與規則文件。
 - `games/subaracity/`：單機 SubaraCity 合併城市遊戲、建築素材與規則文件。
 - `games/petri-dish/`：2D Canvas 菌境培養皿遊戲、十種菌種、環境屬性與顏色互動規劃文件。
-- `games/microorganism/`：250×250 Canvas 微生物爬行遊戲與第一種黑色微生物規劃文件。
+- `games/microorganism/`：180×180 Canvas 微生物爬行遊戲與第一種黑色微生物規劃文件。
 
 ## 執行
 

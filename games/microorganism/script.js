@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const GRID_SIZE = 250;
+  const GRID_SIZE = 180;
   const TICK_MS = 250;
   const CANVAS_SIZE = 1250;
   const BODY_SIZE = 5;
@@ -110,6 +110,9 @@
 
   function updateUi() {
     const center = centerOfBody();
+    canvas.dataset.gridSize = String(GRID_SIZE);
+    canvas.dataset.bodySize = String(microbe ? microbe.cells.size : 0);
+    canvas.dataset.bodyConnected = String(Boolean(microbe && isConnected(microbe.cells)));
     statusValue.textContent = !microbe ? "等待放置" : paused ? "已暫停" : "正在移動";
     volumeValue.textContent = `${microbe ? microbe.cells.size : 0} / ${BODY_SIZE}`;
     stepsValue.textContent = String(microbe ? microbe.steps : 0);
@@ -284,6 +287,35 @@
     return Array.from(candidates);
   }
 
+  function isConnected(cellSet) {
+    if (cellSet.size === 0) return true;
+    const firstCell = cellSet.values().next().value;
+    const visited = new Set([firstCell]);
+    const pending = [firstCell];
+
+    while (pending.length) {
+      const current = pending.pop();
+      neighborsOf(current).forEach((neighbor) => {
+        if (cellSet.has(neighbor) && !visited.has(neighbor)) {
+          visited.add(neighbor);
+          pending.push(neighbor);
+        }
+      });
+    }
+
+    return visited.size === cellSet.size;
+  }
+
+  function getConnectedRetractions(newCell) {
+    return neighborsOf(newCell).filter((oldCell) => {
+      if (!microbe.cells.has(oldCell)) return false;
+      const nextCells = new Set(microbe.cells);
+      nextCells.add(newCell);
+      nextCells.delete(oldCell);
+      return isConnected(nextCells);
+    });
+  }
+
   function stepMicrobe() {
     if (!microbe || paused) return;
 
@@ -295,11 +327,20 @@
       return;
     }
 
-    const newCell = randomItem(candidates);
-    const retractableCells = neighborsOf(newCell).filter((index) => microbe.cells.has(index));
-    if (retractableCells.length === 0) return;
+    const movementOptions = candidates
+      .map((newCell) => ({ newCell, retractableCells: getConnectedRetractions(newCell) }))
+      .filter((option) => option.retractableCells.length > 0);
+    if (movementOptions.length === 0) {
+      setBoardStatus("等待能維持連通的鄰近格，身體維持原狀。");
+      addEvent(`第 ${microbe.steps + 1} 次更新：沒有能維持連通的移動。`);
+      render();
+      return;
+    }
 
-    const oldCell = randomItem(retractableCells);
+    const movement = randomItem(movementOptions);
+    const newCell = movement.newCell;
+    const oldCell = randomItem(movement.retractableCells);
+
     microbe.cells.add(newCell);
     microbe.cells.delete(oldCell);
     microbe.steps += 1;
