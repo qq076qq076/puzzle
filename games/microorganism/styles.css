@@ -299,6 +299,103 @@
   margin-top: 14px;
 }
 
+.micro-type-picker {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--micro-soft-line);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.38);
+}
+
+.micro-type-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.micro-type-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid rgba(23, 23, 23, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.48);
+  color: var(--micro-ink);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+}
+
+.micro-type-option:hover {
+  border-color: rgba(23, 23, 23, 0.34);
+  background: #fff;
+  transform: translateY(-1px);
+}
+
+.micro-type-option.is-selected {
+  border-color: var(--micro-ink);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: inset 0 0 0 1px var(--micro-ink);
+}
+
+.micro-type-option:focus-visible {
+  outline: 3px solid rgba(200, 78, 59, 0.24);
+  outline-offset: 3px;
+}
+
+.micro-type-option b,
+.micro-type-option small {
+  display: block;
+  min-width: 0;
+}
+
+.micro-type-option b {
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.micro-type-option small {
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--micro-muted);
+  font-size: 0.62rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.micro-type-swatch {
+  position: relative;
+  display: block;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border-radius: 9px;
+}
+
+.micro-type-swatch.is-black {
+  background: #111;
+  box-shadow: 4px 4px 0 rgba(17, 17, 17, 0.1);
+}
+
+.micro-type-swatch.is-green {
+  background: #58c96d;
+  box-shadow: 4px 4px 0 rgba(33, 141, 67, 0.12);
+}
+
+.micro-type-swatch.is-green::after {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #0b5c2b;
+  content: "";
+}
+
 .micro-info-card {
   min-width: 0;
   padding: 16px;
@@ -337,6 +434,11 @@
   border-radius: 9px;
   background: #111;
   box-shadow: 5px 5px 0 rgba(17, 17, 17, 0.1);
+}
+
+.microbe-swatch.is-green {
+  background: #58c96d;
+  box-shadow: 5px 5px 0 rgba(33, 141, 67, 0.12);
 }
 
 .microbe-swatch-row p {
@@ -488,6 +590,10 @@
   }
 
   .micro-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .micro-type-options {
     grid-template-columns: 1fr;
   }
 }

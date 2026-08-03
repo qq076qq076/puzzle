@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#f5f0e9" />
-    <meta name="description" content="microorganism：觀察多隻黑色四格微生物在 150×150 網格中每 150 毫秒爬行。" />
+    <meta name="description" content="microorganism：在 150×150 網格中放置黑色與綠色四格微生物，觀察它們依各自節奏爬行。" />
     <title>microorganism · Puzzle Club</title>
     <link rel="stylesheet" href="../../styles.css" />
     <link rel="stylesheet" href="styles.css" />
@@ -18,12 +18,12 @@
           <div class="micro-eyebrow"><span class="micro-eyebrow-dot"></span> CELL MOTION LAB · 150 × 150</div>
           <h1 id="micro-title">microorganism<span>.</span></h1>
           <p class="micro-tagline">小小一隻，<br /><em>持續爬行。</em></p>
-          <p class="micro-copy">在空白區反覆點擊，放下多隻黑色微生物，看它們每 150 毫秒各自從身體邊緣延伸一格，再把鄰近的舊格收回。</p>
+          <p class="micro-copy">先選擇微生物，再在空白區反覆點擊放置。黑色微生物每 150 毫秒從身體邊緣延伸；綠色條蟲每 250 毫秒只由頭部往相鄰格前進。</p>
 
           <div class="micro-rule-chips" aria-label="遊戲規則摘要">
             <div><strong>150²</strong><span>邏輯培養格</span></div>
-            <div><strong>05</strong><span>固定身體格數</span></div>
-            <div><strong>150 MS</strong><span>一次移動間隔</span></div>
+            <div><strong>04</strong><span>固定身體格數</span></div>
+            <div><strong>150/250 MS</strong><span>菌種移動間隔</span></div>
           </div>
         </header>
 
@@ -34,7 +34,7 @@
               <div class="micro-stat"><span>MICROBES</span><strong id="micro-count">0</strong></div>
               <div class="micro-stat"><span>VOLUME</span><strong id="micro-volume">0 格</strong></div>
               <div class="micro-stat"><span>MOVES</span><strong id="micro-steps">0</strong></div>
-              <div class="micro-stat"><span>INTERVAL</span><strong>150ms</strong></div>
+              <div class="micro-stat"><span>INTERVAL</span><strong id="micro-interval">150ms</strong></div>
             </div>
             <div class="micro-actions">
               <button class="micro-button" id="pause-button" type="button" disabled>暫停</button>
@@ -43,7 +43,7 @@
           </div>
 
           <div class="micro-board-heading">
-            <p class="micro-board-status" id="micro-board-status" role="status" aria-live="polite">點擊空白區放置黑色微生物，可放置多隻。</p>
+            <p class="micro-board-status" id="micro-board-status" role="status" aria-live="polite">選擇微生物後，點擊空白區放置，可放置多隻。</p>
             <span class="micro-coordinate" id="micro-coordinate">座標 —</span>
           </div>
 
@@ -53,19 +53,36 @@
           </div>
 
           <div class="micro-info-grid">
+            <section class="micro-type-picker" aria-labelledby="micro-type-title">
+              <div class="micro-section-heading">
+                <span class="micro-section-kicker">SELECT MICROBE</span>
+                <strong id="micro-type-title">選擇微生物</strong>
+              </div>
+              <div class="micro-type-options">
+                <button class="micro-type-option is-selected" type="button" data-type="black" aria-label="選擇黑色微生物" aria-pressed="true">
+                  <span class="micro-type-swatch is-black" aria-hidden="true"></span>
+                  <span><b>黑色微生物</b><small>4 格 · 150ms · 身體延伸</small></span>
+                </button>
+                <button class="micro-type-option" type="button" data-type="green" aria-label="選擇綠色條蟲" aria-pressed="false">
+                  <span class="micro-type-swatch is-green" aria-hidden="true"></span>
+                  <span><b>綠色條蟲</b><small>4 格 · 250ms · 頭部前進</small></span>
+                </button>
+              </div>
+            </section>
+
             <section class="micro-info-card" aria-labelledby="microbe-info-title">
               <div class="micro-section-heading">
-                <span class="micro-section-kicker">BLACK MICROBE COLONY</span>
-                <strong id="microbe-info-title">多隻黑色微生物</strong>
+                <span class="micro-section-kicker">SELECTED MICROBE</span>
+                <strong id="microbe-info-title">黑色微生物選項</strong>
               </div>
               <div class="microbe-swatch-row">
-                <span class="microbe-swatch" aria-hidden="true"></span>
-                <p>每隻固定佔用四格，從自己的身體鄰近空格中隨機選擇下一格，並避開其他微生物。</p>
+                <span class="microbe-swatch is-black" id="microbe-info-swatch" aria-hidden="true"></span>
+                <p id="microbe-info-copy">四格連通身體，從整個身體邊緣隨機延伸並收回一格。</p>
               </div>
               <dl class="micro-detail-list">
                 <div><dt>單隻體積</dt><dd id="micro-body-size">4 格</dd></div>
                 <div><dt>最後放置中心</dt><dd id="micro-center">—</dd></div>
-                <div><dt>移動方式</dt><dd>每隻延伸／收回一格</dd></div>
+                <div><dt>移動方式</dt><dd id="micro-movement-mode">身體鄰近隨機延伸／收回</dd></div>
               </dl>
             </section>
 
@@ -80,12 +97,12 @@
             </section>
           </div>
 
-          <p class="micro-help"><span aria-hidden="true">✦</span> 點擊空白區可放置多隻；Space 暫停／繼續，R 重置。移入畫面可查看 150×150 邏輯座標。</p>
+          <p class="micro-help"><span aria-hidden="true">✦</span> 選擇菌種後點擊空白區可放置多隻；Space 暫停／繼續，R 重置。移入畫面可查看 150×150 邏輯座標。</p>
         </section>
       </section>
 
       <footer class="page-footer micro-footer"><span>PUZZLE CLUB</span><span>GROW SMALL · MOVE OFTEN</span></footer>
     </main>
-    <script src="script.js?v=4-cell"></script>
+    <script src="script.js?v=green-250"></script>
   </body>
 </html>

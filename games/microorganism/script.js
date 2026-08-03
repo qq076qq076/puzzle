@@ -3,7 +3,7 @@
 
   const CONFIG = Object.freeze({
     gridSize: 150,
-    tickMs: 150,
+    baseTickMs: 50,
     canvasSize: 1250,
     trailDurationMs: 520,
     moveAnimationMs: 115,
@@ -23,13 +23,40 @@
       name: "黑色微生物",
       color: "#111111",
       bodySize: 4,
+      tickMs: 150,
       movement: "random-connected-crawl",
       seedOffsets: Object.freeze([
         { x: 0, y: 0 },
         { x: 0, y: -1 },
         { x: 1, y: 0 },
         { x: -1, y: 0 }
-      ])
+      ]),
+      description: "四格連通身體，從整個身體邊緣隨機延伸並收回一格。",
+      movementLabel: "身體鄰近隨機延伸／收回"
+    }),
+    green: Object.freeze({
+      id: "green",
+      name: "綠色條蟲",
+      color: "#58c96d",
+      headColor: "#218d43",
+      bodySize: 4,
+      tickMs: 250,
+      movement: "head-random-crawl",
+      seedOffsets: Object.freeze([
+        { x: 0, y: 0 },
+        { x: -1, y: 0 },
+        { x: -2, y: 0 },
+        { x: -3, y: 0 }
+      ]),
+      orderOffsets: Object.freeze([
+        { x: 0, y: 0 },
+        { x: -1, y: 0 },
+        { x: -2, y: 0 },
+        { x: -3, y: 0 }
+      ]),
+      headOffset: { x: 0, y: 0 },
+      description: "條狀身體，頭部每 250ms 往相鄰空格隨機前進一格。",
+      movementLabel: "頭部相鄰隨機一格"
     })
   });
 
@@ -42,6 +69,12 @@
   const volumeValue = document.querySelector("#micro-volume");
   const stepsValue = document.querySelector("#micro-steps");
   const bodySizeValue = document.querySelector("#micro-body-size");
+  const intervalValue = document.querySelector("#micro-interval");
+  const infoTitle = document.querySelector("#microbe-info-title");
+  const infoCopy = document.querySelector("#microbe-info-copy");
+  const infoSwatch = document.querySelector("#microbe-info-swatch");
+  const movementModeValue = document.querySelector("#micro-movement-mode");
+  const typeButtons = Array.from(document.querySelectorAll(".micro-type-option"));
   const boardStatus = document.querySelector("#micro-board-status");
   const coordinateValue = document.querySelector("#micro-coordinate");
   const centerValue = document.querySelector("#micro-center");
@@ -106,12 +139,26 @@
       .map((point) => indexOf(point.x, point.y));
   }
 
-  function getPlacementCells(center, type) {
-    const safeCenter = {
-      x: Math.max(1, Math.min(CONFIG.gridSize - 2, center.x)),
-      y: Math.max(1, Math.min(CONFIG.gridSize - 2, center.y))
+  function getPlacementAnchor(center, type) {
+    const xOffsets = type.seedOffsets.map((offset) => offset.x);
+    const yOffsets = type.seedOffsets.map((offset) => offset.y);
+    const minX = -Math.min(...xOffsets);
+    const maxX = CONFIG.gridSize - 1 - Math.max(...xOffsets);
+    const minY = -Math.min(...yOffsets);
+    const maxY = CONFIG.gridSize - 1 - Math.max(...yOffsets);
+    return {
+      x: Math.max(minX, Math.min(maxX, center.x)),
+      y: Math.max(minY, Math.min(maxY, center.y))
     };
-    return new Set(type.seedOffsets.map((offset) => indexOf(safeCenter.x + offset.x, safeCenter.y + offset.y)));
+  }
+
+  function getPlacementCells(center, type) {
+    const anchor = getPlacementAnchor(center, type);
+    return new Set(type.seedOffsets.map((offset) => indexOf(anchor.x + offset.x, anchor.y + offset.y)));
+  }
+
+  function getCellsFromOffsets(anchor, offsets) {
+    return offsets.map((offset) => indexOf(anchor.x + offset.x, anchor.y + offset.y));
   }
 
   function centerOfBody(microbe) {
@@ -135,6 +182,19 @@
 
   function setBoardStatus(message) {
     boardStatus.textContent = message;
+  }
+
+  function selectMicrobeType(typeId) {
+    const type = MICROBE_TYPES[typeId];
+    if (!type) return;
+    state.selectedTypeId = typeId;
+    typeButtons.forEach((button) => {
+      const isSelected = button.dataset.type === typeId;
+      button.classList.toggle("is-selected", isSelected);
+      button.setAttribute("aria-pressed", String(isSelected));
+    });
+    setBoardStatus(`${type.name}已選取，每格移動間隔 ${type.tickMs}ms。`);
+    setDirty();
   }
 
   function addEvent(message) {
@@ -194,6 +254,7 @@
     const latestMicrobe = state.microbes[state.microbes.length - 1] || null;
     const latestCenter = centerOfBody(latestMicrobe);
     const totalVolume = getTotalVolume();
+    const selectedType = MICROBE_TYPES[state.selectedTypeId];
 
     canvas.dataset.gridSize = String(CONFIG.gridSize);
     canvas.dataset.microbeCount = String(state.microbes.length);
@@ -204,6 +265,14 @@
     volumeValue.textContent = `${totalVolume} 格`;
     stepsValue.textContent = String(state.totalMoves);
     if (bodySizeValue) bodySizeValue.textContent = latestMicrobe ? `${latestMicrobe.type.bodySize} 格` : "4 格";
+    if (intervalValue) intervalValue.textContent = `${selectedType.tickMs}ms`;
+    if (infoTitle) infoTitle.textContent = `${selectedType.name}選項`;
+    if (infoCopy) infoCopy.textContent = selectedType.description;
+    if (infoSwatch) {
+      infoSwatch.classList.toggle("is-black", selectedType.id === "black");
+      infoSwatch.classList.toggle("is-green", selectedType.id === "green");
+    }
+    if (movementModeValue) movementModeValue.textContent = selectedType.movementLabel;
     pauseButton.disabled = !state.microbes.length;
     pauseButton.textContent = state.paused ? "繼續" : "暫停";
     centerValue.textContent = latestCenter ? `#${latestMicrobe.id} · (${latestCenter.x}, ${latestCenter.y})` : "—";
@@ -241,6 +310,15 @@
   function drawCell(index, fillStyle, inset, radius) {
     const point = pointOf(index);
     drawCellAt(context, point.x, point.y, fillStyle, inset, radius);
+  }
+
+  function drawHeadMarkerAt(xCell, yCell, type) {
+    if (!type.headColor) return;
+    const cellSize = CONFIG.canvasSize / CONFIG.gridSize;
+    context.fillStyle = "rgba(8, 62, 28, 0.85)";
+    context.beginPath();
+    context.arc((xCell + 0.34) * cellSize, (yCell + 0.34) * cellSize, Math.max(1.2, cellSize * 0.08), 0, Math.PI * 2);
+    context.fill();
   }
 
   function buildGridCache() {
@@ -296,19 +374,28 @@
         : 1;
 
       microbe.cells.forEach((index) => {
+        const isHead = index === microbe.head;
+        const cellColor = isHead && microbe.type.headColor ? microbe.type.headColor : microbe.type.color;
         if (visualMove && index === visualMove.newCell) {
           const from = pointOf(visualMove.oldCell);
           const to = pointOf(visualMove.newCell);
+          const visualX = from.x + (to.x - from.x) * progress;
+          const visualY = from.y + (to.y - from.y) * progress;
           drawCellAt(
             context,
-            from.x + (to.x - from.x) * progress,
-            from.y + (to.y - from.y) * progress,
-            microbe.type.color,
+            visualX,
+            visualY,
+            cellColor,
             0.45,
             0.9
           );
+          if (isHead) drawHeadMarkerAt(visualX, visualY, microbe.type);
         } else {
-          drawCell(index, microbe.type.color, 0.45, 0.9);
+          drawCell(index, cellColor, 0.45, 0.9);
+          if (isHead) {
+            const point = pointOf(index);
+            drawHeadMarkerAt(point.x, point.y, microbe.type);
+          }
         }
       });
 
@@ -371,6 +458,11 @@
     }
     const cells = getPlacementCells(center, type);
     if (Array.from(cells).some((index) => state.occupancy.has(index))) return null;
+    const anchor = getPlacementAnchor(center, type);
+    const bodyOrder = type.orderOffsets ? getCellsFromOffsets(anchor, type.orderOffsets) : null;
+    const head = type.headOffset
+      ? indexOf(anchor.x + type.headOffset.x, anchor.y + type.headOffset.y)
+      : null;
 
     const microbe = {
       id: state.nextMicrobeId,
@@ -379,7 +471,10 @@
       cells,
       steps: 0,
       connected: true,
-      visualMove: null
+      visualMove: null,
+      moveAccumulator: 0,
+      bodyOrder,
+      head
     };
     state.nextMicrobeId += 1;
     state.microbes.push(microbe);
@@ -398,8 +493,8 @@
     }
 
     state.paused = false;
-    addEvent(`黑色微生物 #${microbe.id} 放置完成，佔用 ${microbe.type.bodySize} 格。`);
-    setBoardStatus(`已放置 ${state.microbes.length} 隻微生物，每隻每 150 毫秒隨機爬行。`);
+    addEvent(`${microbe.type.name} #${microbe.id} 放置完成，佔用 ${microbe.type.bodySize} 格。`);
+    setBoardStatus(`已放置 ${state.microbes.length} 隻微生物，${microbe.type.name}每 ${microbe.type.tickMs} 毫秒移動。`);
     state.accumulator = 0;
     setDirty();
   }
@@ -455,8 +550,42 @@
     return true;
   }
 
+  function moveHeadRandom(microbe, now) {
+    if (microbe.head === null || !microbe.bodyOrder) return false;
+    const candidates = neighborsOf(microbe.head).filter((index) => {
+      return !microbe.cells.has(index) && !state.occupancy.has(index);
+    });
+    if (!candidates.length) return false;
+
+    const newHead = randomItem(candidates);
+    const oldHead = microbe.head;
+    const oldTail = microbe.bodyOrder[microbe.bodyOrder.length - 1];
+    releaseCell(microbe, oldTail);
+    microbe.cells.delete(oldTail);
+    microbe.bodyOrder = [newHead, ...microbe.bodyOrder.slice(0, -1)];
+    microbe.cells.add(newHead);
+    microbe.head = newHead;
+    state.occupancy.set(newHead, microbe.id);
+    microbe.steps += 1;
+    microbe.connected = isConnected(microbe.cells);
+    microbe.visualMove = {
+      oldCell: oldHead,
+      newCell: newHead,
+      startedAt: now,
+      duration: CONFIG.moveAnimationMs
+    };
+    state.trail.push({
+      oldCell: oldHead,
+      newCell: newHead,
+      expiresAt: now + CONFIG.trailDurationMs
+    });
+    state.totalMoves += 1;
+    return true;
+  }
+
   const MOVEMENT_STRATEGIES = Object.freeze({
-    "random-connected-crawl": moveRandomConnected
+    "random-connected-crawl": moveRandomConnected,
+    "head-random-crawl": moveHeadRandom
   });
 
   function stepAllMicrobes(now) {
@@ -466,14 +595,17 @@
     let movedCount = 0;
 
     movementOrder.forEach((microbe) => {
+      microbe.moveAccumulator += CONFIG.baseTickMs;
+      if (microbe.moveAccumulator < microbe.type.tickMs) return;
+      microbe.moveAccumulator -= microbe.type.tickMs;
       const moveStrategy = MOVEMENT_STRATEGIES[microbe.type.movement];
       if (moveStrategy && moveStrategy(microbe, now)) movedCount += 1;
     });
 
     state.trail = state.trail.filter((move) => move.expiresAt > now);
     refreshConnectivity();
-    setBoardStatus(`第 ${state.tickCount} 次更新：${movedCount}/${state.microbes.length} 隻微生物移動，總體積 ${getTotalVolume()} 格。`);
-    if (state.tickCount === 1 || state.tickCount % 5 === 0) {
+    if (movedCount > 0) setBoardStatus(`第 ${state.tickCount} 次模擬更新：${movedCount}/${state.microbes.length} 隻微生物移動，總體積 ${getTotalVolume()} 格。`);
+    if (movedCount > 0 && (state.tickCount === 1 || state.tickCount % 5 === 0)) {
       addEvent(`第 ${state.tickCount} 次更新：${movedCount}/${state.microbes.length} 隻微生物完成移動。`);
     }
     setDirty();
@@ -487,8 +619,8 @@
     if (!state.paused && state.microbes.length) {
       state.accumulator += elapsed;
       let catchUpTicks = 0;
-      while (state.accumulator >= CONFIG.tickMs && catchUpTicks < CONFIG.maxCatchUpTicks) {
-        state.accumulator -= CONFIG.tickMs;
+      while (state.accumulator >= CONFIG.baseTickMs && catchUpTicks < CONFIG.maxCatchUpTicks) {
+        state.accumulator -= CONFIG.baseTickMs;
         stepAllMicrobes(now);
         catchUpTicks += 1;
       }
@@ -512,7 +644,7 @@
       setBoardStatus("已暫停；所有微生物保持目前四格身體。");
       addEvent("培養區暫停，所有微生物保持原位。");
     } else {
-      setBoardStatus("已繼續，所有微生物每 150 毫秒隨機爬行。");
+      setBoardStatus("已繼續，所有微生物依各自選項的間隔隨機爬行。");
       addEvent("培養區繼續運作。");
     }
     setDirty();
@@ -528,7 +660,8 @@
     state.accumulator = 0;
     state.trail = [];
     state.allConnected = true;
-    setBoardStatus("點擊空白區放置黑色微生物，可放置多隻。");
+    const selectedType = MICROBE_TYPES[state.selectedTypeId];
+    setBoardStatus(`點擊空白區放置${selectedType.name}，可放置多隻。`);
     eventLog.innerHTML = "";
     addEvent("等待放置第一隻微生物。");
     setDirty();
@@ -552,6 +685,9 @@
 
   pauseButton.addEventListener("click", togglePause);
   restartButton.addEventListener("click", resetGame);
+  typeButtons.forEach((button) => {
+    button.addEventListener("click", () => selectMicrobeType(button.dataset.type));
+  });
 
   window.addEventListener("keydown", (event) => {
     if (event.key === " " || event.code === "Space") {
