@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#fff7ed" />
+    <meta name="description" content="SubaraCity：合併相同顏色的城市建築，打造最高人口與等級。" />
+    <title>SubaraCity · Puzzle Club</title>
+    <link rel="stylesheet" href="../../styles.css" />
+  </head>
+  <body class="subaracity-page">
+    <main class="page-shell subaracity-shell">
+      <a class="back-link" href="../../index.html"><span aria-hidden="true">←</span> 回到遊戲列表</a>
+
+      <section class="subaracity-layout" aria-labelledby="subaracity-title">
+        <header class="subaracity-intro">
+          <div class="eyebrow"><span class="eyebrow-dot"></span> CITY MERGE · BUILD YOUR FUTURE</div>
+          <h1 id="subaracity-title">Subara<span class="title-period">City.</span></h1>
+          <p class="tagline">一座城市，<br />每一次合併都重要。</p>
+          <p class="intro-copy">連起相同顏色的建築，讓它們升級成更大的城市。留住空間，也留住下一次合併的可能。</p>
+
+          <div class="subaracity-rule-chips" aria-label="遊戲規則摘要">
+            <div class="subaracity-rule-chip"><strong>01</strong><span>5 × 6 城市棋盤</span></div>
+            <div class="subaracity-rule-chip"><strong>02</strong><span>合併後可留在點選位置</span></div>
+            <div class="subaracity-rule-chip"><strong>03</strong><span>Lv.10 後挑戰白色建築</span></div>
+          </div>
+        </header>
+
+        <section class="subaracity-panel" aria-label="SubaraCity 遊戲">
+          <div class="subaracity-toolbar">
+            <div class="subaracity-metrics">
+              <div class="subaracity-stat"><span class="score-label">YEAR</span><strong id="year">2000</strong></div>
+              <div class="subaracity-stat is-population"><span class="score-label">POPULATION</span><strong id="population">0</strong></div>
+              <div class="subaracity-stat"><span class="score-label">HIGHEST</span><strong id="highest-level">L1</strong></div>
+            </div>
+            <button class="button button-quiet subaracity-restart" id="restart-game" type="button">重來</button>
+          </div>
+
+          <div class="subaracity-board-shell">
+            <div class="subaracity-board-heading">
+              <p class="subaracity-status is-ready" id="city-status" role="status" aria-live="polite">找一片相同顏色的建築，開始你的城市。</p>
+              <span class="subaracity-best" id="best-population">BEST POPULATION 0</span>
+            </div>
+
+            <div class="subaracity-board" id="city-board" role="grid" aria-label="5×6 城市棋盤"></div>
+
+            <div class="subaracity-gameover" id="city-gameover" hidden>
+              <div class="subaracity-gameover-card">
+                <span class="message-kicker">CITY REPORT</span>
+                <h2>城市暫停營運。</h2>
+                <p id="gameover-description">已經沒有可合併的建築了。</p>
+                <button class="button button-primary" id="gameover-restart" type="button">再建一座城市 <span aria-hidden="true">↗</span></button>
+              </div>
+            </div>
+          </div>
+
+          <div class="subaracity-actions">
+            <div class="subaracity-mayor-copy">
+              <span class="section-kicker">MAYOR MARKS</span>
+              <strong id="mayor-hint">清出一格，讓城市繼續成長。</strong>
+            </div>
+            <button class="button button-quiet subaracity-mayor-button" id="mayor-button" type="button" aria-pressed="false">市長標記 <span id="mayor-count">2</span></button>
+          </div>
+
+          <p class="subaracity-control-hint"><span aria-hidden="true">✦</span> 點選同色連通建築，合併後會留在你點選的格子；市長標記可清除建築</p>
+        </section>
+      </section>
+
+      <footer class="page-footer"><span>PUZZLE CLUB</span><span>GROW SMALL · BUILD BIG</span></footer>
+    </main>
+    <script src="script.js"></script>
+  </body>
+</html>
