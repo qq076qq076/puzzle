@@ -22,13 +22,12 @@
       id: "black",
       name: "黑色微生物",
       color: "#111111",
-      bodySize: 5,
+      bodySize: 4,
       movement: "random-connected-crawl",
       seedOffsets: Object.freeze([
         { x: 0, y: 0 },
         { x: 0, y: -1 },
         { x: 1, y: 0 },
-        { x: 0, y: 1 },
         { x: -1, y: 0 }
       ])
     })
@@ -154,6 +153,10 @@
     state.allConnected = state.microbes.length > 0 && state.microbes.every((microbe) => microbe.connected);
   }
 
+  function getTotalVolume() {
+    return state.microbes.reduce((total, microbe) => total + microbe.type.bodySize, 0);
+  }
+
   function claimCells(microbe, cells) {
     cells.forEach((index) => state.occupancy.set(index, microbe.id));
   }
@@ -189,7 +192,7 @@
   function updateUi() {
     const latestMicrobe = state.microbes[state.microbes.length - 1] || null;
     const latestCenter = centerOfBody(latestMicrobe);
-    const totalVolume = state.microbes.reduce((total, microbe) => total + microbe.type.bodySize, 0);
+    const totalVolume = getTotalVolume();
 
     canvas.dataset.gridSize = String(CONFIG.gridSize);
     canvas.dataset.microbeCount = String(state.microbes.length);
@@ -384,7 +387,7 @@
     const microbe = createMicrobe(state.selectedTypeId, center);
     if (!microbe) {
       setBoardStatus("這裡已有微生物，請點擊沒有被佔用的空白區。");
-      addEvent("放置失敗：五格種子區與既有微生物重疊。");
+      addEvent("放置失敗：四格種子區與既有微生物重疊。");
       setDirty();
       return;
     }
@@ -464,7 +467,7 @@
 
     state.trail = state.trail.filter((move) => move.expiresAt > now);
     refreshConnectivity();
-    setBoardStatus(`第 ${state.tickCount} 次更新：${movedCount}/${state.microbes.length} 隻微生物移動，總體積 ${state.microbes.length * 5} 格。`);
+    setBoardStatus(`第 ${state.tickCount} 次更新：${movedCount}/${state.microbes.length} 隻微生物移動，總體積 ${getTotalVolume()} 格。`);
     if (state.tickCount === 1 || state.tickCount % 5 === 0) {
       addEvent(`第 ${state.tickCount} 次更新：${movedCount}/${state.microbes.length} 隻微生物完成移動。`);
     }
@@ -501,7 +504,7 @@
     state.paused = !state.paused;
     state.accumulator = 0;
     if (state.paused) {
-      setBoardStatus("已暫停；所有微生物保持目前五格身體。");
+      setBoardStatus("已暫停；所有微生物保持目前四格身體。");
       addEvent("培養區暫停，所有微生物保持原位。");
     } else {
       setBoardStatus("已繼續，所有微生物每 150 毫秒隨機爬行。");
