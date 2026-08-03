@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f5f0e9" />
+    <meta name="description" content="microorganism：觀察一隻黑色五格微生物在 250×250 網格中每 250 毫秒爬行。" />
+    <title>microorganism · Puzzle Club</title>
+    <link rel="stylesheet" href="../../styles.css" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="micro-page">
+    <main class="page-shell micro-shell">
+      <a class="back-link micro-back-link" href="../../index.html"><span aria-hidden="true">←</span> 回到遊戲列表</a>
+
+      <section class="micro-layout" aria-labelledby="micro-title">
+        <header class="micro-intro">
+          <div class="micro-eyebrow"><span class="micro-eyebrow-dot"></span> CELL MOTION LAB · 250 × 250</div>
+          <h1 id="micro-title">microorganism<span>.</span></h1>
+          <p class="micro-tagline">小小一隻，<br /><em>持續爬行。</em></p>
+          <p class="micro-copy">放下一隻黑色微生物，看它每 250 毫秒從身體邊緣延伸一格，再把鄰近的舊格收回。</p>
+
+          <div class="micro-rule-chips" aria-label="遊戲規則摘要">
+            <div><strong>250²</strong><span>邏輯培養格</span></div>
+            <div><strong>05</strong><span>固定身體格數</span></div>
+            <div><strong>250 MS</strong><span>一次移動間隔</span></div>
+          </div>
+        </header>
+
+        <section class="micro-panel" aria-label="microorganism 遊戲">
+          <div class="micro-toolbar">
+            <div class="micro-metrics">
+              <div class="micro-stat"><span>STATUS</span><strong id="micro-status">等待放置</strong></div>
+              <div class="micro-stat"><span>VOLUME</span><strong id="micro-volume">0 / 5</strong></div>
+              <div class="micro-stat"><span>STEPS</span><strong id="micro-steps">0</strong></div>
+              <div class="micro-stat"><span>INTERVAL</span><strong>250ms</strong></div>
+            </div>
+            <div class="micro-actions">
+              <button class="micro-button" id="pause-button" type="button" disabled>暫停</button>
+              <button class="micro-button" id="restart-button" type="button">重置</button>
+            </div>
+          </div>
+
+          <div class="micro-board-heading">
+            <p class="micro-board-status" id="micro-board-status" role="status" aria-live="polite">點擊培養區放置黑色微生物。</p>
+            <span class="micro-coordinate" id="micro-coordinate">座標 —</span>
+          </div>
+
+          <div class="micro-board-frame">
+            <canvas id="microbe-canvas" width="1250" height="1250" tabindex="0" role="application" aria-label="250×250 微生物培養區"></canvas>
+            <div class="micro-board-corner" aria-hidden="true"><span></span><span></span><span></span></div>
+          </div>
+
+          <div class="micro-info-grid">
+            <section class="micro-info-card" aria-labelledby="microbe-info-title">
+              <div class="micro-section-heading">
+                <span class="micro-section-kicker">CURRENT MICROBE</span>
+                <strong id="microbe-info-title">黑色微生物</strong>
+              </div>
+              <div class="microbe-swatch-row">
+                <span class="microbe-swatch" aria-hidden="true"></span>
+                <p>固定佔用五格，從所有身體鄰近空格中隨機選擇下一格。</p>
+              </div>
+              <dl class="micro-detail-list">
+                <div><dt>目前中心</dt><dd id="micro-center">—</dd></div>
+                <div><dt>移動方式</dt><dd>延伸一格／收回一格</dd></div>
+              </dl>
+            </section>
+
+            <section class="micro-info-card micro-log-card" aria-labelledby="micro-log-title">
+              <div class="micro-section-heading">
+                <span class="micro-section-kicker">MOTION LOG</span>
+                <strong id="micro-log-title">最近移動</strong>
+              </div>
+              <ol class="micro-event-log" id="micro-event-log" aria-live="polite">
+                <li><span class="micro-event-dot"></span><span>等待放置第一隻微生物。</span></li>
+              </ol>
+            </section>
+          </div>
+
+          <p class="micro-help"><span aria-hidden="true">✦</span> 點擊培養區放置；Space 暫停／繼續，R 重置。移入畫面可查看 250×250 邏輯座標。</p>
+        </section>
+      </section>
+
+      <footer class="page-footer micro-footer"><span>PUZZLE CLUB</span><span>GROW SMALL · MOVE OFTEN</span></footer>
+    </main>
+    <script src="script.js"></script>
+  </body>
+</html>

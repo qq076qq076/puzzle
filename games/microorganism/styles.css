@@ -1,0 +1,492 @@
+.micro-page {
+  --micro-ink: #171717;
+  --micro-muted: #837c77;
+  --micro-paper: rgba(255, 253, 249, 0.78);
+  --micro-line: rgba(23, 23, 23, 0.11);
+  --micro-soft-line: rgba(23, 23, 23, 0.06);
+  --micro-accent: #c84e3b;
+  --micro-yellow: #e2b348;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(242, 205, 173, 0.28), transparent 25rem),
+    radial-gradient(circle at 92% 76%, rgba(205, 211, 203, 0.26), transparent 26rem),
+    #f5f0e9;
+  color: var(--micro-ink);
+}
+
+.micro-shell {
+  width: min(1180px, calc(100% - 48px));
+  padding-top: clamp(30px, 6vw, 68px);
+}
+
+.micro-back-link span {
+  color: var(--micro-accent);
+}
+
+.micro-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.7fr) minmax(560px, 1.3fr);
+  align-items: start;
+  gap: clamp(34px, 6vw, 92px);
+  flex: 1;
+  padding-top: clamp(34px, 7vw, 84px);
+}
+
+.micro-intro {
+  position: sticky;
+  top: 24px;
+  padding: 12px 0 36px;
+}
+
+.micro-eyebrow,
+.micro-section-kicker,
+.micro-stat span,
+.micro-footer {
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.micro-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--micro-accent);
+  font-size: 0.65rem;
+  font-weight: 850;
+}
+
+.micro-eyebrow-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--micro-ink);
+  box-shadow: 0 0 0 4px rgba(23, 23, 23, 0.08);
+}
+
+.micro-intro h1 {
+  margin: 20px 0 24px;
+  color: var(--micro-ink);
+  font-size: clamp(2.35rem, 5vw, 4.8rem);
+  font-weight: 900;
+  letter-spacing: -0.08em;
+  line-height: 0.94;
+  overflow-wrap: anywhere;
+}
+
+.micro-intro h1 span {
+  color: var(--micro-accent);
+}
+
+.micro-tagline {
+  margin: 0;
+  color: #5f5852;
+  font-size: clamp(1.5rem, 3vw, 2.55rem);
+  font-weight: 850;
+  letter-spacing: -0.06em;
+  line-height: 1.04;
+}
+
+.micro-tagline em {
+  color: var(--micro-accent);
+  font-style: normal;
+}
+
+.micro-copy {
+  max-width: 29rem;
+  margin: 24px 0 0;
+  color: var(--micro-muted);
+  font-size: 0.92rem;
+  line-height: 1.9;
+}
+
+.micro-rule-chips {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 36px;
+}
+
+.micro-rule-chips div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px 10px;
+  border-top: 1px solid var(--micro-line);
+}
+
+.micro-rule-chips strong {
+  color: var(--micro-ink);
+  font-size: 0.93rem;
+  letter-spacing: -0.03em;
+}
+
+.micro-rule-chips span {
+  color: var(--micro-muted);
+  font-size: 0.62rem;
+  line-height: 1.3;
+}
+
+.micro-panel {
+  min-width: 0;
+  padding: clamp(18px, 3vw, 30px);
+  border: 1px solid rgba(23, 23, 23, 0.08);
+  border-radius: 24px;
+  background: var(--micro-paper);
+  box-shadow: 0 26px 80px rgba(68, 52, 39, 0.11);
+}
+
+.micro-toolbar,
+.micro-board-heading,
+.micro-section-heading,
+.microbe-swatch-row,
+.micro-detail-list div {
+  display: flex;
+  align-items: center;
+}
+
+.micro-toolbar {
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--micro-line);
+}
+
+.micro-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(10px, 2vw, 24px);
+  min-width: 0;
+  flex: 1;
+}
+
+.micro-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.micro-stat span {
+  color: var(--micro-muted);
+  font-size: 0.55rem;
+  font-weight: 850;
+}
+
+.micro-stat strong {
+  overflow: hidden;
+  color: var(--micro-ink);
+  font-size: clamp(0.78rem, 1.5vw, 0.96rem);
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.micro-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.micro-button {
+  min-width: 64px;
+  padding: 9px 12px;
+  border: 1px solid rgba(23, 23, 23, 0.15);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.56);
+  color: var(--micro-ink);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 800;
+  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+}
+
+.micro-button:hover:not(:disabled) {
+  border-color: var(--micro-ink);
+  background: #fff;
+  transform: translateY(-1px);
+}
+
+.micro-button:focus-visible {
+  outline: 3px solid rgba(200, 78, 59, 0.24);
+  outline-offset: 3px;
+}
+
+.micro-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.micro-board-heading {
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 0 14px;
+}
+
+.micro-board-status {
+  min-height: 1.5em;
+  margin: 0;
+  color: var(--micro-muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.micro-coordinate {
+  flex: 0 0 auto;
+  color: var(--micro-ink);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.micro-board-frame {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 1;
+  border: 1px solid rgba(23, 23, 23, 0.12);
+  border-radius: 17px;
+  background: #eee8df;
+  box-shadow: inset 0 0 0 7px rgba(255, 255, 255, 0.28), 0 14px 30px rgba(50, 39, 29, 0.08);
+}
+
+#microbe-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+#microbe-canvas:focus-visible {
+  outline: 3px solid rgba(200, 78, 59, 0.33);
+  outline-offset: -3px;
+}
+
+.micro-board-corner {
+  position: absolute;
+  inset: 12px;
+  pointer-events: none;
+}
+
+.micro-board-corner span {
+  position: absolute;
+  width: 13px;
+  height: 13px;
+  border-color: rgba(23, 23, 23, 0.5);
+  border-style: solid;
+}
+
+.micro-board-corner span:nth-child(1) {
+  top: 0;
+  left: 0;
+  border-width: 1px 0 0 1px;
+}
+
+.micro-board-corner span:nth-child(2) {
+  top: 0;
+  right: 0;
+  border-width: 1px 1px 0 0;
+}
+
+.micro-board-corner span:nth-child(3) {
+  right: 0;
+  bottom: 0;
+  border-width: 0 1px 1px 0;
+}
+
+.micro-info-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.micro-info-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--micro-soft-line);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.38);
+}
+
+.micro-section-heading {
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 15px;
+}
+
+.micro-section-kicker {
+  color: var(--micro-muted);
+  font-size: 0.55rem;
+  font-weight: 850;
+}
+
+.micro-section-heading strong {
+  color: var(--micro-ink);
+  font-size: 0.78rem;
+}
+
+.microbe-swatch-row {
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.microbe-swatch {
+  display: block;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border-radius: 9px;
+  background: #111;
+  box-shadow: 5px 5px 0 rgba(17, 17, 17, 0.1);
+}
+
+.microbe-swatch-row p {
+  margin: 0;
+  color: var(--micro-muted);
+  font-size: 0.72rem;
+  line-height: 1.65;
+}
+
+.micro-detail-list {
+  display: grid;
+  gap: 8px;
+  margin: 18px 0 0;
+}
+
+.micro-detail-list div {
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--micro-soft-line);
+}
+
+.micro-detail-list dt,
+.micro-detail-list dd {
+  margin: 0;
+  font-size: 0.68rem;
+}
+
+.micro-detail-list dt {
+  color: var(--micro-muted);
+}
+
+.micro-detail-list dd {
+  color: var(--micro-ink);
+  font-weight: 750;
+  text-align: right;
+}
+
+.micro-event-log {
+  display: grid;
+  gap: 8px;
+  max-height: 123px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.micro-event-log li {
+  display: grid;
+  grid-template-columns: 7px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  color: var(--micro-muted);
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+
+.micro-event-dot {
+  width: 6px;
+  height: 6px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--micro-ink);
+}
+
+.micro-help {
+  display: flex;
+  gap: 8px;
+  margin: 18px 0 0;
+  color: var(--micro-muted);
+  font-size: 0.69rem;
+  line-height: 1.6;
+}
+
+.micro-help span {
+  color: var(--micro-accent);
+}
+
+.micro-footer {
+  color: var(--micro-muted);
+}
+
+@media (max-width: 900px) {
+  .micro-layout {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+
+  .micro-intro {
+    position: static;
+    padding-bottom: 0;
+  }
+
+  .micro-copy {
+    max-width: 39rem;
+  }
+}
+
+@media (max-width: 620px) {
+  .micro-shell {
+    width: min(100% - 28px, 560px);
+    padding-top: 24px;
+  }
+
+  .micro-layout {
+    padding-top: 34px;
+  }
+
+  .micro-intro h1 {
+    font-size: clamp(2.1rem, 11vw, 3.5rem);
+  }
+
+  .micro-rule-chips {
+    margin-top: 24px;
+  }
+
+  .micro-rule-chips div {
+    padding: 10px 7px;
+  }
+
+  .micro-panel {
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  .micro-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .micro-metrics {
+    width: 100%;
+  }
+
+  .micro-actions {
+    width: 100%;
+  }
+
+  .micro-button {
+    flex: 1;
+  }
+
+  .micro-board-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .micro-info-grid {
+    grid-template-columns: 1fr;
+  }
+}
