@@ -8,12 +8,13 @@
 
 ## 頁面
 
-- `index.html`：遊戲入口，目前列出 2048、1A2B、五子棋、射飛刀與 SubaraCity。
+- `index.html`：遊戲入口，目前列出 2048、1A2B、五子棋、射飛刀、SubaraCity 與菌境。
 - `games/2048/`：2048 遊戲本體與規則文件。
 - `games/1a2b/`：單機版 1A2B 遊戲與規則文件，電腦自動出題。
 - `games/gomoku/`：15×15 本機雙人五子棋與規則文件。
 - `games/knife-throw/`：單機射飛刀／見縫插針遊戲、素材與規則文件。
 - `games/subaracity/`：單機 SubaraCity 合併城市遊戲、建築素材與規則文件。
+- `games/petri-dish/`：2D Canvas 菌境培養皿遊戲、十種菌種、環境屬性與顏色互動規劃文件。
 
 ## 執行
 

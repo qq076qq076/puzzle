@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#10182b" />
+    <meta name="description" content="菌境：在 2D 培養皿中培養十種菌種，觀察環境改造、擴散、吸收與顏色互動。" />
+    <title>菌境 · Puzzle Club</title>
+    <link rel="stylesheet" href="../../styles.css" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="petri-page">
+    <main class="page-shell petri-shell">
+      <a class="back-link petri-back-link" href="../../index.html"><span aria-hidden="true">←</span> 回到遊戲列表</a>
+
+      <section class="petri-layout" aria-labelledby="petri-title">
+        <header class="petri-intro">
+          <div class="petri-eyebrow"><span class="petri-eyebrow-dot"></span> 2D CULTURE LAB · COLOR REACTION</div>
+          <h1 id="petri-title">菌境<span>.</span></h1>
+          <p class="petri-tagline">讓顏色，<br />自己長出答案。</p>
+          <p class="petri-copy">選一種菌，放下一小片種子，看它從核心向外擴散，或和鄰居碰撞出全新的顏色。</p>
+
+          <div class="petri-rule-chips" aria-label="遊戲規則摘要">
+            <div><strong>120²</strong><span>細緻 2D 培養皿</span></div>
+            <div><strong>5×5</strong><span>小範圍種子落菌</span></div>
+            <div><strong>05 SEC</strong><span>一次培養脈衝</span></div>
+          </div>
+        </header>
+
+        <section class="petri-panel" aria-label="菌境遊戲">
+          <div class="petri-toolbar">
+            <div class="petri-metrics">
+              <div class="petri-stat"><span>TIME</span><strong id="petri-time">00:00</strong></div>
+              <div class="petri-stat"><span>COVERAGE</span><strong id="petri-coverage">0%</strong></div>
+              <div class="petri-stat"><span>MIXED</span><strong id="petri-mixed">0</strong></div>
+              <div class="petri-stat is-pulse"><span>NEXT PULSE</span><strong id="petri-pulse">5.0s</strong></div>
+            </div>
+            <div class="petri-toolbar-actions">
+              <button class="petri-small-button" id="pause-button" type="button">暫停</button>
+              <button class="petri-small-button" id="restart-button" type="button">重置</button>
+            </div>
+          </div>
+
+          <div class="petri-board-area">
+            <div class="petri-board-heading">
+              <p class="petri-status is-ready" id="petri-status" role="status" aria-live="polite">選一種菌，放下一片種子。</p>
+              <span class="petri-score" id="petri-score">SCORE 0</span>
+            </div>
+
+            <section class="petri-inspector" aria-live="polite" aria-label="游標所在格環境資訊">
+              <div class="petri-inspector-heading">
+                <span class="petri-section-kicker">CELL ENVIRONMENT</span>
+                <strong id="cell-inspector-title">等待游標</strong>
+              </div>
+              <div class="petri-environment-values">
+                <div class="petri-environment-value is-temperature"><span>溫度</span><strong id="cell-temperature">24°C</strong></div>
+                <div class="petri-environment-value is-brightness"><span>亮度</span><strong id="cell-brightness">45</strong></div>
+                <div class="petri-environment-value is-ph"><span>酸鹼 pH</span><strong id="cell-ph">7.0</strong></div>
+                <div class="petri-environment-value is-colony"><span>菌落</span><strong id="cell-colony">空白格</strong></div>
+              </div>
+              <p class="petri-inspector-note" id="cell-inspector-note">移動游標查看格子的環境、菌種與進入快照。</p>
+            </section>
+
+            <div class="petri-dish-frame">
+              <div class="petri-dish-glass" id="petri-dish" aria-label="120×120 2D 培養皿">
+                <canvas id="dish-base" width="720" height="720" aria-hidden="true"></canvas>
+                <canvas id="dish-color" width="720" height="720" aria-hidden="true"></canvas>
+                <canvas id="dish-effects" width="720" height="720" aria-hidden="true"></canvas>
+                <canvas id="dish-preview" width="720" height="720" tabindex="0" role="application" aria-label="培養皿操作區"></canvas>
+                <div class="petri-pulse-ring" aria-hidden="true"></div>
+                <div class="petri-dish-label" aria-hidden="true"><span>LIVE</span><span>120 × 120</span></div>
+              </div>
+              <div class="petri-dish-corner" aria-hidden="true"><span></span><span></span><span></span></div>
+            </div>
+          </div>
+
+          <div class="petri-controls">
+            <section class="petri-palette" aria-labelledby="palette-title">
+              <div class="petri-section-heading">
+                <span class="petri-section-kicker">SELECT CULTURE</span>
+                <strong id="palette-title">選擇菌種</strong>
+              </div>
+              <div class="petri-species-list" id="species-list">
+                <button class="petri-species is-selected" type="button" data-species="A" aria-label="選擇 A 蔓延菌">
+                  <span class="species-orb is-green" aria-hidden="true">A</span><span><b>A · 蔓延菌</b><small>向外擴散</small></span>
+                </button>
+                <button class="petri-species" type="button" data-species="B" aria-label="選擇 B 吸收菌">
+                  <span class="species-orb is-blue" aria-hidden="true">B</span><span><b>B · 吸收菌</b><small>向內吸收</small></span>
+                </button>
+                <button class="petri-species" type="button" data-species="C" aria-label="選擇 C 催化菌">
+                  <span class="species-orb is-yellow" aria-hidden="true">C</span><span><b>C · 催化菌</b><small>加速鄰居</small></span>
+                </button>
+                <button class="petri-species" type="button" data-species="D" aria-label="選擇 D 爆裂菌">
+                  <span class="species-orb is-red" aria-hidden="true">D</span><span><b>D · 爆裂菌</b><small>五秒爆發</small></span>
+                </button>
+                <button class="petri-species" type="button" data-species="E" aria-label="選擇 E 結晶菌">
+                  <span class="species-orb is-purple" aria-hidden="true">E</span><span><b>E · 結晶菌</b><small>建立屏障</small></span>
+                </button>
+                <button class="petri-species" type="button" data-species="F" aria-label="選擇 F 冷凝菌">
+                  <span class="species-orb is-cyan" aria-hidden="true">F</span><span><b>F · 冷凝菌</b><small>降低溫度</small></span>
+                </button>
+                <button class="petri-species" type="button" data-species="G" aria-label="選擇 G 緩衝菌">
+                  <span class="species-orb is-lime" aria-hidden="true">G</span><span><b>G · 緩衝菌</b><small>中和 pH</small></span>
+                </button>
+                <button class="petri-species" type="button" data-species="H" aria-label="選擇 H 暗行菌">
+                  <span class="species-orb is-indigo" aria-hidden="true">H</span><span><b>H · 暗行菌</b><small>吸收亮度</small></span>
+                </button>
+                <button class="petri-species" type="button" data-species="I" aria-label="選擇 I 播孢菌">
+                  <span class="species-orb is-orange" aria-hidden="true">I</span><span><b>I · 播孢菌</b><small>遠距播種</small></span>
+                </button>
+                <button class="petri-species" type="button" data-species="J" aria-label="選擇 J 轉化菌">
+                  <span class="species-orb is-pink" aria-hidden="true">J</span><span><b>J · 轉化菌</b><small>模仿屬性</small></span>
+                </button>
+              </div>
+              <p class="petri-selection-hint" id="selection-hint">A 菌會從 5×5 種子區向外長出綠色邊界。</p>
+            </section>
+
+            <aside class="petri-log-panel" aria-labelledby="log-title">
+              <div class="petri-section-heading">
+                <span class="petri-section-kicker">REACTION LOG</span>
+                <strong id="log-title">最近反應</strong>
+              </div>
+              <ol class="petri-event-log" id="event-log" aria-live="polite">
+                <li><span class="event-dot is-green"></span><span>培養皿已準備，等待第一片菌落。</span></li>
+              </ol>
+            </aside>
+          </div>
+
+          <p class="petri-help"><span aria-hidden="true">✦</span> 選擇菌種後點擊培養皿；游標會預覽 5×5 種子區與可能的混色反應。</p>
+        </section>
+      </section>
+
+      <footer class="page-footer petri-footer"><span>PUZZLE CLUB</span><span>GROW SMALL · REACT BIG</span></footer>
+    </main>
+    <script src="script.js"></script>
+  </body>
+</html>
