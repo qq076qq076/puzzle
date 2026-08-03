@@ -1,27 +1,43 @@
 (() => {
   "use strict";
 
-  const GRID_SIZE = 150;
-  const TICK_MS = 150;
-  const CANVAS_SIZE = 1250;
-  const BODY_SIZE = 5;
-  const TRAIL_LENGTH = 8;
+  const CONFIG = Object.freeze({
+    gridSize: 150,
+    tickMs: 150,
+    canvasSize: 1250,
+    trailDurationMs: 520,
+    moveAnimationMs: 115,
+    maxCatchUpTicks: 4
+  });
+
   const DIRECTIONS = [
     { x: 0, y: -1 },
     { x: 1, y: 0 },
     { x: 0, y: 1 },
     { x: -1, y: 0 }
   ];
-  const INITIAL_OFFSETS = [
-    { x: 0, y: 0 },
-    { x: 0, y: -1 },
-    { x: 1, y: 0 },
-    { x: 0, y: 1 },
-    { x: -1, y: 0 }
-  ];
+
+  const MICROBE_TYPES = Object.freeze({
+    black: Object.freeze({
+      id: "black",
+      name: "黑色微生物",
+      color: "#111111",
+      bodySize: 5,
+      movement: "random-connected-crawl",
+      seedOffsets: Object.freeze([
+        { x: 0, y: 0 },
+        { x: 0, y: -1 },
+        { x: 1, y: 0 },
+        { x: 0, y: 1 },
+        { x: -1, y: 0 }
+      ])
+    })
+  });
 
   const canvas = document.querySelector("#microbe-canvas");
   const context = canvas.getContext("2d");
+  const gridCanvas = document.createElement("canvas");
+  const gridContext = gridCanvas.getContext("2d");
   const statusValue = document.querySelector("#micro-status");
   const countValue = document.querySelector("#micro-count");
   const volumeValue = document.querySelector("#micro-volume");
@@ -33,35 +49,53 @@
   const pauseButton = document.querySelector("#pause-button");
   const restartButton = document.querySelector("#restart-button");
 
-  let microbes = [];
-  let nextMicrobeId = 1;
-  let paused = true;
-  let timerId = null;
-  let hoverCell = null;
-  let tickCount = 0;
-  let totalMoves = 0;
-  let trail = [];
+  const state = {
+    microbes: [],
+    occupancy: new Map(),
+    nextMicrobeId: 1,
+    selectedTypeId: "black",
+    paused: true,
+    tickCount: 0,
+    totalMoves: 0,
+    accumulator: 0,
+    lastFrameAt: null,
+    frameId: null,
+    hoverCell: null,
+    trail: [],
+    renderDirty: true,
+    allConnected: true
+  };
 
-  canvas.width = CANVAS_SIZE;
-  canvas.height = CANVAS_SIZE;
+  canvas.width = CONFIG.canvasSize;
+  canvas.height = CONFIG.canvasSize;
+  gridCanvas.width = CONFIG.canvasSize;
+  gridCanvas.height = CONFIG.canvasSize;
 
   function indexOf(x, y) {
-    return y * GRID_SIZE + x;
+    return y * CONFIG.gridSize + x;
   }
 
   function pointOf(index) {
     return {
-      x: index % GRID_SIZE,
-      y: Math.floor(index / GRID_SIZE)
+      x: index % CONFIG.gridSize,
+      y: Math.floor(index / CONFIG.gridSize)
     };
   }
 
   function isInside(x, y) {
-    return x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE;
+    return x >= 0 && x < CONFIG.gridSize && y >= 0 && y < CONFIG.gridSize;
   }
 
   function randomItem(items) {
     return items[Math.floor(Math.random() * items.length)];
+  }
+
+  function shuffle(items) {
+    for (let index = items.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(Math.random() * (index + 1));
+      [items[index], items[swapIndex]] = [items[swapIndex], items[index]];
+    }
+    return items;
   }
 
   function neighborsOf(index) {
@@ -72,12 +106,12 @@
       .map((point) => indexOf(point.x, point.y));
   }
 
-  function getPlacementCells(center) {
+  function getPlacementCells(center, type) {
     const safeCenter = {
-      x: Math.max(1, Math.min(GRID_SIZE - 2, center.x)),
-      y: Math.max(1, Math.min(GRID_SIZE - 2, center.y))
+      x: Math.max(1, Math.min(CONFIG.gridSize - 2, center.x)),
+      y: Math.max(1, Math.min(CONFIG.gridSize - 2, center.y))
     };
-    return new Set(INITIAL_OFFSETS.map((offset) => indexOf(safeCenter.x + offset.x, safeCenter.y + offset.y)));
+    return new Set(type.seedOffsets.map((offset) => indexOf(safeCenter.x + offset.x, safeCenter.y + offset.y)));
   }
 
   function centerOfBody(microbe) {
@@ -93,6 +127,10 @@
       x: Math.round(x / microbe.cells.size),
       y: Math.round(y / microbe.cells.size)
     };
+  }
+
+  function setDirty() {
+    state.renderDirty = true;
   }
 
   function setBoardStatus(message) {
@@ -112,13 +150,21 @@
     }
   }
 
-  function getOccupiedCells(excludedMicrobeId) {
-    const occupied = new Set();
-    microbes.forEach((microbe) => {
-      if (microbe.id === excludedMicrobeId) return;
-      microbe.cells.forEach((index) => occupied.add(index));
-    });
-    return occupied;
+  function refreshConnectivity() {
+    state.allConnected = state.microbes.length > 0 && state.microbes.every((microbe) => microbe.connected);
+  }
+
+  function claimCells(microbe, cells) {
+    cells.forEach((index) => state.occupancy.set(index, microbe.id));
+  }
+
+  function releaseCell(microbe, index) {
+    if (state.occupancy.get(index) === microbe.id) state.occupancy.delete(index);
+  }
+
+  function isCellFree(index, microbeId) {
+    const owner = state.occupancy.get(index);
+    return owner === undefined || owner === microbeId;
   }
 
   function isConnected(cellSet) {
@@ -141,24 +187,24 @@
   }
 
   function updateUi() {
-    const latestMicrobe = microbes[microbes.length - 1] || null;
+    const latestMicrobe = state.microbes[state.microbes.length - 1] || null;
     const latestCenter = centerOfBody(latestMicrobe);
-    const allConnected = microbes.length > 0 && microbes.every((microbe) => isConnected(microbe.cells));
+    const totalVolume = state.microbes.reduce((total, microbe) => total + microbe.type.bodySize, 0);
 
-    canvas.dataset.gridSize = String(GRID_SIZE);
-    canvas.dataset.microbeCount = String(microbes.length);
-    canvas.dataset.bodySize = String(microbes.length ? BODY_SIZE : 0);
-    canvas.dataset.bodyConnected = String(allConnected);
-    statusValue.textContent = !microbes.length ? "等待放置" : paused ? "已暫停" : "正在移動";
-    countValue.textContent = String(microbes.length);
-    volumeValue.textContent = `${microbes.length * BODY_SIZE} 格`;
-    stepsValue.textContent = String(totalMoves);
-    pauseButton.disabled = !microbes.length;
-    pauseButton.textContent = paused ? "繼續" : "暫停";
+    canvas.dataset.gridSize = String(CONFIG.gridSize);
+    canvas.dataset.microbeCount = String(state.microbes.length);
+    canvas.dataset.bodySize = String(latestMicrobe ? latestMicrobe.type.bodySize : 0);
+    canvas.dataset.bodyConnected = String(state.allConnected);
+    statusValue.textContent = !state.microbes.length ? "等待放置" : state.paused ? "已暫停" : "正在移動";
+    countValue.textContent = String(state.microbes.length);
+    volumeValue.textContent = `${totalVolume} 格`;
+    stepsValue.textContent = String(state.totalMoves);
+    pauseButton.disabled = !state.microbes.length;
+    pauseButton.textContent = state.paused ? "繼續" : "暫停";
     centerValue.textContent = latestCenter ? `#${latestMicrobe.id} · (${latestCenter.x}, ${latestCenter.y})` : "—";
 
-    if (hoverCell) {
-      coordinateValue.textContent = `座標 ${hoverCell.x}, ${hoverCell.y}`;
+    if (state.hoverCell) {
+      coordinateValue.textContent = `座標 ${state.hoverCell.x}, ${state.hoverCell.y}`;
     } else if (latestCenter) {
       coordinateValue.textContent = `中心 ${latestCenter.x}, ${latestCenter.y}`;
     } else {
@@ -177,51 +223,56 @@
     context2d.closePath();
   }
 
-  function drawCell(index, fillStyle, inset, radius) {
-    const point = pointOf(index);
-    const cellSize = CANVAS_SIZE / GRID_SIZE;
-    const x = point.x * cellSize + inset;
-    const y = point.y * cellSize + inset;
+  function drawCellAt(context2d, xCell, yCell, fillStyle, inset, radius) {
+    const cellSize = CONFIG.canvasSize / CONFIG.gridSize;
+    const x = xCell * cellSize + inset;
+    const y = yCell * cellSize + inset;
     const size = cellSize - inset * 2;
-    roundedRect(context, x, y, size, size, radius);
-    context.fillStyle = fillStyle;
-    context.fill();
+    roundedRect(context2d, x, y, size, size, radius);
+    context2d.fillStyle = fillStyle;
+    context2d.fill();
   }
 
-  function drawGrid() {
-    const cellSize = CANVAS_SIZE / GRID_SIZE;
-    context.fillStyle = "#eee8df";
-    context.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+  function drawCell(index, fillStyle, inset, radius) {
+    const point = pointOf(index);
+    drawCellAt(context, point.x, point.y, fillStyle, inset, radius);
+  }
 
-    context.lineWidth = 1;
-    for (let i = 0; i <= GRID_SIZE; i += 1) {
-      const position = i * cellSize + 0.5;
-      const isMajor = i % 50 === 0;
-      const isSection = i % 10 === 0;
-      context.strokeStyle = isMajor
+  function buildGridCache() {
+    const cellSize = CONFIG.canvasSize / CONFIG.gridSize;
+    gridContext.fillStyle = "#eee8df";
+    gridContext.fillRect(0, 0, CONFIG.canvasSize, CONFIG.canvasSize);
+    gridContext.lineWidth = 1;
+
+    for (let index = 0; index <= CONFIG.gridSize; index += 1) {
+      const position = index * cellSize + 0.5;
+      const isMajor = index % 50 === 0;
+      const isSection = index % 10 === 0;
+      gridContext.strokeStyle = isMajor
         ? "rgba(23, 23, 23, 0.16)"
         : isSection
           ? "rgba(23, 23, 23, 0.08)"
           : "rgba(23, 23, 23, 0.035)";
 
-      context.beginPath();
-      context.moveTo(position, 0);
-      context.lineTo(position, CANVAS_SIZE);
-      context.stroke();
+      gridContext.beginPath();
+      gridContext.moveTo(position, 0);
+      gridContext.lineTo(position, CONFIG.canvasSize);
+      gridContext.stroke();
 
-      context.beginPath();
-      context.moveTo(0, position);
-      context.lineTo(CANVAS_SIZE, position);
-      context.stroke();
+      gridContext.beginPath();
+      gridContext.moveTo(0, position);
+      gridContext.lineTo(CONFIG.canvasSize, position);
+      gridContext.stroke();
     }
   }
 
-  function drawTrail() {
-    const cellSize = CANVAS_SIZE / GRID_SIZE;
-    trail.forEach((move) => {
+  function drawTrail(now) {
+    const cellSize = CONFIG.canvasSize / CONFIG.gridSize;
+    state.trail.forEach((move) => {
       const from = pointOf(move.oldCell);
       const to = pointOf(move.newCell);
-      const alpha = Math.max(0, move.remaining / TRAIL_LENGTH) * 0.22;
+      const alpha = Math.max(0, (move.expiresAt - now) / CONFIG.trailDurationMs) * 0.22;
+      if (alpha <= 0) return;
       context.strokeStyle = `rgba(23, 23, 23, ${alpha})`;
       context.lineWidth = Math.max(2, cellSize * 0.8);
       context.lineCap = "round";
@@ -232,102 +283,124 @@
     });
   }
 
-  function drawBodies() {
-    microbes.forEach((microbe) => {
+  function drawBodies(now) {
+    state.microbes.forEach((microbe) => {
+      const visualMove = microbe.visualMove;
+      const progress = visualMove
+        ? Math.min(1, Math.max(0, (now - visualMove.startedAt) / visualMove.duration))
+        : 1;
+
       microbe.cells.forEach((index) => {
-        drawCell(index, "#111111", 0.45, 0.9);
+        if (visualMove && index === visualMove.newCell) {
+          const from = pointOf(visualMove.oldCell);
+          const to = pointOf(visualMove.newCell);
+          drawCellAt(
+            context,
+            from.x + (to.x - from.x) * progress,
+            from.y + (to.y - from.y) * progress,
+            microbe.type.color,
+            0.45,
+            0.9
+          );
+        } else {
+          drawCell(index, microbe.type.color, 0.45, 0.9);
+        }
       });
 
       const center = centerOfBody(microbe);
       if (center) {
-        const cellSize = CANVAS_SIZE / GRID_SIZE;
+        const cellSize = CONFIG.canvasSize / CONFIG.gridSize;
         context.fillStyle = "rgba(255, 255, 255, 0.3)";
         context.beginPath();
         context.arc((center.x + 0.34) * cellSize, (center.y + 0.3) * cellSize, 0.42, 0, Math.PI * 2);
         context.fill();
       }
+
+      if (visualMove && progress >= 1) microbe.visualMove = null;
     });
   }
 
   function drawPlacementPreview() {
-    if (!hoverCell) return;
-    const previewCells = getPlacementCells(hoverCell);
-    const occupied = getOccupiedCells();
-    const canPlace = Array.from(previewCells).every((index) => !occupied.has(index));
+    if (!state.hoverCell) return;
+    const type = MICROBE_TYPES[state.selectedTypeId];
+    const previewCells = getPlacementCells(state.hoverCell, type);
+    const canPlace = Array.from(previewCells).every((index) => !state.occupancy.has(index));
     previewCells.forEach((index) => {
       drawCell(index, canPlace ? "rgba(17, 17, 17, 0.12)" : "rgba(200, 78, 59, 0.16)", 0.75, 0.8);
     });
   }
 
   function drawHover() {
-    if (!hoverCell) return;
-    const cellSize = CANVAS_SIZE / GRID_SIZE;
-    const index = indexOf(hoverCell.x, hoverCell.y);
+    if (!state.hoverCell) return;
+    const cellSize = CONFIG.canvasSize / CONFIG.gridSize;
+    const index = indexOf(state.hoverCell.x, state.hoverCell.y);
     context.strokeStyle = "rgba(200, 78, 59, 0.8)";
     context.lineWidth = 2;
-    context.strokeRect(index % GRID_SIZE * cellSize + 1, Math.floor(index / GRID_SIZE) * cellSize + 1, cellSize - 2, cellSize - 2);
+    context.strokeRect(index % CONFIG.gridSize * cellSize + 1, Math.floor(index / CONFIG.gridSize) * cellSize + 1, cellSize - 2, cellSize - 2);
   }
 
-  function render() {
-    drawGrid();
-    drawTrail();
+  function render(now) {
+    context.clearRect(0, 0, CONFIG.canvasSize, CONFIG.canvasSize);
+    context.drawImage(gridCanvas, 0, 0);
+    drawTrail(now);
     drawPlacementPreview();
-    drawBodies();
+    drawBodies(now);
     drawHover();
     updateUi();
+    state.renderDirty = false;
   }
 
   function getCellFromPointer(event) {
     const bounds = canvas.getBoundingClientRect();
-    const x = Math.floor((event.clientX - bounds.left) / bounds.width * GRID_SIZE);
-    const y = Math.floor((event.clientY - bounds.top) / bounds.height * GRID_SIZE);
+    const x = Math.floor((event.clientX - bounds.left) / bounds.width * CONFIG.gridSize);
+    const y = Math.floor((event.clientY - bounds.top) / bounds.height * CONFIG.gridSize);
     if (!isInside(x, y)) return null;
     return { x, y };
   }
 
-  function startTimer() {
-    window.clearInterval(timerId);
-    timerId = window.setInterval(stepAllMicrobes, TICK_MS);
+  function createMicrobe(typeId, center) {
+    const type = MICROBE_TYPES[typeId];
+    if (!type) return null;
+    const cells = getPlacementCells(center, type);
+    if (Array.from(cells).some((index) => state.occupancy.has(index))) return null;
+
+    const microbe = {
+      id: state.nextMicrobeId,
+      typeId,
+      type,
+      cells,
+      steps: 0,
+      connected: true,
+      visualMove: null
+    };
+    state.nextMicrobeId += 1;
+    state.microbes.push(microbe);
+    claimCells(microbe, cells);
+    refreshConnectivity();
+    return microbe;
   }
 
-  function stopTimer() {
-    window.clearInterval(timerId);
-    timerId = null;
-  }
-
-  function placeMicrobe(center) {
-    const cells = getPlacementCells(center);
-    const occupied = getOccupiedCells();
-    if (Array.from(cells).some((index) => occupied.has(index))) {
+  function placeSelectedMicrobe(center) {
+    const microbe = createMicrobe(state.selectedTypeId, center);
+    if (!microbe) {
       setBoardStatus("這裡已有微生物，請點擊沒有被佔用的空白區。");
       addEvent("放置失敗：五格種子區與既有微生物重疊。");
-      render();
+      setDirty();
       return;
     }
 
-    const microbe = {
-      id: nextMicrobeId,
-      color: "#111111",
-      cells,
-      steps: 0,
-      placed: true,
-      lastMove: null
-    };
-    nextMicrobeId += 1;
-    microbes.push(microbe);
-    paused = false;
-    addEvent(`黑色微生物 #${microbe.id} 放置完成，佔用 ${BODY_SIZE} 格。`);
-    setBoardStatus(`已放置 ${microbes.length} 隻微生物，每隻每 150 毫秒隨機爬行。`);
-    startTimer();
-    render();
+    state.paused = false;
+    addEvent(`黑色微生物 #${microbe.id} 放置完成，佔用 ${microbe.type.bodySize} 格。`);
+    setBoardStatus(`已放置 ${state.microbes.length} 隻微生物，每隻每 150 毫秒隨機爬行。`);
+    state.accumulator = 0;
+    setDirty();
   }
 
   function getGrowthCandidates(microbe) {
     const candidates = new Set();
-    const occupiedByOthers = getOccupiedCells(microbe.id);
     microbe.cells.forEach((index) => {
       neighborsOf(index).forEach((neighbor) => {
-        if (!microbe.cells.has(neighbor) && !occupiedByOthers.has(neighbor)) candidates.add(neighbor);
+        if (!microbe.cells.has(neighbor) && isCellFree(neighbor, microbe.id)) candidates.add(neighbor);
       });
     });
     return Array.from(candidates);
@@ -343,85 +416,130 @@
     });
   }
 
-  function moveMicrobe(microbe) {
+  function moveRandomConnected(microbe, now) {
     const candidates = getGrowthCandidates(microbe);
     const movementOptions = candidates
       .map((newCell) => ({ newCell, retractableCells: getConnectedRetractions(microbe, newCell) }))
       .filter((option) => option.retractableCells.length > 0);
-    if (movementOptions.length === 0) return null;
+    if (movementOptions.length === 0) return false;
 
     const movement = randomItem(movementOptions);
     const newCell = movement.newCell;
     const oldCell = randomItem(movement.retractableCells);
-    microbe.cells.add(newCell);
+    releaseCell(microbe, oldCell);
     microbe.cells.delete(oldCell);
+    microbe.cells.add(newCell);
+    state.occupancy.set(newCell, microbe.id);
     microbe.steps += 1;
-    microbe.lastMove = { newCell, oldCell };
-    trail.push({ newCell, oldCell, remaining: TRAIL_LENGTH });
-    totalMoves += 1;
-    return { newCell, oldCell };
+    microbe.connected = isConnected(microbe.cells);
+    microbe.visualMove = {
+      oldCell,
+      newCell,
+      startedAt: now,
+      duration: CONFIG.moveAnimationMs
+    };
+    state.trail.push({
+      oldCell,
+      newCell,
+      expiresAt: now + CONFIG.trailDurationMs
+    });
+    state.totalMoves += 1;
+    return true;
   }
 
-  function stepAllMicrobes() {
-    if (!microbes.length || paused) return;
-    tickCount += 1;
-    trail = trail
-      .map((move) => ({ ...move, remaining: move.remaining - 1 }))
-      .filter((move) => move.remaining > 0);
+  const MOVEMENT_STRATEGIES = Object.freeze({
+    "random-connected-crawl": moveRandomConnected
+  });
 
+  function stepAllMicrobes(now) {
+    if (!state.microbes.length || state.paused) return;
+    state.tickCount += 1;
+    const movementOrder = shuffle(state.microbes.slice());
     let movedCount = 0;
-    microbes.forEach((microbe) => {
-      if (moveMicrobe(microbe)) movedCount += 1;
+
+    movementOrder.forEach((microbe) => {
+      const moveStrategy = MOVEMENT_STRATEGIES[microbe.type.movement];
+      if (moveStrategy && moveStrategy(microbe, now)) movedCount += 1;
     });
 
-    setBoardStatus(`第 ${tickCount} 次更新：${movedCount}/${microbes.length} 隻微生物移動，總體積 ${microbes.length * BODY_SIZE} 格。`);
-    addEvent(`第 ${tickCount} 次更新：${movedCount}/${microbes.length} 隻微生物完成移動。`);
-    render();
+    state.trail = state.trail.filter((move) => move.expiresAt > now);
+    refreshConnectivity();
+    setBoardStatus(`第 ${state.tickCount} 次更新：${movedCount}/${state.microbes.length} 隻微生物移動，總體積 ${state.microbes.length * 5} 格。`);
+    if (state.tickCount === 1 || state.tickCount % 5 === 0) {
+      addEvent(`第 ${state.tickCount} 次更新：${movedCount}/${state.microbes.length} 隻微生物完成移動。`);
+    }
+    setDirty();
+  }
+
+  function animationFrame(now) {
+    if (state.lastFrameAt === null) state.lastFrameAt = now;
+    const elapsed = Math.min(1000, now - state.lastFrameAt);
+    state.lastFrameAt = now;
+
+    if (!state.paused && state.microbes.length) {
+      state.accumulator += elapsed;
+      let catchUpTicks = 0;
+      while (state.accumulator >= CONFIG.tickMs && catchUpTicks < CONFIG.maxCatchUpTicks) {
+        state.accumulator -= CONFIG.tickMs;
+        stepAllMicrobes(now);
+        catchUpTicks += 1;
+      }
+      if (catchUpTicks === CONFIG.maxCatchUpTicks) state.accumulator = 0;
+    } else {
+      state.accumulator = 0;
+    }
+
+    const hasVisualAnimation = state.trail.length > 0 || state.microbes.some((microbe) => microbe.visualMove);
+    if (state.renderDirty || hasVisualAnimation || (!state.paused && state.microbes.length > 0)) {
+      render(now);
+    }
+    state.frameId = window.requestAnimationFrame(animationFrame);
   }
 
   function togglePause() {
-    if (!microbes.length) return;
-    paused = !paused;
-    if (paused) {
-      stopTimer();
+    if (!state.microbes.length) return;
+    state.paused = !state.paused;
+    state.accumulator = 0;
+    if (state.paused) {
       setBoardStatus("已暫停；所有微生物保持目前五格身體。");
       addEvent("培養區暫停，所有微生物保持原位。");
     } else {
-      startTimer();
       setBoardStatus("已繼續，所有微生物每 150 毫秒隨機爬行。");
       addEvent("培養區繼續運作。");
     }
-    render();
+    setDirty();
   }
 
   function resetGame() {
-    stopTimer();
-    microbes = [];
-    nextMicrobeId = 1;
-    paused = true;
-    tickCount = 0;
-    totalMoves = 0;
-    trail = [];
-    setBoardStatus("點擊培養區放置黑色微生物，可放置多隻。");
+    state.microbes = [];
+    state.occupancy.clear();
+    state.nextMicrobeId = 1;
+    state.paused = true;
+    state.tickCount = 0;
+    state.totalMoves = 0;
+    state.accumulator = 0;
+    state.trail = [];
+    state.allConnected = true;
+    setBoardStatus("點擊空白區放置黑色微生物，可放置多隻。");
     eventLog.innerHTML = "";
     addEvent("等待放置第一隻微生物。");
-    render();
+    setDirty();
   }
 
   canvas.addEventListener("pointermove", (event) => {
-    hoverCell = getCellFromPointer(event);
-    render();
+    state.hoverCell = getCellFromPointer(event);
+    setDirty();
   });
 
   canvas.addEventListener("pointerleave", () => {
-    hoverCell = null;
-    render();
+    state.hoverCell = null;
+    setDirty();
   });
 
   canvas.addEventListener("pointerdown", (event) => {
     event.preventDefault();
     const point = getCellFromPointer(event);
-    if (point) placeMicrobe(point);
+    if (point) placeSelectedMicrobe(point);
   });
 
   pauseButton.addEventListener("click", togglePause);
@@ -435,6 +553,10 @@
     if (event.key.toLowerCase() === "r") resetGame();
   });
 
-  window.addEventListener("beforeunload", stopTimer);
-  render();
+  window.addEventListener("beforeunload", () => {
+    if (state.frameId !== null) window.cancelAnimationFrame(state.frameId);
+  });
+
+  buildGridCache();
+  state.frameId = window.requestAnimationFrame(animationFrame);
 })();
