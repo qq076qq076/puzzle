@@ -41,6 +41,7 @@
   const countValue = document.querySelector("#micro-count");
   const volumeValue = document.querySelector("#micro-volume");
   const stepsValue = document.querySelector("#micro-steps");
+  const bodySizeValue = document.querySelector("#micro-body-size");
   const boardStatus = document.querySelector("#micro-board-status");
   const coordinateValue = document.querySelector("#micro-coordinate");
   const centerValue = document.querySelector("#micro-center");
@@ -202,6 +203,7 @@
     countValue.textContent = String(state.microbes.length);
     volumeValue.textContent = `${totalVolume} 格`;
     stepsValue.textContent = String(state.totalMoves);
+    if (bodySizeValue) bodySizeValue.textContent = latestMicrobe ? `${latestMicrobe.type.bodySize} 格` : "4 格";
     pauseButton.disabled = !state.microbes.length;
     pauseButton.textContent = state.paused ? "繼續" : "暫停";
     centerValue.textContent = latestCenter ? `#${latestMicrobe.id} · (${latestCenter.x}, ${latestCenter.y})` : "—";
@@ -364,6 +366,9 @@
   function createMicrobe(typeId, center) {
     const type = MICROBE_TYPES[typeId];
     if (!type) return null;
+    if (type.seedOffsets.length !== type.bodySize) {
+      throw new Error(`${type.name} 的 seedOffsets 數量必須等於 bodySize。`);
+    }
     const cells = getPlacementCells(center, type);
     if (Array.from(cells).some((index) => state.occupancy.has(index))) return null;
 
