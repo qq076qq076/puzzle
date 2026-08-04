@@ -72,8 +72,8 @@
         { x: 0, y: 1 },
         { x: -1, y: 0 }
       ]),
-      description: "五格身體，選定一格向外延伸兩格，吞噬其他生物並持續追獵。",
-      movementLabel: "朝其他生物偏向延伸兩格"
+      description: "五格身體，延伸兩格後停留 250ms，再收回兩格並停留 250ms。",
+      movementLabel: "延伸／250ms／收回／250ms"
     })
   });
 
@@ -510,7 +510,9 @@
       bodyOrder,
       head,
       consumedCells: 0,
-      growthLevel: 0
+      growthLevel: 0,
+      predatoryPhase: "ready",
+      pendingPredatoryMove: null
     };
     state.nextMicrobeId += 1;
     state.microbes.push(microbe);
@@ -679,7 +681,7 @@
     return options;
   }
 
-  function movePredatoryTwoStep(microbe, now) {
+  function beginPredatoryTwoStep(microbe, now) {
     const candidates = getRedMoveCandidates(microbe)
       .map((candidate) => ({
         ...candidate,
@@ -697,16 +699,17 @@
       microbe.cells.add(index);
       state.occupancy.set(index, microbe.id);
     });
-    retractionPlan.cells.forEach((oldCell) => {
-      releaseCell(microbe, oldCell);
-      microbe.cells.delete(oldCell);
-    });
 
     microbe.consumedCells += candidate.consumedCells.length;
     microbe.growthLevel += retractionPlan.growthGain;
     microbe.bodySize = microbe.cells.size;
-    microbe.steps += 1;
     microbe.connected = isConnected(microbe.cells);
+    microbe.predatoryPhase = "extended";
+    microbe.pendingPredatoryMove = {
+      retractionCells: retractionPlan.cells,
+      growthGain: retractionPlan.growthGain,
+      consumedCount: candidate.consumedCells.length
+    };
     microbe.visualMove = {
       segments: [
         { oldCell: candidate.origin, newCell: candidate.path[0] },
@@ -719,15 +722,44 @@
       { oldCell: candidate.origin, newCell: candidate.path[0], expiresAt: now + CONFIG.trailDurationMs },
       { oldCell: candidate.path[0], newCell: candidate.path[1], expiresAt: now + CONFIG.trailDurationMs }
     );
-    state.totalMoves += 1;
 
     if (consumedPrey.length > 0) {
-      const growthMessage = retractionPlan.growthGain > 0
-        ? `，身體增加 ${retractionPlan.growthGain} 格`
-        : "";
-      addEvent(`${microbe.type.name} #${microbe.id} 吞噬 ${candidate.consumedCells.length} 格其他生物${growthMessage}。`);
+      addEvent(`${microbe.type.name} #${microbe.id} 延伸兩格並吞噬 ${candidate.consumedCells.length} 格其他生物，250ms 後收回。`);
+    } else {
+      addEvent(`${microbe.type.name} #${microbe.id} 延伸兩格，250ms 後收回。`);
     }
     return true;
+  }
+
+  function finishPredatoryTwoStep(microbe) {
+    const pendingMove = microbe.pendingPredatoryMove;
+    if (!pendingMove) {
+      microbe.predatoryPhase = "ready";
+      return false;
+    }
+
+    pendingMove.retractionCells.forEach((oldCell) => {
+      releaseCell(microbe, oldCell);
+      microbe.cells.delete(oldCell);
+    });
+    microbe.pendingPredatoryMove = null;
+    microbe.predatoryPhase = "ready";
+    microbe.bodySize = microbe.cells.size;
+    microbe.steps += 1;
+    microbe.connected = isConnected(microbe.cells);
+    state.totalMoves += 1;
+
+    const growthMessage = pendingMove.growthGain > 0
+      ? `，身體增加 ${pendingMove.growthGain} 格`
+      : "";
+    addEvent(`${microbe.type.name} #${microbe.id} 收回 ${pendingMove.retractionCells.length} 格，完成移動${growthMessage}，250ms 後再延伸。`);
+    return true;
+  }
+
+  function movePredatoryTwoStep(microbe, now) {
+    return microbe.predatoryPhase === "extended"
+      ? finishPredatoryTwoStep(microbe)
+      : beginPredatoryTwoStep(microbe, now);
   }
 
   function moveRandomConnected(microbe, now) {
