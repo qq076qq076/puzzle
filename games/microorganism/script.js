@@ -510,7 +510,8 @@
   }
 
   function getConnectedRetractions(microbe, newCell) {
-    return neighborsOf(newCell).filter((oldCell) => {
+    return Array.from(microbe.cells).filter((oldCell) => {
+      if (oldCell === newCell) return false;
       if (!microbe.cells.has(oldCell)) return false;
       const nextCells = new Set(microbe.cells);
       nextCells.add(newCell);
