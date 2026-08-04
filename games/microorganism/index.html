@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#f5f0e9" />
-    <meta name="description" content="microorganism：在 150×150 網格中放置黑色與綠色四格微生物，觀察它們依各自節奏爬行。" />
+    <meta name="description" content="microorganism：在 150×150 網格中放置黑色、綠色與紅色微生物，觀察它們依各自節奏爬行與吞噬。" />
     <title>microorganism · Puzzle Club</title>
     <link rel="stylesheet" href="../../styles.css" />
     <link rel="stylesheet" href="styles.css" />
@@ -18,11 +18,11 @@
           <div class="micro-eyebrow"><span class="micro-eyebrow-dot"></span> CELL MOTION LAB · 150 × 150</div>
           <h1 id="micro-title">microorganism<span>.</span></h1>
           <p class="micro-tagline">小小一隻，<br /><em>持續爬行。</em></p>
-          <p class="micro-copy">先選擇微生物，再在空白區反覆點擊放置。黑色微生物每 150 毫秒從身體邊緣延伸；綠色條蟲每 250 毫秒只由頭部往相鄰格前進。</p>
+          <p class="micro-copy">先選擇微生物，再在空白區反覆點擊放置。黑色微生物每 150 毫秒從身體邊緣延伸；綠色條蟲每 250 毫秒由頭部前進；紅色微生物每 250 毫秒延伸兩格並吞噬其他生物。</p>
 
           <div class="micro-rule-chips" aria-label="遊戲規則摘要">
             <div><strong>150²</strong><span>邏輯培養格</span></div>
-            <div><strong>04</strong><span>固定身體格數</span></div>
+            <div><strong>04 / 05</strong><span>初始身體格數</span></div>
             <div><strong>150/250 MS</strong><span>菌種移動間隔</span></div>
           </div>
         </header>
@@ -67,6 +67,10 @@
                   <span class="micro-type-swatch is-green" aria-hidden="true"></span>
                   <span><b>綠色條蟲</b><small>4 格 · 250ms · 頭部前進</small></span>
                 </button>
+                <button class="micro-type-option" type="button" data-type="red" aria-label="選擇紅色微生物" aria-pressed="false">
+                  <span class="micro-type-swatch is-red" aria-hidden="true"></span>
+                  <span><b>紅色微生物</b><small>5 格 · 250ms · 延伸／吞噬</small></span>
+                </button>
               </div>
             </section>
 
@@ -97,12 +101,12 @@
             </section>
           </div>
 
-          <p class="micro-help"><span aria-hidden="true">✦</span> 選擇菌種後點擊空白區可放置多隻；Space 暫停／繼續，R 重置。移入畫面可查看 150×150 邏輯座標。</p>
+          <p class="micro-help"><span aria-hidden="true">✦</span> 選擇菌種後點擊空白區可放置多隻；紅色微生物會朝其他生物偏向移動並吞噬重疊格。Space 暫停／繼續，R 重置。移入畫面可查看 150×150 邏輯座標。</p>
         </section>
       </section>
 
       <footer class="page-footer micro-footer"><span>PUZZLE CLUB</span><span>GROW SMALL · MOVE OFTEN</span></footer>
     </main>
-    <script src="script.js?v=green-250"></script>
+    <script src="script.js?v=red-predator"></script>
   </body>
 </html>

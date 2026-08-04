@@ -57,6 +57,23 @@
       headOffset: { x: 0, y: 0 },
       description: "條狀身體，頭部每 250ms 往相鄰空格隨機前進一格。",
       movementLabel: "頭部相鄰隨機一格"
+    }),
+    red: Object.freeze({
+      id: "red",
+      name: "紅色微生物",
+      color: "#d94a42",
+      bodySize: 5,
+      tickMs: 250,
+      movement: "predatory-two-step",
+      seedOffsets: Object.freeze([
+        { x: 0, y: 0 },
+        { x: 0, y: -1 },
+        { x: 1, y: 0 },
+        { x: 0, y: 1 },
+        { x: -1, y: 0 }
+      ]),
+      description: "五格身體，選定一格向外延伸兩格，吞噬其他生物並持續追獵。",
+      movementLabel: "朝其他生物偏向延伸兩格"
     })
   });
 
@@ -121,6 +138,17 @@
 
   function randomItem(items) {
     return items[Math.floor(Math.random() * items.length)];
+  }
+
+  function weightedRandomItem(items) {
+    if (!items.length) return null;
+    const totalWeight = items.reduce((total, item) => total + item.weight, 0);
+    let cursor = Math.random() * totalWeight;
+    for (const item of items) {
+      cursor -= item.weight;
+      if (cursor <= 0) return item;
+    }
+    return items[items.length - 1];
   }
 
   function shuffle(items) {
@@ -211,11 +239,11 @@
   }
 
   function refreshConnectivity() {
-    state.allConnected = state.microbes.length > 0 && state.microbes.every((microbe) => microbe.connected);
+    state.allConnected = state.microbes.length === 0 || state.microbes.every((microbe) => microbe.connected);
   }
 
   function getTotalVolume() {
-    return state.microbes.reduce((total, microbe) => total + microbe.type.bodySize, 0);
+    return state.microbes.reduce((total, microbe) => total + microbe.cells.size, 0);
   }
 
   function claimCells(microbe, cells) {
@@ -258,19 +286,20 @@
 
     canvas.dataset.gridSize = String(CONFIG.gridSize);
     canvas.dataset.microbeCount = String(state.microbes.length);
-    canvas.dataset.bodySize = String(latestMicrobe ? latestMicrobe.type.bodySize : 0);
+    canvas.dataset.bodySize = String(latestMicrobe ? latestMicrobe.cells.size : 0);
     canvas.dataset.bodyConnected = String(state.allConnected);
     statusValue.textContent = !state.microbes.length ? "等待放置" : state.paused ? "已暫停" : "正在移動";
     countValue.textContent = String(state.microbes.length);
     volumeValue.textContent = `${totalVolume} 格`;
     stepsValue.textContent = String(state.totalMoves);
-    if (bodySizeValue) bodySizeValue.textContent = latestMicrobe ? `${latestMicrobe.type.bodySize} 格` : "4 格";
+    if (bodySizeValue) bodySizeValue.textContent = latestMicrobe ? `${latestMicrobe.cells.size} 格` : "—";
     if (intervalValue) intervalValue.textContent = `${selectedType.tickMs}ms`;
     if (infoTitle) infoTitle.textContent = `${selectedType.name}選項`;
     if (infoCopy) infoCopy.textContent = selectedType.description;
     if (infoSwatch) {
       infoSwatch.classList.toggle("is-black", selectedType.id === "black");
       infoSwatch.classList.toggle("is-green", selectedType.id === "green");
+      infoSwatch.classList.toggle("is-red", selectedType.id === "red");
     }
     if (movementModeValue) movementModeValue.textContent = selectedType.movementLabel;
     pauseButton.disabled = !state.microbes.length;
@@ -372,13 +401,17 @@
       const progress = visualMove
         ? Math.min(1, Math.max(0, (now - visualMove.startedAt) / visualMove.duration))
         : 1;
+      const visualSegments = visualMove
+        ? visualMove.segments || [{ oldCell: visualMove.oldCell, newCell: visualMove.newCell }]
+        : [];
 
       microbe.cells.forEach((index) => {
         const isHead = index === microbe.head;
         const cellColor = isHead && microbe.type.headColor ? microbe.type.headColor : microbe.type.color;
-        if (visualMove && index === visualMove.newCell) {
-          const from = pointOf(visualMove.oldCell);
-          const to = pointOf(visualMove.newCell);
+        const visualSegment = visualSegments.find((segment) => segment.newCell === index);
+        if (visualSegment) {
+          const from = pointOf(visualSegment.oldCell);
+          const to = pointOf(visualSegment.newCell);
           const visualX = from.x + (to.x - from.x) * progress;
           const visualY = from.y + (to.y - from.y) * progress;
           drawCellAt(
@@ -469,12 +502,15 @@
       typeId,
       type,
       cells,
+      bodySize: cells.size,
       steps: 0,
       connected: true,
       visualMove: null,
       moveAccumulator: 0,
       bodyOrder,
-      head
+      head,
+      consumedCells: 0,
+      growthLevel: 0
     };
     state.nextMicrobeId += 1;
     state.microbes.push(microbe);
@@ -493,7 +529,7 @@
     }
 
     state.paused = false;
-    addEvent(`${microbe.type.name} #${microbe.id} 放置完成，佔用 ${microbe.type.bodySize} 格。`);
+    addEvent(`${microbe.type.name} #${microbe.id} 放置完成，佔用 ${microbe.cells.size} 格。`);
     setBoardStatus(`已放置 ${state.microbes.length} 隻微生物，${microbe.type.name}每 ${microbe.type.tickMs} 毫秒移動。`);
     state.accumulator = 0;
     setDirty();
@@ -524,6 +560,174 @@
     return getGrowthCandidates(microbe).filter((newCell) => {
       return getConnectedRetractions(microbe, newCell).length > 0;
     });
+  }
+
+  function consumeForeignCell(predator, index) {
+    const ownerId = state.occupancy.get(index);
+    if (ownerId === undefined || ownerId === predator.id) return null;
+
+    const prey = state.microbes.find((microbe) => microbe.id === ownerId);
+    if (!prey) {
+      state.occupancy.delete(index);
+      return null;
+    }
+
+    prey.cells.delete(index);
+    state.occupancy.set(index, predator.id);
+    if (prey.bodyOrder) {
+      prey.bodyOrder = prey.bodyOrder.filter((cell) => prey.cells.has(cell));
+      if (prey.head !== null && !prey.cells.has(prey.head)) {
+        prey.head = prey.bodyOrder[0] ?? null;
+      }
+    }
+    prey.bodySize = prey.cells.size;
+    prey.connected = isConnected(prey.cells);
+    if (prey.cells.size === 0) {
+      state.microbes = state.microbes.filter((microbe) => microbe !== prey);
+    }
+    return prey;
+  }
+
+  function getRedDirectionWeight(microbe, origin, direction) {
+    const originPoint = pointOf(origin);
+    let strongestAlignment = 0;
+
+    state.microbes.forEach((otherMicrobe) => {
+      if (otherMicrobe === microbe || otherMicrobe.cells.size === 0) return;
+      const target = centerOfBody(otherMicrobe);
+      const vectorX = target.x - originPoint.x;
+      const vectorY = target.y - originPoint.y;
+      const distance = Math.hypot(vectorX, vectorY);
+      if (distance === 0) return;
+      const alignment = (vectorX * direction.x + vectorY * direction.y) / distance;
+      if (alignment > strongestAlignment) strongestAlignment = alignment;
+    });
+
+    return 1 + strongestAlignment * 6;
+  }
+
+  function getRedMoveCandidates(microbe) {
+    const candidates = [];
+    microbe.cells.forEach((origin) => {
+      const originPoint = pointOf(origin);
+      DIRECTIONS.forEach((direction) => {
+        const firstPoint = {
+          x: originPoint.x + direction.x,
+          y: originPoint.y + direction.y
+        };
+        const secondPoint = {
+          x: originPoint.x + direction.x * 2,
+          y: originPoint.y + direction.y * 2
+        };
+        if (!isInside(firstPoint.x, firstPoint.y) || !isInside(secondPoint.x, secondPoint.y)) return;
+
+        const path = [indexOf(firstPoint.x, firstPoint.y), indexOf(secondPoint.x, secondPoint.y)];
+        if (path.some((index) => microbe.cells.has(index))) return;
+        const consumedCells = path.filter((index) => {
+          const ownerId = state.occupancy.get(index);
+          return ownerId !== undefined && ownerId !== microbe.id;
+        });
+        candidates.push({
+          origin,
+          direction,
+          path,
+          consumedCells,
+          weight: getRedDirectionWeight(microbe, origin, direction)
+        });
+      });
+    });
+    return candidates;
+  }
+
+  function getRedRetractionOptions(microbe, candidate) {
+    const totalConsumed = microbe.consumedCells + candidate.consumedCells.length;
+    const nextGrowthLevel = Math.floor(totalConsumed / 2);
+    const growthGain = Math.max(0, nextGrowthLevel - microbe.growthLevel);
+    const retractionCount = Math.max(0, 2 - growthGain);
+    const originalCells = Array.from(microbe.cells).filter((index) => index !== candidate.origin);
+    const extendedCells = new Set(microbe.cells);
+    candidate.path.forEach((index) => extendedCells.add(index));
+
+    if (retractionCount === 0) {
+      return isConnected(extendedCells) ? [{ cells: [], growthGain }] : [];
+    }
+    if (originalCells.length < retractionCount) return [];
+
+    const options = [];
+    if (retractionCount === 1) {
+      originalCells.forEach((oldCell) => {
+        const nextCells = new Set(extendedCells);
+        nextCells.delete(oldCell);
+        if (isConnected(nextCells)) options.push({ cells: [oldCell], growthGain });
+      });
+      return options;
+    }
+
+    for (let firstIndex = 0; firstIndex < originalCells.length - 1; firstIndex += 1) {
+      for (let secondIndex = firstIndex + 1; secondIndex < originalCells.length; secondIndex += 1) {
+        const nextCells = new Set(extendedCells);
+        nextCells.delete(originalCells[firstIndex]);
+        nextCells.delete(originalCells[secondIndex]);
+        if (isConnected(nextCells)) {
+          options.push({
+            cells: [originalCells[firstIndex], originalCells[secondIndex]],
+            growthGain
+          });
+        }
+      }
+    }
+    return options;
+  }
+
+  function movePredatoryTwoStep(microbe, now) {
+    const candidates = getRedMoveCandidates(microbe)
+      .map((candidate) => ({
+        ...candidate,
+        retractionOptions: getRedRetractionOptions(microbe, candidate)
+      }))
+      .filter((candidate) => candidate.retractionOptions.length > 0);
+    if (candidates.length === 0) return false;
+
+    const candidate = weightedRandomItem(candidates);
+    const retractionPlan = randomItem(candidate.retractionOptions);
+    const consumedPrey = candidate.path
+      .map((index) => consumeForeignCell(microbe, index))
+      .filter(Boolean);
+    candidate.path.forEach((index) => {
+      microbe.cells.add(index);
+      state.occupancy.set(index, microbe.id);
+    });
+    retractionPlan.cells.forEach((oldCell) => {
+      releaseCell(microbe, oldCell);
+      microbe.cells.delete(oldCell);
+    });
+
+    microbe.consumedCells += candidate.consumedCells.length;
+    microbe.growthLevel += retractionPlan.growthGain;
+    microbe.bodySize = microbe.cells.size;
+    microbe.steps += 1;
+    microbe.connected = isConnected(microbe.cells);
+    microbe.visualMove = {
+      segments: [
+        { oldCell: candidate.origin, newCell: candidate.path[0] },
+        { oldCell: candidate.path[0], newCell: candidate.path[1] }
+      ],
+      startedAt: now,
+      duration: CONFIG.moveAnimationMs
+    };
+    state.trail.push(
+      { oldCell: candidate.origin, newCell: candidate.path[0], expiresAt: now + CONFIG.trailDurationMs },
+      { oldCell: candidate.path[0], newCell: candidate.path[1], expiresAt: now + CONFIG.trailDurationMs }
+    );
+    state.totalMoves += 1;
+
+    if (consumedPrey.length > 0) {
+      const growthMessage = retractionPlan.growthGain > 0
+        ? `，身體增加 ${retractionPlan.growthGain} 格`
+        : "";
+      addEvent(`${microbe.type.name} #${microbe.id} 吞噬 ${candidate.consumedCells.length} 格其他生物${growthMessage}。`);
+    }
+    return true;
   }
 
   function moveRandomConnected(microbe, now) {
@@ -563,6 +767,9 @@
 
   function moveHeadRandom(microbe, now) {
     if (microbe.head === null || !microbe.bodyOrder) return false;
+    microbe.bodyOrder = microbe.bodyOrder.filter((index) => microbe.cells.has(index));
+    if (!microbe.bodyOrder.length) return false;
+    if (!microbe.cells.has(microbe.head)) microbe.head = microbe.bodyOrder[0];
     const candidates = neighborsOf(microbe.head).filter((index) => {
       return !microbe.cells.has(index) && !state.occupancy.has(index);
     });
@@ -596,7 +803,8 @@
 
   const MOVEMENT_STRATEGIES = Object.freeze({
     "random-connected-crawl": moveRandomConnected,
-    "head-random-crawl": moveHeadRandom
+    "head-random-crawl": moveHeadRandom,
+    "predatory-two-step": movePredatoryTwoStep
   });
 
   function stepAllMicrobes(now) {
@@ -606,6 +814,7 @@
     let movedCount = 0;
 
     movementOrder.forEach((microbe) => {
+      if (!state.microbes.includes(microbe) || microbe.cells.size === 0) return;
       microbe.moveAccumulator += CONFIG.baseTickMs;
       if (microbe.moveAccumulator < microbe.type.tickMs) return;
       microbe.moveAccumulator -= microbe.type.tickMs;
@@ -652,7 +861,7 @@
     state.paused = !state.paused;
     state.accumulator = 0;
     if (state.paused) {
-      setBoardStatus("已暫停；所有微生物保持目前四格身體。");
+      setBoardStatus("已暫停；所有微生物保持目前身體格數。");
       addEvent("培養區暫停，所有微生物保持原位。");
     } else {
       setBoardStatus("已繼續，所有微生物依各自選項的間隔隨機爬行。");

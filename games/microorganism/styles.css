@@ -310,7 +310,7 @@
 
 .micro-type-options {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -396,6 +396,11 @@
   content: "";
 }
 
+.micro-type-swatch.is-red {
+  background: #d94a42;
+  box-shadow: 4px 4px 0 rgba(217, 74, 66, 0.14);
+}
+
 .micro-info-card {
   min-width: 0;
   padding: 16px;
@@ -439,6 +444,11 @@
 .microbe-swatch.is-green {
   background: #58c96d;
   box-shadow: 5px 5px 0 rgba(33, 141, 67, 0.12);
+}
+
+.microbe-swatch.is-red {
+  background: #d94a42;
+  box-shadow: 5px 5px 0 rgba(217, 74, 66, 0.14);
 }
 
 .microbe-swatch-row p {
