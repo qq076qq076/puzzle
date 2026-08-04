@@ -294,7 +294,7 @@
 
 .micro-info-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   margin-top: 14px;
 }
@@ -506,34 +506,6 @@
   color: var(--micro-ink);
   font-weight: 750;
   text-align: right;
-}
-
-.micro-event-log {
-  display: grid;
-  gap: 8px;
-  max-height: 123px;
-  margin: 0;
-  padding: 0;
-  overflow: auto;
-  list-style: none;
-}
-
-.micro-event-log li {
-  display: grid;
-  grid-template-columns: 7px minmax(0, 1fr);
-  align-items: start;
-  gap: 8px;
-  color: var(--micro-muted);
-  font-size: 0.68rem;
-  line-height: 1.5;
-}
-
-.micro-event-dot {
-  width: 6px;
-  height: 6px;
-  margin-top: 5px;
-  border-radius: 50%;
-  background: var(--micro-ink);
 }
 
 .micro-help {

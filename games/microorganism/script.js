@@ -92,7 +92,7 @@
       color: "#8ad9ed",
       headColor: "#2c9fbd",
       bodySize: 7,
-      tickMs: 250,
+      tickMs: 500,
       movement: "jellyfish-swim",
       jelly: true,
       seedOffsets: Object.freeze([
@@ -146,7 +146,6 @@
   const boardStatus = document.querySelector("#micro-board-status");
   const coordinateValue = document.querySelector("#micro-coordinate");
   const centerValue = document.querySelector("#micro-center");
-  const eventLog = document.querySelector("#micro-event-log");
   const pauseButton = document.querySelector("#pause-button");
   const restartButton = document.querySelector("#restart-button");
 
@@ -310,18 +309,7 @@
     setDirty();
   }
 
-  function addEvent(message) {
-    const item = document.createElement("li");
-    const dot = document.createElement("span");
-    const text = document.createElement("span");
-    dot.className = "micro-event-dot";
-    text.textContent = message;
-    item.append(dot, text);
-    eventLog.prepend(item);
-    while (eventLog.children.length > 8) {
-      eventLog.lastElementChild.remove();
-    }
-  }
+  function addEvent() {}
 
   function refreshConnectivity() {
     state.allConnected = state.microbes.length === 0 || state.microbes.every((microbe) => microbe.connected);
@@ -1332,7 +1320,6 @@
     state.blackProductionCooldownUntil = 0;
     const selectedType = MICROBE_TYPES[state.selectedTypeId];
     setBoardStatus(`點擊空白區放置${selectedType.name}，可放置多隻。`);
-    eventLog.innerHTML = "";
     addEvent("等待放置第一隻微生物。");
     setDirty();
   }
