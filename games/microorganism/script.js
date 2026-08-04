@@ -9,7 +9,14 @@
     moveAnimationMs: 115,
     maxCatchUpTicks: 4,
     redSplitThreshold: 12,
+    actionPauseChance: 0.2,
+    actionPauseMs: 300,
     electricArcDurationMs: 500,
+    electricExtendMs: 300,
+    electricCrossExpandMs: 150,
+    electricTentacleRetractMs: 200,
+    electricRestMs: 500,
+    electricTentacleLength: 5,
     sporeDurationMs: 1500,
     mirrorDurationMs: 600,
     auroraDurationMs: 900
@@ -172,7 +179,8 @@
       color: "#f5c542",
       coreColor: "#fff3a3",
       bodySize: 5,
-      tickMs: 300,
+      tickMs: 50,
+      intervalLabel: "階段制",
       movement: "electric-dash",
       electric: true,
       seedOffsets: Object.freeze([
@@ -182,8 +190,8 @@
         { x: 0, y: 1 },
         { x: -1, y: 0 }
       ]),
-      description: "五格金色雷核，蓄電後沿米字方向跳躍兩格並留下電弧。",
-      movementLabel: "蓄電／米字跳躍 2 格／電弧 500ms"
+      description: "平常是五格十字，從中心伸出五格觸角，外端成為新十字中心。",
+      movementLabel: "伸展 300ms／新十字 150ms／收角 200ms／停留 500ms"
     }),
     orange: Object.freeze({
       id: "orange",
@@ -713,9 +721,60 @@
     });
   }
 
+  function drawElectricPhase(microbe, now) {
+    if (!microbe.type.electric || !microbe.electricOrigin || !microbe.electricDirection) return;
+    const cellSize = CONFIG.canvasSize / CONFIG.gridSize;
+    const elapsed = now - microbe.electricPhaseStartedAt;
+    let visibleLength = CONFIG.electricTentacleLength;
+    if (microbe.electricPhase === "extending") {
+      visibleLength = Math.ceil(CONFIG.electricTentacleLength * Math.min(1, Math.max(0, elapsed / CONFIG.electricExtendMs)));
+    } else if (microbe.electricPhase === "retracting") {
+      visibleLength = Math.floor(CONFIG.electricTentacleLength * (1 - Math.min(1, Math.max(0, elapsed / CONFIG.electricTentacleRetractMs))));
+    }
+
+    if (["extending", "transitioning", "retracting"].includes(microbe.electricPhase)) {
+      const tentacle = getElectricTentacleCells(microbe.electricOrigin, microbe.electricDirection, visibleLength);
+      tentacle.forEach((index) => {
+        if (!areCellsInside(new Set([index]))) return;
+        const point = pointOf(index);
+        const pulse = 0.48 + Math.sin(now / 70) * 0.12;
+        drawCellAt(context, point.x, point.y, `rgba(255, 211, 60, ${pulse})`, 0.7, 1.4);
+      });
+      const origin = pointOf(indexOf(microbe.electricOrigin.x, microbe.electricOrigin.y));
+      const outer = pointOf(indexOf(
+        microbe.electricOrigin.x + microbe.electricDirection.x * visibleLength,
+        microbe.electricOrigin.y + microbe.electricDirection.y * visibleLength
+      ));
+      context.save();
+      context.strokeStyle = "rgba(255, 211, 60, 0.7)";
+      context.shadowColor = "rgba(255, 198, 50, 0.9)";
+      context.shadowBlur = cellSize * 0.9;
+      context.lineWidth = Math.max(1, cellSize * 0.12);
+      context.lineCap = "round";
+      context.beginPath();
+      context.moveTo((origin.x + 0.5) * cellSize, (origin.y + 0.5) * cellSize);
+      context.lineTo((outer.x + 0.5) * cellSize, (outer.y + 0.5) * cellSize);
+      context.stroke();
+      context.restore();
+    }
+
+    if (microbe.electricPhase === "transitioning" && microbe.electricTarget) {
+      const progress = Math.min(1, Math.max(0, elapsed / CONFIG.electricCrossExpandMs));
+      getElectricCrossCells(microbe.electricOrigin).forEach((index) => {
+        const point = pointOf(index);
+        drawCellAt(context, point.x, point.y, `rgba(245, 197, 66, ${0.48 * (1 - progress)})`, 0.7, 1.4);
+      });
+      getElectricCrossCells(microbe.electricTarget).forEach((index) => {
+        const point = pointOf(index);
+        drawCellAt(context, point.x, point.y, `rgba(255, 243, 163, ${0.28 + progress * 0.22})`, 0.7, 1.4);
+      });
+    }
+  }
+
   function drawMicrobeAura(microbe, now) {
-    if (microbe.core === null || microbe.core === undefined) return;
-    const point = pointOf(microbe.core);
+    const auraIndex = microbe.core ?? Array.from(microbe.cells)[0];
+    if (auraIndex === undefined) return;
+    const point = pointOf(auraIndex);
     const cellSize = CONFIG.canvasSize / CONFIG.gridSize;
     const centerX = (point.x + 0.5) * cellSize;
     const centerY = (point.y + 0.5) * cellSize;
@@ -727,6 +786,16 @@
       context.beginPath();
       context.arc(centerX, centerY, cellSize * (0.34 + microbe.electricCharge * 0.08), 0, Math.PI * 2);
       context.stroke();
+    }
+    if (microbe.actionPauseUntil > now) {
+      const pauseProgress = Math.max(0, (microbe.actionPauseUntil - now) / CONFIG.actionPauseMs);
+      context.strokeStyle = `rgba(255, 255, 255, ${0.38 + pauseProgress * 0.3})`;
+      context.lineWidth = Math.max(1, cellSize * 0.1);
+      context.setLineDash([cellSize * 0.28, cellSize * 0.18]);
+      context.beginPath();
+      context.arc(centerX, centerY, cellSize * 0.9, 0, Math.PI * 2);
+      context.stroke();
+      context.setLineDash([]);
     }
     if (microbe.type.firework && ["charging", "bloomed"].includes(microbe.fireworkPhase)) {
       const pulse = 0.35 + Math.sin(now / 75) * 0.15;
@@ -771,6 +840,8 @@
       const visualSegments = visualMove
         ? visualMove.segments || [{ oldCell: visualMove.oldCell, newCell: visualMove.newCell }]
         : [];
+
+      drawElectricPhase(microbe, now);
 
       microbe.cells.forEach((index) => {
         const isHead = index === microbe.head;
@@ -888,6 +959,9 @@
       connected: type.jelly ? isEightConnected(cells) : isConnected(cells),
       visualMove: null,
       moveAccumulator: 0,
+      actionPauseUntil: 0,
+      actionPauseStartedAt: 0,
+      actionPausePulseUntil: 0,
       bodyOrder,
       head,
       core: type.coreColor ? indexOf(anchor.x, anchor.y) : null,
@@ -913,6 +987,12 @@
       electricChargePulseUntil: 0,
       electricBonusUntil: 0,
       electricStunnedUntil: 0,
+      electricPhase: type.electric ? "ready" : null,
+      electricPhaseStartedAt: type.electric ? performance.now() : null,
+      electricDirection: null,
+      electricOrigin: null,
+      electricTarget: null,
+      electricTentacleCells: new Set(),
       fireworkPhase: type.firework ? "ready" : null,
       fireworkPhaseStartedAt: type.firework ? performance.now() : null,
       fireworkBonusUntil: 0,
@@ -1019,6 +1099,38 @@
     });
   }
 
+  function shiftActionPhaseTimers(microbe, pausedFor) {
+    [
+      "purplePhaseStartedAt",
+      "fireworkPhaseStartedAt",
+      "electricPhaseStartedAt"
+    ].forEach((field) => {
+      if (typeof microbe[field] === "number") microbe[field] += pausedFor;
+    });
+  }
+
+  function isActionPaused(microbe, now) {
+    if (!microbe.actionPauseUntil) return false;
+    if (microbe.actionPauseUntil > now) return true;
+
+    shiftActionPhaseTimers(microbe, Math.max(0, now - microbe.actionPauseStartedAt));
+    microbe.actionPauseUntil = 0;
+    microbe.actionPauseStartedAt = 0;
+    return false;
+  }
+
+  function maybePauseMicrobeAction(microbe, now) {
+    if (Math.random() >= CONFIG.actionPauseChance) return false;
+    microbe.actionPauseStartedAt = now;
+    microbe.actionPauseUntil = now + CONFIG.actionPauseMs;
+    microbe.actionPausePulseUntil = microbe.actionPauseUntil;
+    microbe.moveAccumulator = 0;
+    const pulseIndex = microbe.core ?? Array.from(microbe.cells)[0];
+    if (pulseIndex !== undefined) addPulse(pulseIndex, "rgb(255, 255, 255)", now, CONFIG.actionPauseMs);
+    addEvent(`${microbe.type.name} #${microbe.id} 觸發 20% 停頓，休息 ${CONFIG.actionPauseMs} 毫秒。`);
+    return true;
+  }
+
   function moveBodyTo(microbe, cells, direction, now, countMove = true, distance = 1) {
     const oldCells = new Set(microbe.cells);
     const segments = Array.from(oldCells).map((oldCell) => {
@@ -1095,6 +1207,19 @@
       startedAt: now,
       expiresAt: now + CONFIG.electricArcDurationMs
     });
+  }
+
+  function getElectricCrossCells(anchor) {
+    return new Set(MICROBE_TYPES.gold.seedOffsets.map((offset) => {
+      return indexOf(anchor.x + offset.x, anchor.y + offset.y);
+    }));
+  }
+
+  function getElectricTentacleCells(anchor, direction, length = CONFIG.electricTentacleLength) {
+    return new Set(Array.from({ length }, (_, offset) => {
+      const distance = offset + 1;
+      return indexOf(anchor.x + direction.x * distance, anchor.y + direction.y * distance);
+    }));
   }
 
   function addMirrorImages(microbe, now) {
@@ -1748,22 +1873,32 @@
       : beginPredatoryTwoStep(microbe, now);
   }
 
-  function getElectricDashCandidates(microbe) {
+  function getElectricMoveCandidates(microbe) {
     if (microbe.core === null || microbe.core === undefined) return [];
     const origin = pointOf(microbe.core);
     const target = getNearestOtherMicrobe(microbe, microbe.core);
     return EIGHT_DIRECTIONS.flatMap((direction) => {
-      const cells = getTranslatedCells(microbe.cells, direction, 2);
-      if (!canOccupyCells(microbe, cells)) return [];
       const destination = {
-        x: origin.x + direction.x * 2,
-        y: origin.y + direction.y * 2
+        x: origin.x + direction.x * CONFIG.electricTentacleLength,
+        y: origin.y + direction.y * CONFIG.electricTentacleLength
       };
+      if (!isInside(destination.x, destination.y)) return [];
+      const cells = getElectricCrossCells(destination);
+      if (!canOccupyCells(microbe, cells)) return [];
+      const tentacleCells = getElectricTentacleCells(origin, direction);
+      const tentacleBlocked = Array.from(tentacleCells).some((index) => {
+        const owner = getCellOwner(index);
+        return owner && owner.id !== microbe.id;
+      });
+      if (!areCellsInside(tentacleCells) || tentacleBlocked) return [];
       const distanceReduction = target
         ? target.distance - Math.hypot(target.target.x - destination.x, target.target.y - destination.y)
         : 0;
       return [{
         direction,
+        origin,
+        destination,
+        tentacleCells,
         cells,
         weight: 1 + Math.max(0, distanceReduction) * (microbe.electricBonusUntil > performance.now() ? 10 : 5)
       }];
@@ -1771,17 +1906,61 @@
   }
 
   function moveElectricDash(microbe, now) {
-    microbe.electricCharge = Math.min(3, (microbe.electricCharge || 0) + 1);
-    microbe.electricChargePulseUntil = now + 180;
-    const candidates = getElectricDashCandidates(microbe);
-    if (!candidates.length) return false;
-    const candidate = weightedRandomItem(candidates);
-    const segments = moveBodyTo(microbe, candidate.cells, candidate.direction, now, true, 2);
-    addElectricArc(segments, now);
-    addPulse(microbe.core, "rgb(255, 211, 60)", now, 500);
-    tryTriggerAurora(microbe, segments, now);
-    addEvent(`${microbe.type.name} #${microbe.id} 蓄電後沿米字方向跳躍兩格，留下金色電弧。`);
-    return true;
+    if (microbe.electricPhase === "ready") {
+      const candidates = getElectricMoveCandidates(microbe);
+      if (!candidates.length) return false;
+      const candidate = weightedRandomItem(candidates);
+      microbe.electricCharge = Math.min(3, (microbe.electricCharge || 0) + 1);
+      microbe.electricChargePulseUntil = now + CONFIG.electricExtendMs;
+      microbe.electricDirection = { ...candidate.direction };
+      microbe.electricOrigin = { ...candidate.origin };
+      microbe.electricTarget = { ...candidate.destination };
+      microbe.electricTentacleCells = new Set(candidate.tentacleCells);
+      microbe.electricPhase = "extending";
+      microbe.electricPhaseStartedAt = now;
+      addPulse(microbe.core, "rgb(255, 211, 60)", now, CONFIG.electricExtendMs);
+      addEvent(`${microbe.type.name} #${microbe.id} 從十字中心向米字方向伸出五格觸角，300ms 後換中心。`);
+      return true;
+    }
+
+    const elapsed = now - microbe.electricPhaseStartedAt;
+    if (microbe.electricPhase === "extending" && elapsed >= CONFIG.electricExtendMs) {
+      const destination = microbe.electricTarget;
+      const segments = moveBodyTo(
+        microbe,
+        getElectricCrossCells(destination),
+        microbe.electricDirection,
+        now,
+        true,
+        CONFIG.electricTentacleLength
+      );
+      addElectricArc(segments, now);
+      tryTriggerAurora(microbe, segments, now);
+      microbe.electricPhase = "transitioning";
+      microbe.electricPhaseStartedAt = now;
+      addPulse(microbe.core, "rgb(255, 211, 60)", now, CONFIG.electricCrossExpandMs);
+      addEvent(`${microbe.type.name} #${microbe.id} 最外側觸角點展開成新十字，原十字同步收起 150ms。`);
+      return true;
+    }
+    if (microbe.electricPhase === "transitioning" && elapsed >= CONFIG.electricCrossExpandMs) {
+      microbe.electricPhase = "retracting";
+      microbe.electricPhaseStartedAt = now;
+      return false;
+    }
+    if (microbe.electricPhase === "retracting" && elapsed >= CONFIG.electricTentacleRetractMs) {
+      microbe.electricTentacleCells = new Set();
+      microbe.electricPhase = "resting";
+      microbe.electricPhaseStartedAt = now;
+      return false;
+    }
+    if (microbe.electricPhase === "resting" && elapsed >= CONFIG.electricRestMs) {
+      microbe.electricPhase = "ready";
+      microbe.electricPhaseStartedAt = now;
+      microbe.electricDirection = null;
+      microbe.electricOrigin = null;
+      microbe.electricTarget = null;
+    }
+    return false;
   }
 
   function getFireworkMoveCandidates(microbe) {
@@ -2310,6 +2489,7 @@
 
     movementOrder.forEach((microbe) => {
       if (!state.microbes.includes(microbe)) return;
+      if (isActionPaused(microbe, now)) return;
       if (microbe.type.jelly && microbe.jellyRecovering) {
         restoreJellyfishIfReady(microbe, now);
         return;
@@ -2319,6 +2499,7 @@
       microbe.moveAccumulator += CONFIG.baseTickMs;
       if (microbe.moveAccumulator < microbe.type.tickMs) return;
       microbe.moveAccumulator -= microbe.type.tickMs;
+      if (maybePauseMicrobeAction(microbe, now)) return;
       const moveStrategy = MOVEMENT_STRATEGIES[microbe.type.movement];
       if (moveStrategy && moveStrategy(microbe, now)) movedCount += 1;
     });
