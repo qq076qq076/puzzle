@@ -17,6 +17,17 @@
     { x: -1, y: 0 }
   ];
 
+  const EIGHT_DIRECTIONS = [
+    { x: 0, y: -1 },
+    { x: 1, y: -1 },
+    { x: 1, y: 0 },
+    { x: 1, y: 1 },
+    { x: 0, y: 1 },
+    { x: -1, y: 1 },
+    { x: -1, y: 0 },
+    { x: -1, y: -1 }
+  ];
+
   const MICROBE_TYPES = Object.freeze({
     black: Object.freeze({
       id: "black",
@@ -74,6 +85,46 @@
       ]),
       description: "五格身體，延伸兩格後停留 250ms，再收回兩格並停留 250ms。",
       movementLabel: "延伸／250ms／收回／250ms"
+    }),
+    "light-blue": Object.freeze({
+      id: "light-blue",
+      name: "淺藍水母",
+      color: "#8ad9ed",
+      headColor: "#2c9fbd",
+      bodySize: 7,
+      tickMs: 250,
+      movement: "jellyfish-swim",
+      jelly: true,
+      seedOffsets: Object.freeze([
+        { x: 0, y: -1 },
+        { x: -2, y: 0 },
+        { x: -1, y: 0 },
+        { x: 0, y: 0 },
+        { x: 1, y: 0 },
+        { x: 2, y: 0 },
+        { x: 0, y: 1 }
+      ]),
+      expandedOffsets: Object.freeze([
+        { x: 0, y: -1 },
+        { x: -2, y: 0 },
+        { x: -1, y: 0 },
+        { x: 0, y: 0 },
+        { x: 1, y: 0 },
+        { x: 2, y: 0 },
+        { x: 0, y: 1 }
+      ]),
+      contractedOffsets: Object.freeze([
+        { x: 0, y: -2 },
+        { x: 0, y: -1 },
+        { x: -1, y: 0 },
+        { x: 0, y: 0 },
+        { x: 1, y: 0 },
+        { x: 0, y: 1 }
+      ]),
+      expandedHeadOffset: { x: 0, y: -1 },
+      contractedHeadOffset: { x: 0, y: -2 },
+      description: "七格淺藍水母，張開蓄力後收縮揮動，沿八方向前進兩格。",
+      movementLabel: "張開／揮動前進 2 格／收縮"
     })
   });
 
@@ -169,6 +220,14 @@
       .map((point) => indexOf(point.x, point.y));
   }
 
+  function neighborsWithDirectionsOf(index, directions) {
+    const point = pointOf(index);
+    return directions
+      .map((direction) => ({ x: point.x + direction.x, y: point.y + direction.y }))
+      .filter((nextPoint) => isInside(nextPoint.x, nextPoint.y))
+      .map((nextPoint) => indexOf(nextPoint.x, nextPoint.y));
+  }
+
   function getPlacementAnchor(center, type) {
     const xOffsets = type.seedOffsets.map((offset) => offset.x);
     const yOffsets = type.seedOffsets.map((offset) => offset.y);
@@ -189,6 +248,30 @@
 
   function getCellsFromOffsets(anchor, offsets) {
     return offsets.map((offset) => indexOf(anchor.x + offset.x, anchor.y + offset.y));
+  }
+
+  function transformJellyOffset(offset, direction) {
+    const right = { x: -direction.y, y: direction.x };
+    return {
+      x: right.x * offset.x - direction.x * offset.y,
+      y: right.y * offset.x - direction.y * offset.y
+    };
+  }
+
+  function getJellyCells(anchor, direction, phase, type = MICROBE_TYPES["light-blue"]) {
+    const offsets = phase === "contracted" ? type.contractedOffsets : type.expandedOffsets;
+    return new Set(offsets.map((offset) => {
+      const transformed = transformJellyOffset(offset, direction);
+      return indexOf(anchor.x + transformed.x, anchor.y + transformed.y);
+    }));
+  }
+
+  function getJellyHeadCell(anchor, direction, phase, type = MICROBE_TYPES["light-blue"]) {
+    const offset = phase === "contracted" ? type.contractedHeadOffset : type.expandedHeadOffset;
+    const transformed = transformJellyOffset(offset, direction);
+    return isInside(anchor.x + transformed.x, anchor.y + transformed.y)
+      ? indexOf(anchor.x + transformed.x, anchor.y + transformed.y)
+      : null;
   }
 
   function centerOfBody(microbe) {
@@ -280,6 +363,29 @@
     return visited.size === cellSet.size;
   }
 
+  function isEightConnected(cellSet) {
+    if (cellSet.size === 0) return true;
+    const firstCell = cellSet.values().next().value;
+    const visited = new Set([firstCell]);
+    const pending = [firstCell];
+
+    while (pending.length) {
+      const current = pending.pop();
+      neighborsWithDirectionsOf(current, EIGHT_DIRECTIONS).forEach((neighbor) => {
+        if (cellSet.has(neighbor) && !visited.has(neighbor)) {
+          visited.add(neighbor);
+          pending.push(neighbor);
+        }
+      });
+    }
+
+    return visited.size === cellSet.size;
+  }
+
+  function isBodyConnected(microbe) {
+    return microbe.type.jelly ? isEightConnected(microbe.cells) : isConnected(microbe.cells);
+  }
+
   function updateUi() {
     const latestMicrobe = state.microbes[state.microbes.length - 1] || null;
     const latestCenter = centerOfBody(latestMicrobe);
@@ -302,6 +408,7 @@
       infoSwatch.classList.toggle("is-black", selectedType.id === "black");
       infoSwatch.classList.toggle("is-green", selectedType.id === "green");
       infoSwatch.classList.toggle("is-red", selectedType.id === "red");
+      infoSwatch.classList.toggle("is-light-blue", selectedType.id === "light-blue");
     }
     if (movementModeValue) movementModeValue.textContent = selectedType.movementLabel;
     pauseButton.disabled = !state.microbes.length;
@@ -346,7 +453,9 @@
   function drawHeadMarkerAt(xCell, yCell, type) {
     if (!type.headColor) return;
     const cellSize = CONFIG.canvasSize / CONFIG.gridSize;
-    context.fillStyle = "rgba(8, 62, 28, 0.85)";
+    context.fillStyle = type.id === "light-blue"
+      ? "rgba(20, 112, 139, 0.9)"
+      : "rgba(8, 62, 28, 0.85)";
     context.beginPath();
     context.arc((xCell + 0.34) * cellSize, (yCell + 0.34) * cellSize, Math.max(1.2, cellSize * 0.08), 0, Math.PI * 2);
     context.fill();
@@ -495,9 +604,13 @@
     if (Array.from(cells).some((index) => state.occupancy.has(index))) return null;
     const anchor = getPlacementAnchor(center, type);
     const bodyOrder = type.orderOffsets ? getCellsFromOffsets(anchor, type.orderOffsets) : null;
-    const head = type.headOffset
-      ? indexOf(anchor.x + type.headOffset.x, anchor.y + type.headOffset.y)
-      : null;
+    const jellyDirection = type.jelly ? { x: 0, y: -1 } : null;
+    const jellyPhase = type.jelly ? "expanded" : null;
+    const head = type.jelly
+      ? getJellyHeadCell(anchor, jellyDirection, jellyPhase, type)
+      : type.headOffset
+        ? indexOf(anchor.x + type.headOffset.x, anchor.y + type.headOffset.y)
+        : null;
 
     const microbe = {
       id: state.nextMicrobeId,
@@ -506,11 +619,17 @@
       cells,
       bodySize: cells.size,
       steps: 0,
-      connected: true,
+      connected: type.jelly ? isEightConnected(cells) : true,
       visualMove: null,
       moveAccumulator: 0,
       bodyOrder,
       head,
+      jellyAnchor: type.jelly ? { ...anchor } : null,
+      jellyDirection,
+      jellyPhase,
+      jellyRecovering: false,
+      jellyRecoveryUntil: 0,
+      jellyRecoverySnapshot: null,
       consumedCells: 0,
       growthLevel: 0,
       predatoryPhase: "ready",
@@ -527,7 +646,7 @@
     const microbe = createMicrobe(state.selectedTypeId, center);
     if (!microbe) {
       setBoardStatus("這裡已有微生物，請點擊沒有被佔用的空白區。");
-      addEvent("放置失敗：四格種子區與既有微生物重疊。");
+      addEvent(`放置失敗：${MICROBE_TYPES[state.selectedTypeId].bodySize} 格種子區與既有微生物重疊。`);
       setDirty();
       return;
     }
@@ -562,6 +681,73 @@
     });
   }
 
+  function isJellyPoseInside(anchor, direction, phase, type) {
+    const offsets = phase === "contracted" ? type.contractedOffsets : type.expandedOffsets;
+    return offsets.every((offset) => {
+      const transformed = transformJellyOffset(offset, direction);
+      return isInside(anchor.x + transformed.x, anchor.y + transformed.y);
+    });
+  }
+
+  function getCellOwner(index) {
+    const ownerId = state.occupancy.get(index);
+    return state.microbes.find((microbe) => microbe.id === ownerId) || null;
+  }
+
+  function startJellyfishRecovery(microbe, now) {
+    if (!microbe.type.jelly) return;
+    const wasRecovering = microbe.jellyRecovering;
+    const direction = microbe.jellyDirection || { x: 0, y: -1 };
+    if (!microbe.jellyRecoverySnapshot) {
+      microbe.jellyRecoverySnapshot = {
+        anchor: { ...microbe.jellyAnchor },
+        direction: { ...direction }
+      };
+    }
+    microbe.jellyRecovering = true;
+    microbe.jellyRecoveryUntil = Math.max(microbe.jellyRecoveryUntil, now + 3000);
+    microbe.jellyPhase = "recovery";
+    microbe.visualMove = null;
+    if (!wasRecovering) {
+      addEvent(`${microbe.type.name} #${microbe.id} 受到損失，停止 3 秒後恢復原狀。`);
+    }
+  }
+
+  function restoreJellyfishIfReady(microbe, now) {
+    if (!microbe.type.jelly || !microbe.jellyRecovering || now < microbe.jellyRecoveryUntil) return false;
+    const snapshot = microbe.jellyRecoverySnapshot;
+    if (!snapshot || !isJellyPoseInside(snapshot.anchor, snapshot.direction, "expanded", microbe.type)) {
+      microbe.jellyRecoveryUntil = now + 100;
+      return false;
+    }
+
+    const restoredCells = getJellyCells(snapshot.anchor, snapshot.direction, "expanded", microbe.type);
+    const blocked = Array.from(restoredCells).some((index) => {
+      const ownerId = state.occupancy.get(index);
+      return ownerId !== undefined && ownerId !== microbe.id;
+    });
+    if (blocked) {
+      microbe.jellyRecoveryUntil = now + 100;
+      return false;
+    }
+
+    microbe.cells.forEach((index) => releaseCell(microbe, index));
+    microbe.cells = restoredCells;
+    claimCells(microbe, restoredCells);
+    microbe.bodySize = restoredCells.size;
+    microbe.jellyAnchor = { ...snapshot.anchor };
+    microbe.jellyDirection = { ...snapshot.direction };
+    microbe.jellyPhase = "expanded";
+    microbe.jellyRecovering = false;
+    microbe.jellyRecoveryUntil = 0;
+    microbe.jellyRecoverySnapshot = null;
+    microbe.head = getJellyHeadCell(microbe.jellyAnchor, microbe.jellyDirection, "expanded", microbe.type);
+    microbe.connected = isBodyConnected(microbe);
+    addEvent(`${microbe.type.name} #${microbe.id} 已恢復原狀。`);
+    setDirty();
+    return true;
+  }
+
   function getNonBreakingGrowthCandidates(microbe) {
     return getGrowthCandidates(microbe).filter((newCell) => {
       return getConnectedRetractions(microbe, newCell).length > 0;
@@ -581,6 +767,7 @@
 
     prey.cells.delete(index);
     state.occupancy.set(index, predator.id);
+    if (prey.typeId === "light-blue") startJellyfishRecovery(prey, performance.now());
     if (prey.bodyOrder) {
       prey.bodyOrder = prey.bodyOrder.filter((cell) => prey.cells.has(cell));
       if (prey.head !== null && !prey.cells.has(prey.head)) {
@@ -588,8 +775,8 @@
       }
     }
     prey.bodySize = prey.cells.size;
-    prey.connected = isConnected(prey.cells);
-    if (prey.cells.size === 0) {
+    prey.connected = prey.type.jelly ? isEightConnected(prey.cells) : isConnected(prey.cells);
+    if (prey.cells.size === 0 && prey.typeId !== "light-blue") {
       state.microbes = state.microbes.filter((microbe) => microbe !== prey);
     }
     return prey;
@@ -726,14 +913,17 @@
         const path = [indexOf(firstPoint.x, firstPoint.y), indexOf(secondPoint.x, secondPoint.y)];
         if (path.some((index) => microbe.cells.has(index))) return;
         const blockedByRed = path.some((index) => {
-          const ownerId = state.occupancy.get(index);
-          const owner = state.microbes.find((item) => item.id === ownerId);
+          const owner = getCellOwner(index);
           return owner?.typeId === "red";
         });
         if (blockedByRed) return;
+        const blockedByRecoveringJellyfish = path.some((index) => {
+          const owner = getCellOwner(index);
+          return owner?.typeId === "light-blue" && owner.jellyRecovering;
+        });
+        if (blockedByRecoveringJellyfish) return;
         const consumedCells = path.filter((index) => {
-          const ownerId = state.occupancy.get(index);
-          const owner = state.microbes.find((item) => item.id === ownerId);
+          const owner = getCellOwner(index);
           return owner && owner.id !== microbe.id && owner.typeId !== "red";
         });
         candidates.push({
@@ -941,10 +1131,122 @@
     return true;
   }
 
+  function getJellyPoseConflict(microbe, cells) {
+    let redHit = false;
+    let blocked = false;
+    cells.forEach((index) => {
+      const owner = getCellOwner(index);
+      if (!owner || owner.id === microbe.id) return;
+      if (owner.typeId === "red") redHit = true;
+      else blocked = true;
+    });
+    return { redHit, blocked };
+  }
+
+  function applyJellyPose(microbe, anchor, direction, phase, cells, now, countMove) {
+    const oldHead = microbe.head;
+    microbe.cells.forEach((index) => releaseCell(microbe, index));
+    microbe.cells = cells;
+    claimCells(microbe, cells);
+    microbe.bodySize = cells.size;
+    microbe.jellyAnchor = { ...anchor };
+    microbe.jellyDirection = { ...direction };
+    microbe.jellyPhase = phase;
+    microbe.head = getJellyHeadCell(anchor, direction, phase, microbe.type);
+    microbe.connected = isBodyConnected(microbe);
+
+    if (countMove) {
+      microbe.steps += 1;
+      state.totalMoves += 1;
+      if (oldHead !== null && microbe.head !== null && oldHead !== microbe.head) {
+        microbe.visualMove = {
+          oldCell: oldHead,
+          newCell: microbe.head,
+          startedAt: now,
+          duration: CONFIG.moveAnimationMs
+        };
+        state.trail.push({
+          oldCell: oldHead,
+          newCell: microbe.head,
+          expiresAt: now + CONFIG.trailDurationMs
+        });
+      }
+    }
+  }
+
+  function getJellySwingCandidates(microbe) {
+    if (!microbe.jellyAnchor) return [];
+    return EIGHT_DIRECTIONS.flatMap((direction) => {
+      const anchor = {
+        x: microbe.jellyAnchor.x + direction.x * 2,
+        y: microbe.jellyAnchor.y + direction.y * 2
+      };
+      if (!isJellyPoseInside(anchor, direction, "contracted", microbe.type)) return [];
+      const cells = getJellyCells(anchor, direction, "contracted", microbe.type);
+      const conflict = getJellyPoseConflict(microbe, cells);
+      if (conflict.blocked) return [];
+      return [{ direction, anchor, cells, redHit: conflict.redHit }];
+    });
+  }
+
+  function bounceJellyfish(microbe, direction, now) {
+    const reverseDirection = { x: -direction.x, y: -direction.y };
+    const anchor = {
+      x: microbe.jellyAnchor.x + reverseDirection.x * 4,
+      y: microbe.jellyAnchor.y + reverseDirection.y * 4
+    };
+    if (!isJellyPoseInside(anchor, reverseDirection, "contracted", microbe.type)) {
+      addEvent(`${microbe.type.name} #${microbe.id} 撞到紅色，但後方四格超出培養區。`);
+      return false;
+    }
+    const cells = getJellyCells(anchor, reverseDirection, "contracted", microbe.type);
+    const conflict = getJellyPoseConflict(microbe, cells);
+    if (conflict.blocked || conflict.redHit) {
+      addEvent(`${microbe.type.name} #${microbe.id} 撞到紅色，但反彈路徑受阻。`);
+      return false;
+    }
+    applyJellyPose(microbe, anchor, reverseDirection, "contracted", cells, now, true);
+    addEvent(`${microbe.type.name} #${microbe.id} 撞到紅色，立即往回彈四格。`);
+    return true;
+  }
+
+  function expandJellyfish(microbe, now) {
+    const direction = microbe.jellyDirection || { x: 0, y: -1 };
+    if (!isJellyPoseInside(microbe.jellyAnchor, direction, "expanded", microbe.type)) return false;
+    const cells = getJellyCells(microbe.jellyAnchor, direction, "expanded", microbe.type);
+    const conflict = getJellyPoseConflict(microbe, cells);
+    if (conflict.redHit) return bounceJellyfish(microbe, direction, now);
+    if (conflict.blocked) return false;
+    applyJellyPose(microbe, microbe.jellyAnchor, direction, "expanded", cells, now, false);
+    return true;
+  }
+
+  function moveJellyfish(microbe, now) {
+    if (microbe.jellyRecovering || !microbe.jellyAnchor) return false;
+    if (microbe.jellyPhase === "contracted") return expandJellyfish(microbe, now);
+
+    const candidates = getJellySwingCandidates(microbe);
+    if (!candidates.length) return false;
+    const candidate = randomItem(candidates);
+    if (candidate.redHit) return bounceJellyfish(microbe, candidate.direction, now);
+    applyJellyPose(
+      microbe,
+      candidate.anchor,
+      candidate.direction,
+      "contracted",
+      candidate.cells,
+      now,
+      true
+    );
+    addEvent(`${microbe.type.name} #${microbe.id} 揮動前進兩格，進入收縮姿勢。`);
+    return true;
+  }
+
   const MOVEMENT_STRATEGIES = Object.freeze({
     "random-connected-crawl": moveRandomConnected,
     "head-random-crawl": moveHeadRandom,
-    "predatory-two-step": movePredatoryTwoStep
+    "predatory-two-step": movePredatoryTwoStep,
+    "jellyfish-swim": moveJellyfish
   });
 
   function stepAllMicrobes(now) {
@@ -954,7 +1256,12 @@
     let movedCount = 0;
 
     movementOrder.forEach((microbe) => {
-      if (!state.microbes.includes(microbe) || microbe.cells.size === 0) return;
+      if (!state.microbes.includes(microbe)) return;
+      if (microbe.type.jelly && microbe.jellyRecovering) {
+        restoreJellyfishIfReady(microbe, now);
+        return;
+      }
+      if (microbe.cells.size === 0) return;
       microbe.moveAccumulator += CONFIG.baseTickMs;
       if (microbe.moveAccumulator < microbe.type.tickMs) return;
       microbe.moveAccumulator -= microbe.type.tickMs;
