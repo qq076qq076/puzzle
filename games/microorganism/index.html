@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#f5f0e9" />
-    <meta name="description" content="microorganism：在 150×150 網格中放置黑色、綠色、紅色、淺藍水母與紫色微生物，觀察它們依各自節奏爬行、游動、吞噬與分裂。" />
+    <meta name="description" content="microorganism：在 150×150 網格中放置八種微生物，觀察它們依各自節奏爬行、游動、吞噬、放電、綻放與分裂。" />
     <title>microorganism · Puzzle Club</title>
     <link rel="stylesheet" href="../../styles.css" />
     <link rel="stylesheet" href="styles.css" />
@@ -18,7 +18,7 @@
           <div class="micro-eyebrow"><span class="micro-eyebrow-dot"></span> CELL MOTION LAB · 150 × 150</div>
           <h1 id="micro-title">microorganism<span>.</span></h1>
           <p class="micro-tagline">小小一隻，<br /><em>持續爬行。</em></p>
-          <p class="micro-copy">先選擇微生物，再在空白區反覆點擊放置。黑色微生物每 150 毫秒從身體邊緣延伸；綠色條蟲每 250 毫秒由頭部前進且有三分之一機率休息；紅色微生物依序延伸兩格、停留 250 毫秒、收回兩格，再停留 250 毫秒，超過 12 格會斷裂成兩隻；淺藍水母張開到最大停留 500 毫秒，揮動前進後也停留 500 毫秒；紫色微生物會尋找空白方向並吞噬紅色。</p>
+          <p class="micro-copy">先選擇微生物，再在空白區反覆點擊放置。黑色微生物每 150 毫秒從身體邊緣延伸；綠色條蟲每 250 毫秒由頭部前進且有三分之一機率休息；紅色微生物依序延伸兩格、停留 250 毫秒、收回兩格，再停留 250 毫秒，超過 12 格會斷裂成兩隻；淺藍水母張開到最大停留 500 毫秒，揮動前進後也停留 500 毫秒；紫色微生物會尋找空白方向並吞噬紅色；電弧、煙火與鏡像會在培養皿中交織出特殊效果。</p>
 
           <div class="micro-rule-chips" aria-label="遊戲規則摘要">
             <div><strong>150²</strong><span>邏輯培養格</span></div>
@@ -79,6 +79,18 @@
                   <span class="micro-type-swatch is-purple" aria-hidden="true"></span>
                   <span><b>紫色微生物</b></span>
                 </button>
+                <button class="micro-type-option" type="button" data-type="gold" aria-label="選擇金色電弧菌" aria-pressed="false">
+                  <span class="micro-type-swatch is-gold" aria-hidden="true"></span>
+                  <span><b>金色電弧菌</b></span>
+                </button>
+                <button class="micro-type-option" type="button" data-type="orange" aria-label="選擇橙色煙火孢子菌" aria-pressed="false">
+                  <span class="micro-type-swatch is-orange" aria-hidden="true"></span>
+                  <span><b>橙色煙火孢子菌</b></span>
+                </button>
+                <button class="micro-type-option" type="button" data-type="silver" aria-label="選擇白色鏡像水晶菌" aria-pressed="false">
+                  <span class="micro-type-swatch is-silver" aria-hidden="true"></span>
+                  <span><b>白色鏡像水晶菌</b></span>
+                </button>
               </div>
             </section>
 
@@ -105,6 +117,6 @@
 
       <footer class="page-footer micro-footer"><span>PUZZLE CLUB</span><span>GROW SMALL · MOVE OFTEN</span></footer>
     </main>
-    <script src="script.js?v=red-split"></script>
+    <script src="script.js?v=new-microbes"></script>
   </body>
 </html>
