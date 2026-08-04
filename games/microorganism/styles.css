@@ -310,7 +310,7 @@
 
 .micro-type-options {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -417,6 +417,22 @@
   content: "";
 }
 
+.micro-type-swatch.is-purple {
+  background: #9b59d6;
+  box-shadow: 4px 4px 0 rgba(91, 45, 134, 0.16);
+}
+
+.micro-type-swatch.is-purple::after {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #5b2d86;
+  content: "";
+}
+
 .micro-info-card {
   min-width: 0;
   padding: 16px;
@@ -470,6 +486,11 @@
 .microbe-swatch.is-light-blue {
   background: #8ad9ed;
   box-shadow: 5px 5px 0 rgba(44, 159, 189, 0.16);
+}
+
+.microbe-swatch.is-purple {
+  background: #9b59d6;
+  box-shadow: 5px 5px 0 rgba(91, 45, 134, 0.16);
 }
 
 .microbe-swatch-row p {

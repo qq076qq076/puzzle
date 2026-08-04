@@ -125,6 +125,39 @@
       contractedHeadOffset: { x: 0, y: -2 },
       description: "七格淺藍水母，張開蓄力後收縮揮動，沿八方向前進兩格。",
       movementLabel: "張開／揮動前進 2 格／收縮"
+    }),
+    purple: Object.freeze({
+      id: "purple",
+      name: "紫色微生物",
+      color: "#9b59d6",
+      coreColor: "#5b2d86",
+      bodySize: 5,
+      tickMs: 50,
+      intervalLabel: "階段制",
+      movement: "purple-core-step",
+      purple: true,
+      seedOffsets: Object.freeze([
+        { x: 0, y: 0 },
+        { x: 0, y: -1 },
+        { x: 1, y: 0 },
+        { x: 0, y: 1 },
+        { x: -1, y: 0 }
+      ]),
+      expandedOffsets: Object.freeze([
+        { x: 0, y: -2 },
+        { x: 0, y: -1 },
+        { x: 1, y: -1 },
+        { x: -2, y: 0 },
+        { x: -1, y: 0 },
+        { x: 0, y: 0 },
+        { x: 1, y: 0 },
+        { x: 2, y: 0 },
+        { x: 0, y: 1 },
+        { x: 1, y: 1 },
+        { x: 0, y: 2 }
+      ]),
+      description: "核心五格，朝核心四方向之一移動後張開；偏好空白區，能吞噬紅色微生物。",
+      movementLabel: "移動／張開 100ms／收回 500ms／停留 250ms"
     })
   });
 
@@ -249,12 +282,16 @@
     return offsets.map((offset) => indexOf(anchor.x + offset.x, anchor.y + offset.y));
   }
 
-  function transformJellyOffset(offset, direction) {
+  function transformLocalOffset(offset, direction) {
     const right = { x: -direction.y, y: direction.x };
     return {
       x: right.x * offset.x - direction.x * offset.y,
       y: right.y * offset.x - direction.y * offset.y
     };
+  }
+
+  function transformJellyOffset(offset, direction) {
+    return transformLocalOffset(offset, direction);
   }
 
   function getJellyCells(anchor, direction, phase, type = MICROBE_TYPES["light-blue"]) {
@@ -305,7 +342,8 @@
       button.classList.toggle("is-selected", isSelected);
       button.setAttribute("aria-pressed", String(isSelected));
     });
-    setBoardStatus(`${type.name}已選取，每格移動間隔 ${type.tickMs}ms。`);
+    const timingLabel = type.intervalLabel || `每格移動間隔 ${type.tickMs}ms`;
+    setBoardStatus(`${type.name}已選取，${timingLabel}。`);
     setDirty();
   }
 
@@ -389,7 +427,7 @@
     volumeValue.textContent = `${totalVolume} 格`;
     stepsValue.textContent = String(state.totalMoves);
     if (bodySizeValue) bodySizeValue.textContent = latestMicrobe ? `${latestMicrobe.cells.size} 格` : "—";
-    if (intervalValue) intervalValue.textContent = `${selectedType.tickMs}ms`;
+    if (intervalValue) intervalValue.textContent = selectedType.intervalLabel || `${selectedType.tickMs}ms`;
     if (infoTitle) infoTitle.textContent = `${selectedType.name}選項`;
     if (infoCopy) infoCopy.textContent = selectedType.description;
     if (infoSwatch) {
@@ -397,6 +435,7 @@
       infoSwatch.classList.toggle("is-green", selectedType.id === "green");
       infoSwatch.classList.toggle("is-red", selectedType.id === "red");
       infoSwatch.classList.toggle("is-light-blue", selectedType.id === "light-blue");
+      infoSwatch.classList.toggle("is-purple", selectedType.id === "purple");
     }
     if (movementModeValue) movementModeValue.textContent = selectedType.movementLabel;
     pauseButton.disabled = !state.microbes.length;
@@ -446,6 +485,15 @@
       : "rgba(8, 62, 28, 0.85)";
     context.beginPath();
     context.arc((xCell + 0.34) * cellSize, (yCell + 0.34) * cellSize, Math.max(1.2, cellSize * 0.08), 0, Math.PI * 2);
+    context.fill();
+  }
+
+  function drawCoreMarkerAt(xCell, yCell, type) {
+    if (!type.coreColor) return;
+    const cellSize = CONFIG.canvasSize / CONFIG.gridSize;
+    context.fillStyle = type.coreColor;
+    context.beginPath();
+    context.arc((xCell + 0.5) * cellSize, (yCell + 0.5) * cellSize, Math.max(1.5, cellSize * 0.16), 0, Math.PI * 2);
     context.fill();
   }
 
@@ -540,6 +588,11 @@
         context.fill();
       }
 
+      if (microbe.core !== null && microbe.core !== undefined) {
+        const corePoint = pointOf(microbe.core);
+        drawCoreMarkerAt(corePoint.x, corePoint.y, microbe.type);
+      }
+
       if (visualMove && progress >= 1) microbe.visualMove = null;
     });
   }
@@ -594,6 +647,8 @@
     const bodyOrder = type.orderOffsets ? getCellsFromOffsets(anchor, type.orderOffsets) : null;
     const jellyDirection = type.jelly ? { x: 0, y: -1 } : null;
     const jellyPhase = type.jelly ? "expanded" : null;
+    const purpleCore = type.purple ? { ...anchor } : null;
+    const purplePhase = type.purple ? "ready" : null;
     const head = type.jelly
       ? getJellyHeadCell(anchor, jellyDirection, jellyPhase, type)
       : type.headOffset
@@ -612,6 +667,13 @@
       moveAccumulator: 0,
       bodyOrder,
       head,
+      core: type.purple ? indexOf(anchor.x, anchor.y) : null,
+      purpleCore,
+      purpleDirection: null,
+      purplePhase,
+      purplePhaseStartedAt: type.purple ? performance.now() : null,
+      purpleHuntingRed: false,
+      purpleFastAction: false,
       jellyAnchor: type.jelly ? { ...anchor } : null,
       jellyDirection,
       jellyPhase,
@@ -641,7 +703,8 @@
 
     state.paused = false;
     addEvent(`${microbe.type.name} #${microbe.id} 放置完成，佔用 ${microbe.cells.size} 格。`);
-    setBoardStatus(`已放置 ${state.microbes.length} 隻微生物，${microbe.type.name}每 ${microbe.type.tickMs} 毫秒移動。`);
+    const timingLabel = microbe.type.intervalLabel || `每 ${microbe.type.tickMs} 毫秒移動`;
+    setBoardStatus(`已放置 ${state.microbes.length} 隻微生物，${microbe.type.name}${timingLabel}。`);
     processBlackContacts(performance.now());
     refreshConnectivity();
     state.accumulator = 0;
@@ -751,7 +814,8 @@
       state.occupancy.delete(index);
       return null;
     }
-    if (prey.typeId === "red") return null;
+    if (prey.typeId === "red" && predator.typeId !== "purple") return null;
+    if (predator.typeId === "purple" && prey.typeId !== "red") return null;
 
     prey.cells.delete(index);
     state.occupancy.set(index, predator.id);
@@ -1230,11 +1294,193 @@
     return true;
   }
 
+  function getPurpleCells(anchor, direction, phase, type = MICROBE_TYPES.purple) {
+    const offsets = phase === "expanded" ? type.expandedOffsets : type.seedOffsets;
+    return new Set(offsets.map((offset) => {
+      const transformed = transformLocalOffset(offset, direction);
+      return indexOf(anchor.x + transformed.x, anchor.y + transformed.y);
+    }));
+  }
+
+  function isPurplePoseInside(anchor, direction, phase, type = MICROBE_TYPES.purple) {
+    const offsets = phase === "expanded" ? type.expandedOffsets : type.seedOffsets;
+    return offsets.every((offset) => {
+      const transformed = transformLocalOffset(offset, direction);
+      return isInside(anchor.x + transformed.x, anchor.y + transformed.y);
+    });
+  }
+
+  function getPurplePoseConflict(microbe, cells) {
+    const redCells = [];
+    let blocked = false;
+    cells.forEach((index) => {
+      const owner = getCellOwner(index);
+      if (!owner || owner.id === microbe.id) return;
+      if (owner.typeId === "red") redCells.push(index);
+      else blocked = true;
+    });
+    return { redCells, blocked };
+  }
+
+  function getNearestRedCellTarget(microbe, origin) {
+    const originPoint = pointOf(origin);
+    return state.microbes
+      .filter((otherMicrobe) => otherMicrobe !== microbe && otherMicrobe.typeId === "red" && otherMicrobe.cells.size > 0)
+      .reduce((nearest, otherMicrobe) => {
+        otherMicrobe.cells.forEach((index) => {
+          const point = pointOf(index);
+          const distance = Math.hypot(point.x - originPoint.x, point.y - originPoint.y);
+          if (!nearest || distance < nearest.distance) nearest = { point, distance };
+        });
+        return nearest;
+      }, null);
+  }
+
+  function getPurpleDirectionWeight(microbe, candidate) {
+    const openScore = candidate.emptyCount * 3;
+    if (!microbe.purpleHuntingRed) return 1 + openScore;
+
+    const target = getNearestRedCellTarget(microbe, microbe.core);
+    if (!target) return 1 + openScore;
+    const origin = pointOf(microbe.core);
+    const destination = pointOf(indexOf(candidate.anchor.x, candidate.anchor.y));
+    const currentDistance = Math.hypot(target.point.x - origin.x, target.point.y - origin.y);
+    const nextDistance = Math.hypot(target.point.x - destination.x, target.point.y - destination.y);
+    const distanceReduction = currentDistance - nextDistance;
+    const redReward = candidate.redCells.length ? 40 : 0;
+    return 1 + openScore + Math.max(0, distanceReduction) * 10 + redReward;
+  }
+
+  function getPurpleMoveCandidates(microbe) {
+    if (!microbe.purpleCore) return [];
+    return DIRECTIONS.flatMap((direction) => {
+      const anchor = {
+        x: microbe.purpleCore.x + direction.x,
+        y: microbe.purpleCore.y + direction.y
+      };
+      if (!isPurplePoseInside(anchor, direction, "expanded", microbe.type)) return [];
+      const cells = getPurpleCells(anchor, direction, "expanded", microbe.type);
+      const conflict = getPurplePoseConflict(microbe, cells);
+      if (conflict.blocked || conflict.redCells.length > 1) return [];
+      const emptyCount = Array.from(cells).filter((index) => !state.occupancy.has(index)).length;
+      return [{
+        anchor,
+        cells,
+        direction,
+        redCells: conflict.redCells,
+        emptyCount,
+        weight: getPurpleDirectionWeight(microbe, {
+          anchor,
+          direction,
+          redCells: conflict.redCells,
+          emptyCount
+        })
+      }];
+    });
+  }
+
+  function applyPurplePose(microbe, anchor, direction, phase, cells, countMove) {
+    microbe.cells.forEach((index) => releaseCell(microbe, index));
+    microbe.cells = cells;
+    claimCells(microbe, cells);
+    microbe.bodySize = cells.size;
+    microbe.purpleCore = { ...anchor };
+    microbe.purpleDirection = { ...direction };
+    microbe.core = indexOf(anchor.x, anchor.y);
+    microbe.connected = isBodyConnected(microbe);
+    if (countMove) {
+      microbe.steps += 1;
+      state.totalMoves += 1;
+    }
+  }
+
+  function getPurplePhaseDuration(microbe) {
+    const baseDurations = {
+      expanded: 100,
+      retracting: 500,
+      resting: 250
+    };
+    const duration = baseDurations[microbe.purplePhase] || 0;
+    return microbe.purpleFastAction ? duration / 2 : duration;
+  }
+
+  function hasRemainingRed() {
+    return state.microbes.some((microbe) => microbe.typeId === "red" && microbe.cells.size > 0);
+  }
+
+  function beginPurpleMovement(microbe, now) {
+    if (Math.random() < 0.25) {
+      microbe.purplePhase = "resting";
+      microbe.purplePhaseStartedAt = now;
+      microbe.purpleFastAction = false;
+      return false;
+    }
+
+    if (microbe.purpleHuntingRed && !hasRemainingRed()) microbe.purpleHuntingRed = false;
+    const candidates = getPurpleMoveCandidates(microbe);
+    if (!candidates.length) {
+      microbe.purplePhase = "resting";
+      microbe.purplePhaseStartedAt = now;
+      microbe.purpleFastAction = false;
+      return false;
+    }
+
+    const candidate = weightedRandomItem(candidates);
+    const consumed = candidate.redCells.length > 0
+      ? consumeForeignCell(microbe, candidate.redCells[0])
+      : null;
+    if (candidate.redCells.length > 0 && !consumed) return false;
+
+    applyPurplePose(microbe, candidate.anchor, candidate.direction, "expanded", candidate.cells, true);
+    microbe.purplePhase = "expanded";
+    microbe.purplePhaseStartedAt = now;
+    microbe.purpleHuntingRed = Boolean(consumed) || microbe.purpleHuntingRed;
+    microbe.purpleFastAction = Boolean(consumed);
+    addEvent(consumed
+      ? `${microbe.type.name} #${microbe.id} 吞噬一格紅色，開始追蹤其他紅色。`
+      : `${microbe.type.name} #${microbe.id} 朝空白方向移動並張開。`);
+    return true;
+  }
+
+  function finishPurpleRetraction(microbe, now) {
+    const direction = microbe.purpleDirection || { x: 0, y: -1 };
+    const cells = getPurpleCells(microbe.purpleCore, direction, "normal", microbe.type);
+    const conflict = getPurplePoseConflict(microbe, cells);
+    if (conflict.blocked || conflict.redCells.length > 0) {
+      microbe.purplePhaseStartedAt = now;
+      return false;
+    }
+    applyPurplePose(microbe, microbe.purpleCore, direction, "normal", cells, false);
+    microbe.purplePhase = "resting";
+    microbe.purplePhaseStartedAt = now;
+    return true;
+  }
+
+  function movePurple(microbe, now) {
+    if (microbe.purplePhase === "ready") return beginPurpleMovement(microbe, now);
+    if (now - microbe.purplePhaseStartedAt < getPurplePhaseDuration(microbe)) return false;
+
+    if (microbe.purplePhase === "expanded") {
+      microbe.purplePhase = "retracting";
+      microbe.purplePhaseStartedAt = now;
+      return false;
+    }
+    if (microbe.purplePhase === "retracting") return finishPurpleRetraction(microbe, now);
+    if (microbe.purplePhase === "resting") {
+      microbe.purplePhase = "ready";
+      microbe.purplePhaseStartedAt = now;
+      microbe.purpleFastAction = false;
+      if (!hasRemainingRed()) microbe.purpleHuntingRed = false;
+    }
+    return false;
+  }
+
   const MOVEMENT_STRATEGIES = Object.freeze({
     "random-connected-crawl": moveRandomConnected,
     "head-random-crawl": moveHeadRandom,
     "predatory-two-step": movePredatoryTwoStep,
-    "jellyfish-swim": moveJellyfish
+    "jellyfish-swim": moveJellyfish,
+    "purple-core-step": movePurple
   });
 
   function stepAllMicrobes(now) {
