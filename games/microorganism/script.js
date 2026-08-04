@@ -113,7 +113,9 @@
     hoverCell: null,
     trail: [],
     renderDirty: true,
-    allConnected: true
+    allConnected: true,
+    blackContacts: new Set(),
+    blackProductionCooldownUntil: 0
   };
 
   canvas.width = CONFIG.canvasSize;
@@ -533,6 +535,8 @@
     state.paused = false;
     addEvent(`${microbe.type.name} #${microbe.id} 放置完成，佔用 ${microbe.cells.size} 格。`);
     setBoardStatus(`已放置 ${state.microbes.length} 隻微生物，${microbe.type.name}每 ${microbe.type.tickMs} 毫秒移動。`);
+    processBlackContacts(performance.now());
+    refreshConnectivity();
     state.accumulator = 0;
     setDirty();
   }
@@ -573,6 +577,7 @@
       state.occupancy.delete(index);
       return null;
     }
+    if (prey.typeId === "red") return null;
 
     prey.cells.delete(index);
     state.occupancy.set(index, predator.id);
@@ -588,6 +593,86 @@
       state.microbes = state.microbes.filter((microbe) => microbe !== prey);
     }
     return prey;
+  }
+
+  function getBlackContacts() {
+    const blackMicrobes = state.microbes.filter((microbe) => {
+      return microbe.typeId === "black" && microbe.cells.size > 0;
+    });
+    const contacts = new Map();
+
+    for (let firstIndex = 0; firstIndex < blackMicrobes.length - 1; firstIndex += 1) {
+      const firstMicrobe = blackMicrobes[firstIndex];
+      for (let secondIndex = firstIndex + 1; secondIndex < blackMicrobes.length; secondIndex += 1) {
+        const secondMicrobe = blackMicrobes[secondIndex];
+        let contact = null;
+        firstMicrobe.cells.forEach((firstCell) => {
+          if (contact) return;
+          neighborsOf(firstCell).some((secondCell) => {
+            if (!secondMicrobe.cells.has(secondCell)) return false;
+            contact = { firstCell, secondCell };
+            return true;
+          });
+        });
+        if (contact) {
+          contacts.set(`${firstMicrobe.id}:${secondMicrobe.id}`, {
+            firstMicrobe,
+            secondMicrobe,
+            ...contact
+          });
+        }
+      }
+    }
+    return contacts;
+  }
+
+  function findBlackOffspringCenter(contact) {
+    const basePoints = [
+      pointOf(contact.firstCell),
+      pointOf(contact.secondCell),
+      centerOfBody(contact.firstMicrobe),
+      centerOfBody(contact.secondMicrobe)
+    ].filter(Boolean);
+    const candidates = [];
+    const seen = new Set();
+
+    basePoints.forEach((basePoint) => {
+      for (let yOffset = -8; yOffset <= 8; yOffset += 1) {
+        for (let xOffset = -8; xOffset <= 8; xOffset += 1) {
+          const x = basePoint.x + xOffset;
+          const y = basePoint.y + yOffset;
+          if (!isInside(x, y)) continue;
+          const key = `${x},${y}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          candidates.push({ x, y });
+        }
+      }
+    });
+
+    shuffle(candidates);
+    const type = MICROBE_TYPES.black;
+    return candidates.find((center) => {
+      const cells = getPlacementCells(center, type);
+      return Array.from(cells).every((index) => !state.occupancy.has(index));
+    }) || null;
+  }
+
+  function processBlackContacts(now) {
+    const contacts = getBlackContacts();
+    contacts.forEach((contact, key) => {
+      if (state.blackContacts.has(key) || now < state.blackProductionCooldownUntil) return;
+      if (Math.random() >= 0.5) return;
+
+      const center = findBlackOffspringCenter(contact);
+      if (!center) return;
+      const offspring = createMicrobe("black", center);
+      if (!offspring) return;
+
+      state.blackProductionCooldownUntil = now + 3000;
+      addEvent(`黑色微生物 #${contact.firstMicrobe.id} 與 #${contact.secondMicrobe.id} 碰觸，產出黑色微生物 #${offspring.id}，冷卻 3 秒。`);
+    });
+    state.blackContacts = new Set(contacts.keys());
   }
 
   function getRedDirectionWeight(microbe, origin, direction) {
@@ -625,9 +710,16 @@
 
         const path = [indexOf(firstPoint.x, firstPoint.y), indexOf(secondPoint.x, secondPoint.y)];
         if (path.some((index) => microbe.cells.has(index))) return;
+        const blockedByRed = path.some((index) => {
+          const ownerId = state.occupancy.get(index);
+          const owner = state.microbes.find((item) => item.id === ownerId);
+          return owner?.typeId === "red";
+        });
+        if (blockedByRed) return;
         const consumedCells = path.filter((index) => {
           const ownerId = state.occupancy.get(index);
-          return ownerId !== undefined && ownerId !== microbe.id;
+          const owner = state.microbes.find((item) => item.id === ownerId);
+          return owner && owner.id !== microbe.id && owner.typeId !== "red";
         });
         candidates.push({
           origin,
@@ -799,6 +891,7 @@
 
   function moveHeadRandom(microbe, now) {
     if (microbe.head === null || !microbe.bodyOrder) return false;
+    if (Math.random() < 1 / 3) return false;
     microbe.bodyOrder = microbe.bodyOrder.filter((index) => microbe.cells.has(index));
     if (!microbe.bodyOrder.length) return false;
     if (!microbe.cells.has(microbe.head)) microbe.head = microbe.bodyOrder[0];
@@ -855,6 +948,7 @@
     });
 
     state.trail = state.trail.filter((move) => move.expiresAt > now);
+    processBlackContacts(now);
     refreshConnectivity();
     if (movedCount > 0) setBoardStatus(`第 ${state.tickCount} 次模擬更新：${movedCount}/${state.microbes.length} 隻微生物移動，總體積 ${getTotalVolume()} 格。`);
     if (movedCount > 0 && (state.tickCount === 1 || state.tickCount % 5 === 0)) {
@@ -912,6 +1006,8 @@
     state.accumulator = 0;
     state.trail = [];
     state.allConnected = true;
+    state.blackContacts = new Set();
+    state.blackProductionCooldownUntil = 0;
     const selectedType = MICROBE_TYPES[state.selectedTypeId];
     setBoardStatus(`點擊空白區放置${selectedType.name}，可放置多隻。`);
     eventLog.innerHTML = "";
