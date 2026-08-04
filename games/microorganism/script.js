@@ -519,20 +519,30 @@
     });
   }
 
-  function moveRandomConnected(microbe, now) {
-    const candidates = getGrowthCandidates(microbe);
-    const movementOptions = candidates
-      .map((newCell) => ({ newCell, retractableCells: getConnectedRetractions(microbe, newCell) }))
-      .filter((option) => option.retractableCells.length > 0);
-    if (movementOptions.length === 0) return false;
+  function getNonBreakingGrowthCandidates(microbe) {
+    return getGrowthCandidates(microbe).filter((newCell) => {
+      return getConnectedRetractions(microbe, newCell).length > 0;
+    });
+  }
 
-    const movement = randomItem(movementOptions);
-    const newCell = movement.newCell;
-    const oldCell = randomItem(movement.retractableCells);
-    releaseCell(microbe, oldCell);
-    microbe.cells.delete(oldCell);
+  function moveRandomConnected(microbe, now) {
+    const growthCandidates = getNonBreakingGrowthCandidates(microbe);
+    if (growthCandidates.length === 0) return false;
+
+    const newCell = randomItem(growthCandidates);
     microbe.cells.add(newCell);
     state.occupancy.set(newCell, microbe.id);
+
+    const retractableCells = getConnectedRetractions(microbe, newCell);
+    if (retractableCells.length === 0) {
+      microbe.cells.delete(newCell);
+      releaseCell(microbe, newCell);
+      return false;
+    }
+
+    const oldCell = randomItem(retractableCells);
+    releaseCell(microbe, oldCell);
+    microbe.cells.delete(oldCell);
     microbe.steps += 1;
     microbe.connected = isConnected(microbe.cells);
     microbe.visualMove = {
