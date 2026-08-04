@@ -213,9 +213,19 @@
 .duquan-stage-wrap { position: relative; overflow: hidden; aspect-ratio: 960 / 620; border: 1px solid rgba(246, 235, 222, 0.16); border-radius: 14px; background: #141311; box-shadow: inset 0 0 0 6px rgba(255, 255, 255, 0.025), 0 16px 30px rgba(0, 0, 0, 0.27); }
 #duquan-canvas { display: block; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
 #duquan-canvas:focus-visible { outline: 3px solid rgba(241, 195, 107, 0.52); outline-offset: -3px; }
-.duquan-canvas-corner { position: absolute; width: 16px; height: 16px; border-color: rgba(241, 195, 107, 0.68); border-style: solid; pointer-events: none; }
-.duquan-canvas-corner-tl { top: 12px; left: 12px; border-width: 1px 0 0 1px; }
-.duquan-canvas-corner-br { right: 12px; bottom: 12px; border-width: 0 1px 1px 0; }
+.duquan-stage-wrap::before,
+.duquan-stage-wrap::after {
+  position: absolute;
+  z-index: 1;
+  width: 16px;
+  height: 16px;
+  border-color: rgba(241, 195, 107, 0.68);
+  border-style: solid;
+  content: "";
+  pointer-events: none;
+}
+.duquan-stage-wrap::before { top: 12px; left: 12px; border-width: 1px 0 0 1px; }
+.duquan-stage-wrap::after { right: 12px; bottom: 12px; border-width: 0 1px 1px 0; }
 
 .duquan-status-row { align-items: baseline; min-height: 28px; padding: 11px 1px 0; }
 .duquan-status { margin: 0; color: #c2b6aa; font-size: 0.68rem; line-height: 1.4; }
@@ -246,7 +256,7 @@
 }
 
 @media (max-width: 760px) {
-  .duquan-shell { width: min(100% - 28px, 600px); padding-top: 26px; }
+  .duquan-shell { width: min(calc(100% - 28px), 600px); padding-top: 26px; }
   .duquan-layout { display: block; margin-top: 38px; }
   .duquan-intro { padding-bottom: 30px; }
   .duquan-copy { max-width: 520px; }
@@ -260,14 +270,36 @@
 }
 
 @media (max-width: 520px) {
-  .duquan-shell { width: min(100% - 20px, 460px); }
+  .duquan-shell { width: min(calc(100% - 20px), 460px); }
   .duquan-intro h1 { font-size: clamp(4rem, 20vw, 6rem); }
   .duquan-eyebrow { font-size: 0.55rem; letter-spacing: 0.1em; }
   .duquan-toolbar { align-items: flex-start; flex-direction: column; }
   .duquan-metrics { width: 100%; justify-content: space-between; }
   .duquan-stat { flex: 1; min-width: 0; }
   .duquan-quiet-button { align-self: flex-end; }
+  .duquan-panel {
+    width: calc(100% + 20px);
+    margin-inline: -10px;
+    padding: 0 10px 16px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
   .duquan-setup, .duquan-arena-section { padding: 13px; }
+  .duquan-arena-section {
+    margin-inline: -10px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .duquan-stage-wrap {
+    margin-inline: 0;
+    width: 100%;
+  }
+  .duquan-arena-heading, .duquan-status-row { padding-inline: 10px; }
   .duquan-choice-grid { gap: 6px; }
   .duquan-choice { min-height: 68px; padding: 8px; gap: 7px; }
   .duquan-choice-icon { width: 31px; height: 31px; flex-basis: 31px; border-radius: 9px; font-size: 1.2rem; }

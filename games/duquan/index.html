@@ -45,6 +45,31 @@
             <button class="duquan-quiet-button" id="reset-button" type="button">重新配置</button>
           </div>
 
+          <section class="duquan-arena-section" id="arena-section" aria-labelledby="arena-title" hidden>
+            <div class="duquan-arena-heading">
+              <div>
+                <span class="duquan-section-kicker">THE FIST RING · LIVE</span>
+                <h2 id="arena-title">拳台正在判斷</h2>
+              </div>
+              <div class="duquan-arena-live"><span></span>100ms LOOP</div>
+            </div>
+
+            <div class="duquan-stage-wrap">
+              <canvas id="duquan-canvas" width="960" height="620" tabindex="0" role="application" aria-label="剪刀石頭布模擬拳台"></canvas>
+              <div class="duquan-result-card" id="result-card" hidden aria-live="polite">
+                <span class="duquan-result-kicker" id="result-kicker">FINAL CALL</span>
+                <strong id="result-title">剪刀稱霸</strong>
+                <p id="result-copy">—</p>
+                <button class="duquan-primary-button" id="next-round-button" type="button">開始下一輪 <span aria-hidden="true">↗</span></button>
+              </div>
+            </div>
+
+            <div class="duquan-status-row">
+              <p class="duquan-status" id="status-value" role="status" aria-live="polite">模擬啟動中…</p>
+              <span class="duquan-last-event" id="last-event">等待第一次碰撞</span>
+            </div>
+          </section>
+
           <section class="duquan-setup" id="setup-panel" aria-labelledby="choice-title">
             <div class="duquan-setup-heading">
               <div>
@@ -96,33 +121,6 @@
                 </div>
               </div>
             </section>
-          </section>
-
-          <section class="duquan-arena-section" id="arena-section" aria-labelledby="arena-title" hidden>
-            <div class="duquan-arena-heading">
-              <div>
-                <span class="duquan-section-kicker">THE FIST RING · LIVE</span>
-                <h2 id="arena-title">拳台正在判斷</h2>
-              </div>
-              <div class="duquan-arena-live"><span></span>100ms LOOP</div>
-            </div>
-
-            <div class="duquan-stage-wrap">
-              <canvas id="duquan-canvas" width="960" height="620" tabindex="0" role="application" aria-label="剪刀石頭布模擬拳台"></canvas>
-              <div class="duquan-canvas-corner duquan-canvas-corner-tl" aria-hidden="true"></div>
-              <div class="duquan-canvas-corner duquan-canvas-corner-br" aria-hidden="true"></div>
-              <div class="duquan-result-card" id="result-card" hidden aria-live="polite">
-                <span class="duquan-result-kicker" id="result-kicker">FINAL CALL</span>
-                <strong id="result-title">剪刀稱霸</strong>
-                <p id="result-copy">—</p>
-                <button class="duquan-primary-button" id="next-round-button" type="button">開始下一輪 <span aria-hidden="true">↗</span></button>
-              </div>
-            </div>
-
-            <div class="duquan-status-row">
-              <p class="duquan-status" id="status-value" role="status" aria-live="polite">模擬啟動中…</p>
-              <span class="duquan-last-event" id="last-event">等待第一次碰撞</span>
-            </div>
           </section>
 
           <p class="duquan-help"><span aria-hidden="true">✦</span> 越靠近，方向權重越高；同類圖示會保持距離，邊界會把它們推回拳台。</p>

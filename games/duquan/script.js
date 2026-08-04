@@ -10,6 +10,9 @@
     collisionDistance: 27,
     moveDistance: 7.5,
     steering: 0.42,
+    speedBoostChance: 0.05,
+    speedBoostDurationMs: 3000,
+    speedBoostMultiplier: 1.7,
     gridSize: 40,
     typeOrder: ["scissors", "rock", "paper"]
   });
@@ -52,7 +55,8 @@
     lastTimestamp: 0,
     pulse: 0,
     collisionFlash: [],
-    recentWinner: null
+    recentWinner: null,
+    counts: { scissors: 0, rock: 0, paper: 0 }
   };
 
   const iconImages = Object.fromEntries(CONFIG.typeOrder.map((typeId) => {
@@ -119,6 +123,7 @@
     }, { scissors: 0, rock: 0, paper: 0 });
     const aliveTypes = CONFIG.typeOrder.filter((typeId) => counts[typeId] > 0);
     const total = state.actors.length;
+    state.counts = counts;
     aliveValue.textContent = state.actors.length ? `${aliveTypes.length} 種` : "—";
     tickValue.textContent = state.running || state.finished ? String(state.tick).padStart(3, "0") : "—";
     if (total > 0) {
@@ -163,7 +168,8 @@
           velocityX: Math.cos(angle) * 0.35,
           velocityY: Math.sin(angle) * 0.35,
           bob: Math.random() * Math.PI * 2,
-          flash: 0
+          flash: 0,
+          speedBoostRemaining: 0
         });
       }
     }
@@ -236,8 +242,8 @@
       directionY += (dy / distance) * closeness * polarity;
     }
 
-    const edgePadding = 92;
-    const edgeStrength = 2.4;
+    const edgePadding = 108;
+    const edgeStrength = 4.8;
     const leftPressure = Math.max(0, (edgePadding - actor.x) / edgePadding);
     const rightPressure = Math.max(0, (edgePadding - (CONFIG.canvasWidth - actor.x)) / edgePadding);
     const topPressure = Math.max(0, (edgePadding - actor.y) / edgePadding);
@@ -252,10 +258,13 @@
 
     const magnitude = Math.hypot(directionX, directionY) || 1;
     const edgeDistance = Math.min(actor.x, CONFIG.canvasWidth - actor.x, actor.y, CONFIG.canvasHeight - actor.y);
-    const boundaryBoost = edgeDistance < edgePadding ? 1 + ((edgePadding - edgeDistance) / edgePadding) * 0.25 : 1;
-    const speed = nearestOpponent
+    const boundaryBoost = edgeDistance < edgePadding ? 1 + ((edgePadding - edgeDistance) / edgePadding) * 0.4 : 1;
+    const baseSpeed = nearestOpponent
       ? (beats(actor.type, nearestOpponent.type) ? 1.08 : 0.72) * boundaryBoost
       : 0.92 * boundaryBoost;
+    const speed = actor.speedBoostRemaining > 0
+      ? baseSpeed * CONFIG.speedBoostMultiplier
+      : baseSpeed;
     return {
       x: directionX / magnitude,
       y: directionY / magnitude,
@@ -263,7 +272,28 @@
     };
   }
 
+  function updateSpeedBoosts() {
+    const counts = state.counts;
+    const minimumCount = Math.min(...CONFIG.typeOrder.map((typeId) => counts[typeId]));
+    const maximumCount = Math.max(...CONFIG.typeOrder.map((typeId) => counts[typeId]));
+    const underdogTypes = new Set(
+      maximumCount > minimumCount
+        ? CONFIG.typeOrder.filter((typeId) => counts[typeId] === minimumCount)
+        : []
+    );
+
+    for (const actor of state.actors) {
+      actor.speedBoostRemaining = Math.max(0, actor.speedBoostRemaining - CONFIG.tickMs);
+      if (actor.speedBoostRemaining === 0
+        && underdogTypes.has(actor.type)
+        && Math.random() < CONFIG.speedBoostChance) {
+        actor.speedBoostRemaining = CONFIG.speedBoostDurationMs;
+      }
+    }
+  }
+
   function moveActors() {
+    updateSpeedBoosts();
     const directions = new Map();
     for (const actor of state.actors) directions.set(actor.id, getDirection(actor, state.actors));
     for (const actor of state.actors) {
@@ -282,17 +312,17 @@
       actor.y += actor.velocityY * CONFIG.moveDistance;
       if (actor.x <= minX) {
         actor.x = minX;
-        actor.velocityX = Math.max(0.46, Math.abs(actor.velocityX) * 0.82);
+        actor.velocityX = Math.max(0.68, Math.abs(actor.velocityX) * 0.88);
       } else if (actor.x >= maxX) {
         actor.x = maxX;
-        actor.velocityX = -Math.max(0.46, Math.abs(actor.velocityX) * 0.82);
+        actor.velocityX = -Math.max(0.68, Math.abs(actor.velocityX) * 0.88);
       }
       if (actor.y <= minY) {
         actor.y = minY;
-        actor.velocityY = Math.max(0.46, Math.abs(actor.velocityY) * 0.82);
+        actor.velocityY = Math.max(0.68, Math.abs(actor.velocityY) * 0.88);
       } else if (actor.y >= maxY) {
         actor.y = maxY;
-        actor.velocityY = -Math.max(0.46, Math.abs(actor.velocityY) * 0.82);
+        actor.velocityY = -Math.max(0.68, Math.abs(actor.velocityY) * 0.88);
       }
       actor.bob += 0.25;
       actor.flash = Math.max(0, actor.flash - 0.16);
