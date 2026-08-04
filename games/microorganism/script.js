@@ -7,7 +7,8 @@
     canvasSize: 1250,
     trailDurationMs: 520,
     moveAnimationMs: 115,
-    maxCatchUpTicks: 4
+    maxCatchUpTicks: 4,
+    redSplitThreshold: 12
   });
 
   const DIRECTIONS = [
@@ -83,8 +84,8 @@
         { x: 0, y: 1 },
         { x: -1, y: 0 }
       ]),
-      description: "五格身體，延伸兩格後停留 250ms，再收回兩格並停留 250ms。",
-      movementLabel: "延伸／250ms／收回／250ms"
+      description: "五格身體，延伸兩格後停留 250ms，再收回兩格並停留 250ms；超過 12 格會斷裂成兩隻。",
+      movementLabel: "延伸／250ms／收回／250ms／>12格斷裂"
     }),
     "light-blue": Object.freeze({
       id: "light-blue",
@@ -637,15 +638,9 @@
     return { x, y };
   }
 
-  function createMicrobe(typeId, center) {
+  function createMicrobeState(typeId, cells, anchor) {
     const type = MICROBE_TYPES[typeId];
     if (!type) return null;
-    if (type.seedOffsets.length !== type.bodySize) {
-      throw new Error(`${type.name} 的 seedOffsets 數量必須等於 bodySize。`);
-    }
-    const cells = getPlacementCells(center, type);
-    if (Array.from(cells).some((index) => state.occupancy.has(index))) return null;
-    const anchor = getPlacementAnchor(center, type);
     const bodyOrder = type.orderOffsets ? getCellsFromOffsets(anchor, type.orderOffsets) : null;
     const jellyDirection = type.jelly ? { x: 0, y: -1 } : null;
     const jellyPhase = type.jelly ? "expanded" : null;
@@ -661,10 +656,10 @@
       id: state.nextMicrobeId,
       typeId,
       type,
-      cells,
+      cells: new Set(cells),
       bodySize: cells.size,
       steps: 0,
-      connected: type.jelly ? isEightConnected(cells) : true,
+      connected: type.jelly ? isEightConnected(cells) : isConnected(cells),
       visualMove: null,
       moveAccumulator: 0,
       bodyOrder,
@@ -689,6 +684,19 @@
       pendingPredatoryMove: null
     };
     state.nextMicrobeId += 1;
+    return microbe;
+  }
+
+  function createMicrobe(typeId, center) {
+    const type = MICROBE_TYPES[typeId];
+    if (!type) return null;
+    if (type.seedOffsets.length !== type.bodySize) {
+      throw new Error(`${type.name} 的 seedOffsets 數量必須等於 bodySize。`);
+    }
+    const cells = getPlacementCells(center, type);
+    if (Array.from(cells).some((index) => state.occupancy.has(index))) return null;
+    const anchor = getPlacementAnchor(center, type);
+    const microbe = createMicrobeState(typeId, cells, anchor);
     state.microbes.push(microbe);
     claimCells(microbe, cells);
     refreshConnectivity();
@@ -1044,6 +1052,90 @@
     return options;
   }
 
+  function getRedSplitPartition(cells) {
+    const cellList = Array.from(cells);
+    if (cellList.length < 2) return null;
+
+    const root = randomItem(cellList);
+    const parent = new Map([[root, null]]);
+    const traversal = [root];
+    for (let cursor = 0; cursor < traversal.length; cursor += 1) {
+      const current = traversal[cursor];
+      shuffle(neighborsOf(current)).forEach((neighbor) => {
+        if (!cells.has(neighbor) || parent.has(neighbor)) return;
+        parent.set(neighbor, current);
+        traversal.push(neighbor);
+      });
+    }
+    if (traversal.length !== cellList.length) return null;
+
+    const children = new Map(traversal.map((index) => [index, []]));
+    traversal.slice(1).forEach((index) => {
+      children.get(parent.get(index)).push(index);
+    });
+
+    const subtreeSizes = new Map();
+    for (let cursor = traversal.length - 1; cursor >= 0; cursor -= 1) {
+      const index = traversal[cursor];
+      const subtreeSize = children.get(index).reduce((total, child) => {
+        return total + subtreeSizes.get(child);
+      }, 1);
+      subtreeSizes.set(index, subtreeSize);
+    }
+
+    const totalSize = cellList.length;
+    const cuts = traversal.slice(1).map((child) => {
+      const fragmentSize = subtreeSizes.get(child);
+      return {
+        child,
+        fragmentSize,
+        difference: Math.abs(totalSize - fragmentSize * 2)
+      };
+    });
+    const bestDifference = Math.min(...cuts.map((cut) => cut.difference));
+    const selectedCut = randomItem(cuts.filter((cut) => cut.difference === bestDifference));
+    const fragmentCells = new Set();
+    const pending = [selectedCut.child];
+    while (pending.length) {
+      const index = pending.pop();
+      fragmentCells.add(index);
+      pending.push(...children.get(index));
+    }
+
+    let originalCells = new Set(cellList.filter((index) => !fragmentCells.has(index)));
+    if (!originalCells.size || !fragmentCells.size) return null;
+    if (fragmentCells.size > originalCells.size) {
+      const largerSide = new Set(fragmentCells);
+      const smallerSide = new Set(originalCells);
+      originalCells = largerSide;
+      fragmentCells.clear();
+      smallerSide.forEach((index) => fragmentCells.add(index));
+    }
+    return { originalCells, fragmentCells };
+  }
+
+  function splitRedIfOvergrown(microbe) {
+    if (microbe.typeId !== "red" || microbe.cells.size <= CONFIG.redSplitThreshold) return null;
+    const partition = getRedSplitPartition(microbe.cells);
+    if (!partition) return null;
+
+    microbe.cells.forEach((index) => releaseCell(microbe, index));
+    microbe.cells = partition.originalCells;
+    microbe.bodySize = microbe.cells.size;
+    microbe.connected = isConnected(microbe.cells);
+    microbe.visualMove = null;
+    microbe.consumedCells = 0;
+    microbe.growthLevel = 0;
+    microbe.predatoryPhase = "ready";
+    microbe.pendingPredatoryMove = null;
+    claimCells(microbe, microbe.cells);
+
+    const fragment = createMicrobeState("red", partition.fragmentCells, null);
+    state.microbes.push(fragment);
+    claimCells(fragment, fragment.cells);
+    return fragment;
+  }
+
   function beginPredatoryTwoStep(microbe, now) {
     const candidates = getRedMoveCandidates(microbe)
       .map((candidate) => ({
@@ -1112,10 +1204,15 @@
     microbe.connected = isConnected(microbe.cells);
     state.totalMoves += 1;
 
+    const splitFragment = splitRedIfOvergrown(microbe);
+
     const growthMessage = pendingMove.growthGain > 0
       ? `，身體增加 ${pendingMove.growthGain} 格`
       : "";
-    addEvent(`${microbe.type.name} #${microbe.id} 收回 ${pendingMove.retractionCells.length} 格，完成移動${growthMessage}，250ms 後再延伸。`);
+    const splitMessage = splitFragment
+      ? `，超過 ${CONFIG.redSplitThreshold} 格，斷裂成 #${microbe.id} 與 #${splitFragment.id}`
+      : "";
+    addEvent(`${microbe.type.name} #${microbe.id} 收回 ${pendingMove.retractionCells.length} 格，完成移動${growthMessage}${splitMessage}，250ms 後再延伸。`);
     return true;
   }
 
