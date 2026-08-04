@@ -675,22 +675,37 @@
     state.blackContacts = new Set(contacts.keys());
   }
 
-  function getRedDirectionWeight(microbe, origin, direction) {
+  function getNearestRedTarget(microbe, origin) {
     const originPoint = pointOf(origin);
-    let strongestAlignment = 0;
-
-    state.microbes.forEach((otherMicrobe) => {
-      if (otherMicrobe === microbe || otherMicrobe.cells.size === 0) return;
-      const target = centerOfBody(otherMicrobe);
-      const vectorX = target.x - originPoint.x;
-      const vectorY = target.y - originPoint.y;
-      const distance = Math.hypot(vectorX, vectorY);
-      if (distance === 0) return;
-      const alignment = (vectorX * direction.x + vectorY * direction.y) / distance;
-      if (alignment > strongestAlignment) strongestAlignment = alignment;
+    const otherMicrobes = state.microbes.filter((otherMicrobe) => {
+      return otherMicrobe !== microbe && otherMicrobe.cells.size > 0;
     });
+    const edibleMicrobes = otherMicrobes.filter((otherMicrobe) => otherMicrobe.typeId !== "red");
+    const targetPool = edibleMicrobes.length ? edibleMicrobes : otherMicrobes;
 
-    return 1 + strongestAlignment * 6;
+    return targetPool.reduce((nearest, otherMicrobe) => {
+      const target = centerOfBody(otherMicrobe);
+      const distance = Math.hypot(target.x - originPoint.x, target.y - originPoint.y);
+      if (!nearest || distance < nearest.distance) return { target, distance };
+      return nearest;
+    }, null);
+  }
+
+  function getRedDirectionWeight(microbe, origin, direction) {
+    const nearestTarget = getNearestRedTarget(microbe, origin);
+    if (!nearestTarget) return 1;
+
+    const originPoint = pointOf(origin);
+    const destination = {
+      x: originPoint.x + direction.x * 2,
+      y: originPoint.y + direction.y * 2
+    };
+    const destinationDistance = Math.hypot(
+      nearestTarget.target.x - destination.x,
+      nearestTarget.target.y - destination.y
+    );
+    const distanceReduction = nearestTarget.distance - destinationDistance;
+    return 1 + Math.max(0, distanceReduction) * 8;
   }
 
   function getRedMoveCandidates(microbe) {
