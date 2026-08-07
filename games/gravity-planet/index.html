@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#070b1d" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>重力星球 · Gravity Planet</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="gravity-page">
+      <a class="back-link" href="../../index.html"><span aria-hidden="true">←</span> 所有遊戲</a>
+
+      <section class="game-header" aria-labelledby="game-title">
+        <div>
+          <div class="eyebrow"><span class="eyebrow-dot"></span> GRAVITY PLANET · THREE.JS</div>
+          <h1 id="game-title">重力星球<span>.</span></h1>
+          <p class="game-tagline">吸收碎石，變成宇宙裡更大的存在。</p>
+        </div>
+        <div class="header-actions">
+          <button class="button button-quiet" id="pause-button" type="button">暫停</button>
+          <button class="button button-primary" id="restart-button" type="button">重新開始 <span aria-hidden="true">↗</span></button>
+        </div>
+      </section>
+
+      <section class="game-shell" aria-label="重力星球遊戲">
+        <div class="canvas-frame" id="canvas-frame">
+          <div id="scene-container" aria-label="3D 宇宙遊戲場景"></div>
+          <div class="scene-vignette" aria-hidden="true"></div>
+          <div class="danger-alert" id="danger-alert" hidden>
+            <span class="danger-orb" aria-hidden="true"></span>
+            <span><strong id="danger-name">危險星體靠近</strong><small id="danger-distance">保持距離</small></span>
+          </div>
+          <div class="combo-pill" id="combo-pill" hidden>COMBO ×<strong id="combo-value">3</strong></div>
+          <div class="scene-toast" id="scene-toast" aria-live="polite"></div>
+          <div class="evolution-popup" id="evolution-popup" hidden>
+            <div class="evolution-card">
+              <div class="evolution-kicker"><span class="evolution-spark" aria-hidden="true">✦</span> EVOLUTION COMPLETE</div>
+              <h2 id="evolution-name">小行星</h2>
+              <p id="evolution-description">你的核心已經足夠強大，現在可以用更大的引力收集碎石。</p>
+              <button class="button button-primary" id="evolution-continue" type="button">繼續探索 <span aria-hidden="true">↗</span></button>
+            </div>
+          </div>
+          <div class="pause-cover" id="pause-cover" hidden>
+            <div class="cover-card">
+              <span class="cover-kicker">COSMIC PAUSE</span>
+              <h2>宇宙暫停中</h2>
+              <p>準備好後，繼續收集你的下一塊星塵。</p>
+              <button class="button button-primary" id="resume-button" type="button">繼續探索</button>
+            </div>
+          </div>
+          <div class="gameover-cover" id="gameover-cover" hidden>
+            <div class="cover-card gameover-card">
+              <span class="cover-kicker">GRAVITY COLLAPSE</span>
+              <h2>引力護盾耗盡</h2>
+              <p id="gameover-copy">你的星體在宇宙中留下了漂亮的軌跡。</p>
+              <div class="result-grid">
+                <div><span>最高階級</span><strong id="result-level">1</strong></div>
+                <div><span>最高質量</span><strong id="result-mass">1</strong></div>
+                <div><span>存活時間</span><strong id="result-time">0:00</strong></div>
+              </div>
+              <button class="button button-primary" id="gameover-restart" type="button">再次出發 <span aria-hidden="true">↗</span></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="game-controls">
+          <div class="control-card how-card">
+            <div class="dpad" aria-label="虛擬方向鍵">
+              <button type="button" data-dir="up" aria-label="向上">↑</button>
+              <button type="button" data-dir="left" aria-label="向左">←</button>
+              <button type="button" data-dir="down" aria-label="向下">↓</button>
+              <button type="button" data-dir="right" aria-label="向右">→</button>
+            </div>
+            <div class="control-copy">
+              <div class="hud-kicker">HOW TO MOVE</div>
+              <strong>上下左右移動</strong>
+              <span>方向鍵或 WASD，靠近小星體即可吸收</span>
+            </div>
+          </div>
+          <div class="control-card record-card">
+            <div class="hud-kicker">RUN RECORD</div>
+            <div class="record-row"><span>存活</span><strong id="time-value">0:00</strong></div>
+            <div class="record-row"><span>BEST MASS</span><strong id="best-value">1</strong></div>
+          </div>
+        </div>
+      </section>
+
+      <footer class="page-footer">
+        <span>COLLECT · EVOLVE · ESCAPE</span>
+        <span class="footer-rule" aria-hidden="true"></span>
+        <span>越大，宇宙越安靜</span>
+      </footer>
+    </main>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>

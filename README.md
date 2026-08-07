@@ -17,6 +17,7 @@
 - `games/petri-dish/`：2D Canvas 菌境培養皿遊戲、十種菌種、環境屬性與顏色互動規劃文件。
 - `games/microorganism/`：150×150 Canvas 黑色與綠色微生物爬行遊戲與規劃文件。
 - `games/duquan/`：剪刀、石頭、布各 30 個圖示的 100ms 距離加權模擬遊戲。
+- `games/gravity-planet/`：Three.js 重力星球生存遊戲，吸收碎石、進化成 10 階星體並躲避大型星體。
 
 ## 執行
 
