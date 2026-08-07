@@ -26,6 +26,7 @@ const FRAGMENT_GRAVITY_GRACE = 0.75;
 const NATURAL_SPAWN_TANGENT_BIAS = 0.68;
 const NATURAL_SPAWN_CLEARANCE = 1.2;
 const NATURAL_SPAWN_MAX_SPEED = 3;
+const COMET_TAIL_MIN_SPEED = 2.6;
 const COMET_TAIL_AXIS = new THREE.Vector3(0, 1, 0);
 const input = new Set();
 const directionMap = { up: "up", down: "down", left: "left", right: "right" };
@@ -49,6 +50,8 @@ const ui = {
   comboPill: document.querySelector("#combo-pill"),
   comboValue: document.querySelector("#combo-value"),
   sceneToast: document.querySelector("#scene-toast"),
+  massProgress: document.querySelector("#mass-progress"),
+  massProgressFill: document.querySelector("#mass-progress-fill"),
   timeValue: document.querySelector("#time-value"),
   bestValue: document.querySelector("#best-value"),
   resultLevel: document.querySelector("#result-level"),
@@ -78,7 +81,7 @@ const playerRoot = new THREE.Group();
 const effectGroup = new THREE.Group();
 scene.add(worldGroup, bodyGroup, playerRoot, effectGroup);
 
-const infiniteWorld = { gridGroup: null, gridTiles: [], starfield: null, chunkX: null, chunkZ: null };
+const infiniteWorld = { gridGroup: null, gridTiles: [], gridDivisions: null, starfield: null, chunkX: null, chunkZ: null };
 
 const state = {
   status: "ready",
@@ -436,14 +439,12 @@ function createStars() {
   infiniteWorld.starfield = stars;
   worldGroup.add(stars);
 
+  const gridDivisions = currentGridDivisions();
   const gridGroup = new THREE.Group();
   for (let gridX = -1; gridX <= 1; gridX += 1) {
     for (let gridZ = -1; gridZ <= 1; gridZ += 1) {
       const tile = new THREE.Group();
-      const grid = new THREE.GridHelper(WORLD.gridTileSize, 14, 0x203f69, 0x15294e);
-      grid.position.y = -0.8;
-      grid.material.transparent = true;
-      grid.material.opacity = 0.22;
+      const grid = createWorldGrid(gridDivisions);
       tile.add(grid);
       const floor = new THREE.Mesh(
         new THREE.PlaneGeometry(WORLD.gridTileSize, WORLD.gridTileSize),
@@ -454,12 +455,44 @@ function createStars() {
       tile.add(floor);
       tile.userData.offsetX = gridX;
       tile.userData.offsetZ = gridZ;
+      tile.userData.grid = grid;
       gridGroup.add(tile);
       infiniteWorld.gridTiles.push(tile);
     }
   }
   infiniteWorld.gridGroup = gridGroup;
+  infiniteWorld.gridDivisions = gridDivisions;
   worldGroup.add(gridGroup);
+}
+
+function currentGridDivisions() {
+  const scaleFromStartingLevel = LEVELS[state.player.level - 1].radius / LEVELS[0].radius;
+  return Math.max(14, Math.round(14 * scaleFromStartingLevel));
+}
+
+function createWorldGrid(divisions) {
+  const grid = new THREE.GridHelper(WORLD.gridTileSize, divisions, 0x203f69, 0x15294e);
+  grid.position.y = -0.8;
+  grid.material.transparent = true;
+  grid.material.opacity = 0.22;
+  return grid;
+}
+
+function updateGridDensity() {
+  const divisions = currentGridDivisions();
+  if (divisions === infiniteWorld.gridDivisions) return;
+  infiniteWorld.gridDivisions = divisions;
+  infiniteWorld.gridTiles.forEach((tile) => {
+    const oldGrid = tile.userData.grid;
+    const newGrid = createWorldGrid(divisions);
+    if (oldGrid) {
+      tile.remove(oldGrid);
+      oldGrid.geometry.dispose();
+      oldGrid.material.dispose();
+    }
+    tile.userData.grid = newGrid;
+    tile.add(newGrid);
+  });
 }
 
 function updateInfiniteWorld() {
@@ -684,7 +717,9 @@ function createCometTail(body) {
 
 function updateCometTail(body) {
   const speedSquared = body.velocity.x * body.velocity.x + body.velocity.z * body.velocity.z;
-  const shouldShow = state.player.level - body.level >= 3 && speedSquared > 0.16;
+  const isBelowPlayerLevel = body.level <= state.player.level - 1;
+  const shouldShow = isBelowPlayerLevel
+    && speedSquared >= COMET_TAIL_MIN_SPEED * COMET_TAIL_MIN_SPEED;
   if (!shouldShow) {
     if (body.cometTail) body.cometTail.group.visible = false;
     return;
@@ -996,6 +1031,7 @@ function triggerEvolution(nextLevel) {
   state.player.model = newModel;
   createEvolutionBurst(state.player.position, data.accent);
   updateAllBodyScales();
+  updateGridDensity();
   ui.evolutionName.textContent = data.name;
   ui.evolutionDescription.textContent = data.description;
   ui.evolutionPopup.hidden = true;
@@ -1065,6 +1101,7 @@ function takeHit(body) {
     state.player.level = newLevel;
     rebuildPlayerModel();
     updateAllBodyScales();
+    updateGridDensity();
     addToast(`星體退化 · ${LEVELS[newLevel - 1].name}`, "#ffb0bd");
   }
   if (state.player.shield <= 0) endGame();
@@ -1078,8 +1115,8 @@ function updatePlayer(delta) {
     (input.has("down") ? 1 : 0) - (input.has("up") ? 1 : 0),
   );
   if (movement.lengthSq() > 0) movement.normalize();
-  const playerSpeed = 12.5 * Math.pow(0.92, player.level - 1);
-  const playerAcceleration = 28 * accelerationResponseFor(player);
+  const playerSpeed = 12.5;
+  const playerAcceleration = 28;
   player.velocity.addScaledVector(movement, playerAcceleration * delta);
 
   let nearestDanger = null;
@@ -1190,14 +1227,22 @@ function fractureBody(smaller, larger, collision) {
 
   const fragmentLevel = Math.max(1, smaller.level - 1);
   const fragmentSizeScale = Math.max(0.42, Math.min(0.82, smaller.sizeScale * 0.72));
-  const baseAngle = Math.atan2(awayFromLarger.z, awayFromLarger.x);
-  const fragmentRadius = Math.max(0.8, smaller.radius * 1.15);
   const fragmentCollisionRadius = LEVELS[fragmentLevel - 1].radius
     * bodyScaleRelativeToPlayer()
     * fragmentSizeScale;
 
   removeBody(smaller);
-  const fragmentCount = Math.min(3 + Math.floor(Math.random() * 3), WORLD.maxBodies - state.bodies.length);
+  const desiredFragmentCount = 6 + Math.floor(Math.random() * 5);
+  const slotsNeeded = Math.max(0, desiredFragmentCount - (WORLD.maxBodies - state.bodies.length));
+  if (slotsNeeded > 0) {
+    [...state.bodies]
+      .filter((body) => body !== larger)
+      .sort((first, second) => second.position.distanceToSquared(state.player.position)
+        - first.position.distanceToSquared(state.player.position))
+      .slice(0, slotsNeeded)
+      .forEach(removeBody);
+  }
+  const fragmentCount = Math.min(desiredFragmentCount, WORLD.maxBodies - state.bodies.length);
   if (fragmentCount <= 0) {
     createBurst(sourcePosition, LEVELS[smaller.level - 1].accent, 28, 3.7);
     return;
@@ -1212,13 +1257,23 @@ function fractureBody(smaller, larger, collision) {
   larger.collisionCooldown = Math.max(larger.collisionCooldown, FRAGMENT_GRAVITY_GRACE);
   createBurst(sourcePosition, LEVELS[smaller.level - 1].accent, 28, 3.7);
 
+  const angularStep = (Math.PI * 2) / fragmentCount;
+  const fragmentOrbitRadius = Math.max(
+    0.8,
+    smaller.radius * 0.9,
+    fragmentCollisionRadius * 1.15 / Math.sin(Math.PI / fragmentCount),
+  );
+  const fragmentCloudCenter = larger.position.clone().addScaledVector(
+    awayFromLarger,
+    larger.radius + fragmentOrbitRadius + fragmentCollisionRadius + COLLISION_SEPARATION_GAP + 0.35,
+  );
+  const baseAngle = rand(0, Math.PI * 2);
   const fragmentEjections = [];
   const averageEjection = new THREE.Vector3();
   for (let index = 0; index < fragmentCount; index += 1) {
-    const spread = fragmentCount === 1 ? 0 : (index / (fragmentCount - 1) - 0.5) * 1.5;
-    const angle = baseAngle + spread + rand(-0.12, 0.12);
-    const offset = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle)).multiplyScalar(fragmentRadius);
-    const ejection = offset.clone().normalize().multiplyScalar(rand(0.6, 1.8));
+    const angle = baseAngle + index * angularStep;
+    const offset = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle)).multiplyScalar(fragmentOrbitRadius);
+    const ejection = offset.clone().normalize().multiplyScalar(rand(0.9, 2.1));
     fragmentEjections.push({ offset, ejection });
     averageEjection.add(ejection);
   }
@@ -1228,14 +1283,7 @@ function fractureBody(smaller, larger, collision) {
     const fragmentVelocity = fragmentCloudVelocity.clone()
       .add(fragment.ejection)
       .sub(averageEjection);
-    const fragmentPosition = sourcePosition.clone().add(fragment.offset);
-    const awayFromLargerAtFragment = fragmentPosition.clone().sub(larger.position).setY(0);
-    if (awayFromLargerAtFragment.lengthSq() < 0.0001) awayFromLargerAtFragment.copy(awayFromLarger);
-    else awayFromLargerAtFragment.normalize();
-    const safeDistance = larger.radius + fragmentCollisionRadius + COLLISION_SEPARATION_GAP + 0.35;
-    if (fragmentPosition.distanceTo(larger.position) < safeDistance) {
-      fragmentPosition.copy(larger.position).addScaledVector(awayFromLargerAtFragment, safeDistance);
-    }
+    const fragmentPosition = fragmentCloudCenter.clone().add(fragment.offset);
     createBody(fragmentLevel, fragmentPosition, {
       mass: fragmentMass,
       sizeScale: fragmentSizeScale,
@@ -1393,6 +1441,14 @@ function updateCamera(delta) {
 function updateUi(force = false) {
   if (!force && state.time - state.lastUiUpdate < 0.08) return;
   state.lastUiUpdate = state.time;
+  const levelIndex = state.player.level - 1;
+  const currentThreshold = LEVELS[levelIndex].mass;
+  const nextThreshold = LEVELS[levelIndex + 1]?.mass;
+  const massProgress = nextThreshold === undefined
+    ? 1
+    : clamp((state.player.mass - currentThreshold) / (nextThreshold - currentThreshold), 0, 1);
+  ui.massProgressFill.style.transform = `scaleX(${massProgress})`;
+  ui.massProgress.setAttribute("aria-valuenow", String(Math.round(massProgress * 100)));
   ui.timeValue.textContent = formatTime(state.time);
   ui.bestValue.textContent = formatNumber(Math.max(getBestMass(), state.highMass));
   ui.pauseButton.textContent = state.status === "paused" ? "繼續" : "暫停";
@@ -1453,6 +1509,7 @@ function restartGame() {
   state.player.combo = 0;
   state.player.comboTimer = 0;
   input.clear();
+  updateGridDensity();
   updateInfiniteWorld();
   rebuildPlayerModel();
   camera.position.set(0, 33, 28);
