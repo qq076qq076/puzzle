@@ -641,9 +641,8 @@ h1 {
 
 .home-hero {
   display: grid;
-  grid-template-columns: 0.9fr 1.1fr;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  gap: clamp(44px, 11vw, 148px);
   min-height: clamp(390px, 49vw, 570px);
   padding: clamp(42px, 8vw, 83px) 0 clamp(35px, 6vw, 65px);
 }
@@ -656,10 +655,11 @@ h1 {
 .home-heading {
   margin-top: 22px;
   color: var(--ink);
-  font-size: clamp(3.7rem, 7.8vw, 6.6rem);
+  font-size: clamp(2.75rem, 7.8vw, 6.6rem);
   font-weight: 850;
   letter-spacing: -0.1em;
   line-height: 0.98;
+  white-space: nowrap;
 }
 
 .home-heading em {
@@ -842,6 +842,40 @@ h1 {
   border-top: 1px solid rgba(53, 44, 56, 0.07);
 }
 
+@media (min-width: 801px) {
+  .games-section {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px clamp(14px, 2vw, 24px);
+  }
+
+  .section-heading {
+    grid-column: 1 / -1;
+  }
+
+  .game-card {
+    align-items: flex-start;
+    flex-direction: column;
+    min-height: 288px;
+    margin-top: 0;
+    gap: 0;
+    padding: clamp(22px, 2.5vw, 30px);
+  }
+
+  .game-card-content {
+    max-width: none;
+  }
+
+  .game-card h3 {
+    font-size: clamp(2rem, 4vw, 3.6rem);
+    white-space: nowrap;
+  }
+
+  .game-card p {
+    max-width: none;
+  }
+}
+
 @media (max-width: 800px) {
   .home-shell {
     width: min(560px, calc(100% - 34px));
@@ -867,6 +901,39 @@ h1 {
   }
 }
 
+@media (min-width: 521px) and (max-width: 800px) {
+  .games-section {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+  }
+
+  .section-heading {
+    grid-column: 1 / -1;
+  }
+
+  .game-card {
+    align-items: flex-start;
+    flex-direction: column;
+    min-height: 288px;
+    margin-top: 0;
+    padding: 24px;
+  }
+
+  .game-card-content {
+    max-width: none;
+  }
+
+  .game-card h3 {
+    font-size: clamp(2rem, 5vw, 3rem);
+    white-space: nowrap;
+  }
+
+  .game-card p {
+    max-width: none;
+  }
+}
+
 @media (max-width: 520px) {
   .home-shell {
     width: calc(100% - 24px);
@@ -879,7 +946,7 @@ h1 {
 
   .home-heading {
     margin-top: 17px;
-    font-size: clamp(3.2rem, 17vw, 5rem);
+    font-size: clamp(2.35rem, 11.7vw, 5rem);
   }
 
   .home-hero {
