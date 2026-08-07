@@ -27,6 +27,8 @@ const NATURAL_SPAWN_TANGENT_BIAS = 0.68;
 const NATURAL_SPAWN_CLEARANCE = 1.2;
 const NATURAL_SPAWN_MAX_SPEED = 3;
 const COMET_TAIL_MIN_SPEED = 2.6;
+const GYRO_DEAD_ZONE = 3.5;
+const GYRO_MAX_TILT = 22;
 const COMET_TAIL_AXIS = new THREE.Vector3(0, 1, 0);
 const input = new Set();
 const directionMap = { up: "up", down: "down", left: "left", right: "right" };
@@ -52,6 +54,12 @@ const ui = {
   sceneToast: document.querySelector("#scene-toast"),
   massProgress: document.querySelector("#mass-progress"),
   massProgressFill: document.querySelector("#mass-progress-fill"),
+  howCard: document.querySelector(".how-card"),
+  controlTitle: document.querySelector("#control-title"),
+  controlHint: document.querySelector("#control-hint"),
+  gyroButton: document.querySelector("#gyro-button"),
+  gyroIndicator: document.querySelector("#gyro-indicator"),
+  gyroDot: document.querySelector("#gyro-dot"),
   timeValue: document.querySelector("#time-value"),
   bestValue: document.querySelector("#best-value"),
   resultLevel: document.querySelector("#result-level"),
@@ -109,6 +117,19 @@ const state = {
   },
 };
 
+const gyroscope = {
+  supported: false,
+  enabled: false,
+  ready: false,
+  listening: false,
+  permissionPending: false,
+  baselineBeta: null,
+  baselineGamma: null,
+  inputX: 0,
+  inputZ: 0,
+  lastReading: 0,
+};
+
 let glowTexture;
 let planetBandTexture;
 let cometTailGeometry;
@@ -120,6 +141,129 @@ function rand(min, max) {
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function normalizeAngleDelta(value, baseline) {
+  let difference = value - baseline;
+  while (difference > 180) difference -= 360;
+  while (difference < -180) difference += 360;
+  return difference;
+}
+
+function gyroAxisValue(value) {
+  const magnitude = Math.abs(value);
+  if (magnitude <= GYRO_DEAD_ZONE) return 0;
+  return Math.sign(value) * clamp(
+    (magnitude - GYRO_DEAD_ZONE) / (GYRO_MAX_TILT - GYRO_DEAD_ZONE),
+    0,
+    1,
+  );
+}
+
+function screenOrientationAngle() {
+  const angle = window.screen?.orientation?.angle ?? window.orientation ?? 0;
+  return ((Number(angle) % 360) + 360) % 360;
+}
+
+function updateGyroIndicator() {
+  const travel = 17;
+  ui.gyroDot.style.transform = `translate(calc(-50% + ${gyroscope.inputX * travel}px), calc(-50% + ${gyroscope.inputZ * travel}px))`;
+}
+
+function resetGyroscopeCalibration(showToast = false) {
+  gyroscope.ready = false;
+  gyroscope.baselineBeta = null;
+  gyroscope.baselineGamma = null;
+  gyroscope.inputX = 0;
+  gyroscope.inputZ = 0;
+  gyroscope.lastReading = 0;
+  ui.howCard.classList.remove("gyro-active");
+  ui.gyroIndicator.hidden = true;
+  ui.controlTitle.textContent = "保持姿勢校正中";
+  ui.controlHint.textContent = "握穩手機，接著傾斜即可移動";
+  updateGyroIndicator();
+  if (showToast) addToast("陀螺儀重新校正", "#a8f4ff");
+}
+
+function handleDeviceOrientation(event) {
+  if (!gyroscope.enabled || event.beta === null || event.gamma === null) return;
+  const beta = Number(event.beta);
+  const gamma = Number(event.gamma);
+  if (!Number.isFinite(beta) || !Number.isFinite(gamma)) return;
+
+  if (gyroscope.baselineBeta === null || gyroscope.baselineGamma === null) {
+    gyroscope.baselineBeta = beta;
+    gyroscope.baselineGamma = gamma;
+    gyroscope.ready = true;
+    ui.howCard.classList.add("gyro-active");
+    ui.gyroIndicator.hidden = false;
+    ui.controlTitle.textContent = "傾斜手機移動";
+    ui.controlHint.textContent = "點按重新校正可重設目前握姿";
+    ui.gyroButton.textContent = "重新校正";
+    addToast("陀螺儀控制已啟用", "#a8f4ff");
+  }
+
+  const deviceX = normalizeAngleDelta(gamma, gyroscope.baselineGamma);
+  const deviceZ = normalizeAngleDelta(beta, gyroscope.baselineBeta);
+  const angle = screenOrientationAngle() * Math.PI / 180;
+  const screenX = deviceX * Math.cos(angle) - deviceZ * Math.sin(angle);
+  const screenZ = deviceX * Math.sin(angle) + deviceZ * Math.cos(angle);
+  const targetX = gyroAxisValue(screenX);
+  const targetZ = gyroAxisValue(screenZ);
+  gyroscope.inputX += (targetX - gyroscope.inputX) * 0.22;
+  gyroscope.inputZ += (targetZ - gyroscope.inputZ) * 0.22;
+  gyroscope.lastReading = performance.now();
+  updateGyroIndicator();
+}
+
+async function enableGyroscope() {
+  if (gyroscope.permissionPending) return;
+  if (gyroscope.enabled) {
+    resetGyroscopeCalibration(true);
+    return;
+  }
+
+  gyroscope.permissionPending = true;
+  ui.gyroButton.disabled = true;
+  try {
+    if (!window.isSecureContext) throw new Error("secure-context-required");
+    const orientationEvent = window.DeviceOrientationEvent;
+    if (typeof orientationEvent?.requestPermission === "function") {
+      const permission = await orientationEvent.requestPermission();
+      if (permission !== "granted") throw new Error("permission-denied");
+    }
+    if (!gyroscope.listening) {
+      window.addEventListener("deviceorientation", handleDeviceOrientation, { passive: true });
+      window.addEventListener("orientationchange", () => resetGyroscopeCalibration(), { passive: true });
+      window.screen?.orientation?.addEventListener?.("change", () => resetGyroscopeCalibration());
+      gyroscope.listening = true;
+    }
+    gyroscope.enabled = true;
+    resetGyroscopeCalibration();
+    ui.gyroButton.textContent = "重新校正";
+  } catch (error) {
+    gyroscope.enabled = false;
+    ui.controlTitle.textContent = "使用方向鍵移動";
+    ui.controlHint.textContent = error.message === "secure-context-required"
+      ? "陀螺儀需要 HTTPS，請使用方向鍵操作"
+      : "未取得動作權限，請使用方向鍵或重試";
+    ui.gyroButton.textContent = "再次啟用";
+    addToast("無法啟用陀螺儀", "#ff9ca8");
+  } finally {
+    gyroscope.permissionPending = false;
+    ui.gyroButton.disabled = false;
+  }
+}
+
+function setupGyroscope() {
+  const isTouchDevice = window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0;
+  gyroscope.supported = isTouchDevice && "DeviceOrientationEvent" in window;
+  if (!gyroscope.supported) return;
+  ui.howCard.classList.add("gyro-available");
+  ui.gyroButton.hidden = false;
+  ui.controlTitle.textContent = "傾斜手機移動";
+  ui.controlHint.textContent = "先啟用陀螺儀並保持目前握姿";
+  ui.gyroButton.addEventListener("click", enableGyroscope);
 }
 
 function formatNumber(value) {
@@ -1114,7 +1258,19 @@ function updatePlayer(delta) {
     0,
     (input.has("down") ? 1 : 0) - (input.has("up") ? 1 : 0),
   );
-  if (movement.lengthSq() > 0) movement.normalize();
+  if (gyroscope.enabled
+    && gyroscope.ready
+    && performance.now() - gyroscope.lastReading >= 1500) {
+    resetGyroscopeCalibration();
+  }
+  const gyroReadingIsFresh = gyroscope.enabled
+    && gyroscope.ready
+    && performance.now() - gyroscope.lastReading < 750;
+  if (gyroReadingIsFresh) {
+    movement.x += gyroscope.inputX;
+    movement.z += gyroscope.inputZ;
+  }
+  if (movement.lengthSq() > 1) movement.normalize();
   const playerSpeed = 12.5;
   const playerAcceleration = 28;
   player.velocity.addScaledVector(movement, playerAcceleration * delta);
@@ -1562,6 +1718,7 @@ function setupInput() {
     button.addEventListener("lostpointercapture", release);
     button.addEventListener("pointerleave", (event) => { if (event.buttons === 0) release(); });
   });
+  setupGyroscope();
 }
 
 function resize() {

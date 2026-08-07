@@ -76,11 +76,15 @@
               <button type="button" data-dir="down" aria-label="向下">↓</button>
               <button type="button" data-dir="right" aria-label="向右">→</button>
             </div>
+            <div class="gyro-indicator" id="gyro-indicator" aria-hidden="true" hidden>
+              <span class="gyro-dot" id="gyro-dot"></span>
+            </div>
             <div class="control-copy">
               <div class="hud-kicker">HOW TO MOVE</div>
-              <strong>上下左右移動</strong>
-              <span>方向鍵或 WASD，靠近小星體即可吸收</span>
+              <strong id="control-title">上下左右移動</strong>
+              <span id="control-hint">方向鍵或 WASD，靠近小星體即可吸收</span>
             </div>
+            <button class="gyro-button" id="gyro-button" type="button" hidden>啟用陀螺儀</button>
           </div>
           <div class="control-card record-card">
             <div class="hud-kicker">RUN RECORD</div>
