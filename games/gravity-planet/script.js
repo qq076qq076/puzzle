@@ -20,6 +20,11 @@ const GRAVITY_MAX_ACCELERATION = 8.5;
 const COLLISION_RESTITUTION = 0.78;
 const COLLISION_SEPARATION_SPEED = 2.1;
 const COLLISION_SEPARATION_GAP = 0.18;
+const FRACTURE_SEPARATION_SPEED = 5;
+const EQUAL_SPLIT_SEPARATION_SPEED = 3.4;
+const NATURAL_SPAWN_TANGENT_BIAS = 0.68;
+const NATURAL_SPAWN_CLEARANCE = 1.2;
+const NATURAL_SPAWN_MAX_SPEED = 3;
 const COMET_TAIL_AXIS = new THREE.Vector3(0, 1, 0);
 const input = new Set();
 const directionMap = { up: "up", down: "down", left: "left", right: "right" };
@@ -491,12 +496,33 @@ function updateModel(model, time, delta) {
   }
 }
 
+function randomSpawnVelocity(level, position) {
+  const data = LEVELS[level - 1];
+  const radial = position.clone().sub(state.player.position).setY(0);
+  if (radial.lengthSq() < 0.0001) radial.set(1, 0, 0);
+  radial.normalize();
+
+  const tangent = new THREE.Vector3(-radial.z, 0, radial.x);
+  if (Math.random() < 0.5) tangent.negate();
+  const randomAngle = rand(0, Math.PI * 2);
+  const randomDirection = new THREE.Vector3(Math.cos(randomAngle), 0, Math.sin(randomAngle));
+  const tangentBias = clamp(NATURAL_SPAWN_TANGENT_BIAS + rand(-0.12, 0.12), 0.5, 0.82);
+  const direction = tangent.multiplyScalar(tangentBias)
+    .addScaledVector(randomDirection, 1 - tangentBias);
+  if (direction.lengthSq() < 0.0001) direction.copy(randomDirection);
+  direction.normalize();
+
+  const minimumSpeed = 1.1 + (10 - level) * 0.08;
+  const speed = Math.min(NATURAL_SPAWN_MAX_SPEED, Math.max(minimumSpeed, data.drift * rand(1.15, 1.7)));
+  return direction.multiplyScalar(speed);
+}
+
 function createBody(level, forcedPosition = null, options = {}) {
   const data = LEVELS[level - 1];
-  const position = forcedPosition ? forcedPosition.clone() : randomBodyPosition(level);
-  const angle = rand(0, Math.PI * 2);
-  const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
-  const initialVelocity = options.velocity ? options.velocity.clone() : direction.multiplyScalar(data.drift * rand(0.72, 1.18));
+  const position = forcedPosition
+    ? forcedPosition.clone()
+    : options.insideViewport ? randomInitialBodyPosition(level) : randomBodyPosition(level);
+  const initialVelocity = options.velocity ? options.velocity.clone() : randomSpawnVelocity(level, position);
   const body = {
     id: `${Date.now()}-${Math.random()}`,
     level,
@@ -540,23 +566,63 @@ function randomBodyPosition(level) {
       0,
       player.z + Math.sin(angle) * distance,
     );
-    if (position.distanceTo(player) >= minDistance && isPointOutsideViewport(position, VIEWPORT_SPAWN_MARGIN)) return position;
+    if (position.distanceTo(player) >= minDistance
+      && isPointOutsideViewport(position, VIEWPORT_SPAWN_MARGIN)
+      && hasSpawnClearance(position, level)) return position;
   }
 
   // 避免極端螢幕比例下隨機嘗試不足，沿著多個方向尋找真正的畫面外位置。
   const fallbackAngles = Array.from({ length: 24 }, (_, index) => (index / 24) * Math.PI * 2);
-  for (const distance of [WORLD.spawnRadius, WORLD.spawnRadius + 14, WORLD.spawnRadius + 28, WORLD.spawnRadius + 42]) {
+  const fallbackDistances = [WORLD.spawnRadius, WORLD.spawnRadius + 10, WORLD.recycleRadius - 5];
+  for (const distance of fallbackDistances) {
     for (const angle of fallbackAngles) {
       const position = new THREE.Vector3(
         player.x + Math.cos(angle) * distance,
         0,
         player.z + Math.sin(angle) * distance,
       );
-      if (isPointOutsideViewport(position, 0.08)) return position;
+      if (isPointOutsideViewport(position, 0.08) && hasSpawnClearance(position, level)) return position;
     }
   }
 
-  return player.clone().add(new THREE.Vector3(WORLD.spawnRadius + 42, 0, 0));
+  return player.clone().add(new THREE.Vector3(WORLD.recycleRadius - 5, 0, 0));
+}
+
+function randomInitialBodyPosition(level) {
+  const player = state.player.position;
+  const minDistance = level > state.player.level ? 18 : 5.5;
+  for (let attempt = 0; attempt < 160; attempt += 1) {
+    const angle = rand(0, Math.PI * 2);
+    const distance = rand(minDistance, 34);
+    const position = new THREE.Vector3(
+      player.x + Math.cos(angle) * distance,
+      0,
+      player.z + Math.sin(angle) * distance,
+    );
+    if (isPointInsideViewport(position, 0.12) && hasSpawnClearance(position, level)) return position;
+  }
+
+  const fallbackAngles = Array.from({ length: 24 }, (_, index) => (index / 24) * Math.PI * 2);
+  for (const distance of [8, 12, 18, 24, 30]) {
+    if (distance < minDistance) continue;
+    for (const angle of fallbackAngles) {
+      const position = new THREE.Vector3(
+        player.x + Math.cos(angle) * distance,
+        0,
+        player.z + Math.sin(angle) * distance,
+      );
+      if (isPointInsideViewport(position, 0.06) && hasSpawnClearance(position, level)) return position;
+    }
+  }
+
+  return randomBodyPosition(level);
+}
+
+function hasSpawnClearance(position, level) {
+  const candidateRadius = LEVELS[level - 1].radius * bodyScaleRelativeToPlayer();
+  return state.bodies.every((body) => (
+    position.distanceTo(body.position) >= candidateRadius + body.radius + NATURAL_SPAWN_CLEARANCE
+  ));
 }
 
 function isPointOutsideViewport(position, margin = 0) {
@@ -565,6 +631,14 @@ function isPointOutsideViewport(position, margin = 0) {
   return projected.z < -1 || projected.z > 1
     || projected.x < -1 - margin || projected.x > 1 + margin
     || projected.y < -1 - margin || projected.y > 1 + margin;
+}
+
+function isPointInsideViewport(position, margin = 0) {
+  camera.updateMatrixWorld(true);
+  const projected = position.clone().project(camera);
+  return projected.z >= -1 && projected.z <= 1
+    && projected.x >= -1 + margin && projected.x <= 1 - margin
+    && projected.y >= -1 + margin && projected.y <= 1 - margin;
 }
 
 function bodyScaleRelativeToPlayer() {
@@ -608,7 +682,7 @@ function createCometTail(body) {
 
 function updateCometTail(body) {
   const speedSquared = body.velocity.x * body.velocity.x + body.velocity.z * body.velocity.z;
-  const shouldShow = state.player.level - body.level >= 4 && speedSquared > 0.16;
+  const shouldShow = state.player.level - body.level >= 3 && speedSquared > 0.16;
   if (!shouldShow) {
     if (body.cometTail) body.cometTail.group.visible = false;
     return;
@@ -1071,8 +1145,12 @@ function absorbBodyIntoBody(larger, smaller, collision) {
   const totalMass = largerMass + smallerMass;
   const momentum = larger.velocity.clone().multiplyScalar(largerMass)
     .add(smaller.velocity.clone().multiplyScalar(smallerMass));
+  const centerOfMassPosition = larger.position.clone().multiplyScalar(largerMass)
+    .add(smaller.position.clone().multiplyScalar(smallerMass))
+    .multiplyScalar(1 / totalMass);
   const impactPosition = collision.position.clone();
   larger.mass = totalMass;
+  larger.position.copy(centerOfMassPosition);
   larger.velocity.copy(momentum.multiplyScalar(1 / totalMass));
   larger.sizeScale = Math.min(1.28, larger.sizeScale + (smallerMass / totalMass) * 0.16);
   larger.collisionCooldown = 0.3;
@@ -1084,10 +1162,13 @@ function absorbBodyIntoBody(larger, smaller, collision) {
 function fractureBody(smaller, larger, collision) {
   if (!state.bodies.includes(smaller) || !state.bodies.includes(larger)) return;
   const sourcePosition = smaller.position.clone();
-  const sourceVelocity = smaller.velocity.clone();
   const awayFromLarger = sourcePosition.clone().sub(larger.position).setY(0);
   if (awayFromLarger.lengthSq() < 0.0001) awayFromLarger.copy(collision.normal).negate();
   else awayFromLarger.normalize();
+  const combinedMass = smaller.mass + larger.mass;
+  const combinedVelocity = smaller.velocity.clone().multiplyScalar(smaller.mass)
+    .add(larger.velocity.clone().multiplyScalar(larger.mass))
+    .multiplyScalar(1 / Math.max(1, combinedMass));
 
   const fragmentLevel = Math.max(1, smaller.level - 1);
   const fragmentSizeScale = Math.max(0.42, Math.min(0.82, smaller.sizeScale * 0.72));
@@ -1101,13 +1182,31 @@ function fractureBody(smaller, larger, collision) {
     return;
   }
   const fragmentMass = Math.max(0.05, (smaller.mass * 0.86) / fragmentCount);
+  const fragmentCloudMass = fragmentMass * fragmentCount;
+  const outputMass = larger.mass + fragmentCloudMass;
+  const fragmentCloudVelocity = combinedVelocity.clone()
+    .addScaledVector(awayFromLarger, FRACTURE_SEPARATION_SPEED * larger.mass / outputMass);
+  larger.velocity.copy(combinedVelocity)
+    .addScaledVector(awayFromLarger, -FRACTURE_SEPARATION_SPEED * fragmentCloudMass / outputMass);
   createBurst(sourcePosition, LEVELS[smaller.level - 1].accent, 28, 3.7);
+
+  const fragmentEjections = [];
+  const averageEjection = new THREE.Vector3();
   for (let index = 0; index < fragmentCount; index += 1) {
-    const angle = baseAngle + (index / fragmentCount) * Math.PI * 2 + rand(-0.24, 0.24);
+    const spread = fragmentCount === 1 ? 0 : (index / (fragmentCount - 1) - 0.5) * 1.5;
+    const angle = baseAngle + spread + rand(-0.12, 0.12);
     const offset = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle)).multiplyScalar(fragmentRadius);
-    const fragmentVelocity = sourceVelocity.clone()
-      .addScaledVector(offset.clone().normalize(), rand(1.8, 3.8));
-    createBody(fragmentLevel, sourcePosition.clone().add(offset), {
+    const ejection = offset.clone().normalize().multiplyScalar(rand(0.6, 1.8));
+    fragmentEjections.push({ offset, ejection });
+    averageEjection.add(ejection);
+  }
+  averageEjection.multiplyScalar(1 / fragmentCount);
+
+  for (const fragment of fragmentEjections) {
+    const fragmentVelocity = fragmentCloudVelocity.clone()
+      .add(fragment.ejection)
+      .sub(averageEjection);
+    createBody(fragmentLevel, sourcePosition.clone().add(fragment.offset), {
       mass: fragmentMass,
       sizeScale: fragmentSizeScale,
       velocity: fragmentVelocity,
@@ -1125,12 +1224,14 @@ function splitEqualBodies(first, second, collision) {
   const fragmentLevel = sourceLevel - 3;
   const firstPosition = first.position.clone();
   const secondPosition = second.position.clone();
-  const firstVelocity = first.velocity.clone();
-  const secondVelocity = second.velocity.clone();
   const totalMass = first.mass + second.mass;
-  const centerVelocity = firstVelocity.clone().multiplyScalar(first.mass)
-    .add(secondVelocity.clone().multiplyScalar(second.mass))
+  const centerVelocity = first.velocity.clone().multiplyScalar(first.mass)
+    .add(second.velocity.clone().multiplyScalar(second.mass))
     .multiplyScalar(1 / Math.max(1, totalMass));
+  const firstVelocity = centerVelocity.clone()
+    .addScaledVector(collision.normal, -EQUAL_SPLIT_SEPARATION_SPEED * 0.5);
+  const secondVelocity = centerVelocity.clone()
+    .addScaledVector(collision.normal, EQUAL_SPLIT_SEPARATION_SPEED * 0.5);
   const impactPosition = collision.position.clone();
   const impactAngle = Math.atan2(collision.normal.z, collision.normal.x) + Math.PI / 2;
   const ejectDistance = Math.max(0.8, (first.radius + second.radius) * 0.38);
@@ -1150,9 +1251,9 @@ function splitEqualBodies(first, second, collision) {
 
   createBurst(impactPosition, LEVELS[sourceLevel - 1].accent, 54, 4.8);
   for (let index = 0; index < 3; index += 1) {
-    const angle = impactAngle + (index / 3) * Math.PI * 2 + rand(-0.18, 0.18);
+    const angle = impactAngle + (index / 3) * Math.PI * 2;
     const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
-    const fragmentVelocity = centerVelocity.clone().addScaledVector(direction, rand(2.4, 4.2));
+    const fragmentVelocity = centerVelocity.clone().addScaledVector(direction, 3.1);
     createBody(fragmentLevel, impactPosition.clone().addScaledVector(direction, ejectDistance), {
       mass: LEVELS[fragmentLevel - 1].bodyMass,
       sizeScale: 0.84,
@@ -1320,8 +1421,12 @@ function restartGame() {
   input.clear();
   updateInfiniteWorld();
   rebuildPlayerModel();
-  for (let index = 0; index < 12; index += 1) createBody(1);
-  createBody(2);
+  camera.position.set(0, 33, 28);
+  camera.lookAt(0, 0, 0);
+  camera.updateMatrixWorld(true);
+  for (let index = 0; index < 8; index += 1) createBody(1, null, { insideViewport: true });
+  for (let index = 0; index < 4; index += 1) createBody(1);
+  createBody(2, null, { insideViewport: true });
   createBody(2);
   ui.pauseCover.hidden = true;
   ui.gameoverCover.hidden = true;
@@ -1341,7 +1446,9 @@ function setupInput() {
     }
     if (event.key === " ") {
       event.preventDefault();
-      togglePause();
+      if (event.repeat) return;
+      if (state.status === "evolving" && !ui.evolutionPopup.hidden) continueAfterEvolution();
+      else togglePause();
     }
     if (event.key.toLowerCase() === "r") restartGame();
   });
