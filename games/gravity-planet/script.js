@@ -20,8 +20,9 @@ const GRAVITY_MAX_ACCELERATION = 8.5;
 const COLLISION_RESTITUTION = 0.78;
 const COLLISION_SEPARATION_SPEED = 2.1;
 const COLLISION_SEPARATION_GAP = 0.18;
-const FRACTURE_SEPARATION_SPEED = 5;
-const EQUAL_SPLIT_SEPARATION_SPEED = 3.4;
+const FRACTURE_SEPARATION_SPEED = 7.2;
+const EQUAL_SPLIT_SEPARATION_SPEED = 5;
+const FRAGMENT_GRAVITY_GRACE = 0.75;
 const NATURAL_SPAWN_TANGENT_BIAS = 0.68;
 const NATURAL_SPAWN_CLEARANCE = 1.2;
 const NATURAL_SPAWN_MAX_SPEED = 3;
@@ -537,6 +538,7 @@ function createBody(level, forcedPosition = null, options = {}) {
     velocity: initialVelocity,
     phase: rand(0, Math.PI * 2),
     collisionCooldown: options.collisionCooldown ?? 0,
+    gravityGrace: options.gravityGrace ?? 0,
     cometTail: null,
     group: createCelestialModel(level),
   };
@@ -857,14 +859,27 @@ function inverseMassFor(entity) {
   return 1 / Math.max(1, entity.mass);
 }
 
+function accelerationResponseFor(entity) {
+  return clamp(Math.pow(Math.max(1, entity.mass), -0.12), 0.28, 1);
+}
+
 function applyGravityPair(first, second, delta) {
+  if ((first.gravityGrace ?? 0) > 0 || (second.gravityGrace ?? 0) > 0) return;
   const offset = second.position.clone().sub(first.position);
   const distanceSquared = offset.lengthSq();
   const distance = Math.max(0.5, Math.sqrt(distanceSquared));
   const direction = distanceSquared > 0.0001 ? offset.clone().normalize() : new THREE.Vector3();
   const softenedDistanceCubed = Math.pow(distanceSquared + GRAVITY_SOFTENING * GRAVITY_SOFTENING, 1.5);
-  const firstAcceleration = clamp(GRAVITY_CONSTANT * gravityMassFor(second) * distance / softenedDistanceCubed, 0, GRAVITY_MAX_ACCELERATION);
-  const secondAcceleration = clamp(GRAVITY_CONSTANT * gravityMassFor(first) * distance / softenedDistanceCubed, 0, GRAVITY_MAX_ACCELERATION);
+  const firstAcceleration = clamp(
+    GRAVITY_CONSTANT * gravityMassFor(second) * distance / softenedDistanceCubed,
+    0,
+    GRAVITY_MAX_ACCELERATION,
+  ) * accelerationResponseFor(first);
+  const secondAcceleration = clamp(
+    GRAVITY_CONSTANT * gravityMassFor(first) * distance / softenedDistanceCubed,
+    0,
+    GRAVITY_MAX_ACCELERATION,
+  ) * accelerationResponseFor(second);
   first.velocity.addScaledVector(direction, firstAcceleration * delta);
   second.velocity.addScaledVector(direction, -secondAcceleration * delta);
 
@@ -1064,7 +1079,8 @@ function updatePlayer(delta) {
   );
   if (movement.lengthSq() > 0) movement.normalize();
   const playerSpeed = 12.5 * Math.pow(0.92, player.level - 1);
-  player.velocity.addScaledVector(movement, 28 * delta);
+  const playerAcceleration = 28 * accelerationResponseFor(player);
+  player.velocity.addScaledVector(movement, playerAcceleration * delta);
 
   let nearestDanger = null;
   for (const body of state.bodies) {
@@ -1123,9 +1139,11 @@ function updateBodies(delta) {
   const toRemove = [];
   for (const body of state.bodies) {
     body.collisionCooldown = Math.max(0, body.collisionCooldown - delta);
+    body.gravityGrace = Math.max(0, body.gravityGrace - delta);
+    const driftResponse = accelerationResponseFor(body);
     const drift = body.velocity.clone();
-    drift.x += Math.sin(state.time * 0.36 + body.phase) * 0.12;
-    drift.z += Math.cos(state.time * 0.31 + body.phase * 1.3) * 0.12;
+    drift.x += Math.sin(state.time * 0.36 + body.phase) * 0.12 * driftResponse;
+    drift.z += Math.cos(state.time * 0.31 + body.phase * 1.3) * 0.12 * driftResponse;
     body.position.addScaledVector(drift, delta);
     body.group.position.copy(body.position);
     body.group.position.y = Math.sin(state.time * 1.1 + body.phase) * 0.25;
@@ -1173,7 +1191,10 @@ function fractureBody(smaller, larger, collision) {
   const fragmentLevel = Math.max(1, smaller.level - 1);
   const fragmentSizeScale = Math.max(0.42, Math.min(0.82, smaller.sizeScale * 0.72));
   const baseAngle = Math.atan2(awayFromLarger.z, awayFromLarger.x);
-  const fragmentRadius = Math.max(0.45, smaller.radius * 0.72);
+  const fragmentRadius = Math.max(0.8, smaller.radius * 1.15);
+  const fragmentCollisionRadius = LEVELS[fragmentLevel - 1].radius
+    * bodyScaleRelativeToPlayer()
+    * fragmentSizeScale;
 
   removeBody(smaller);
   const fragmentCount = Math.min(3 + Math.floor(Math.random() * 3), WORLD.maxBodies - state.bodies.length);
@@ -1188,6 +1209,7 @@ function fractureBody(smaller, larger, collision) {
     .addScaledVector(awayFromLarger, FRACTURE_SEPARATION_SPEED * larger.mass / outputMass);
   larger.velocity.copy(combinedVelocity)
     .addScaledVector(awayFromLarger, -FRACTURE_SEPARATION_SPEED * fragmentCloudMass / outputMass);
+  larger.collisionCooldown = Math.max(larger.collisionCooldown, FRAGMENT_GRAVITY_GRACE);
   createBurst(sourcePosition, LEVELS[smaller.level - 1].accent, 28, 3.7);
 
   const fragmentEjections = [];
@@ -1206,11 +1228,20 @@ function fractureBody(smaller, larger, collision) {
     const fragmentVelocity = fragmentCloudVelocity.clone()
       .add(fragment.ejection)
       .sub(averageEjection);
-    createBody(fragmentLevel, sourcePosition.clone().add(fragment.offset), {
+    const fragmentPosition = sourcePosition.clone().add(fragment.offset);
+    const awayFromLargerAtFragment = fragmentPosition.clone().sub(larger.position).setY(0);
+    if (awayFromLargerAtFragment.lengthSq() < 0.0001) awayFromLargerAtFragment.copy(awayFromLarger);
+    else awayFromLargerAtFragment.normalize();
+    const safeDistance = larger.radius + fragmentCollisionRadius + COLLISION_SEPARATION_GAP + 0.35;
+    if (fragmentPosition.distanceTo(larger.position) < safeDistance) {
+      fragmentPosition.copy(larger.position).addScaledVector(awayFromLargerAtFragment, safeDistance);
+    }
+    createBody(fragmentLevel, fragmentPosition, {
       mass: fragmentMass,
       sizeScale: fragmentSizeScale,
       velocity: fragmentVelocity,
-      collisionCooldown: 0.38,
+      collisionCooldown: FRAGMENT_GRAVITY_GRACE,
+      gravityGrace: FRAGMENT_GRAVITY_GRACE,
     });
   }
 }
@@ -1241,24 +1272,27 @@ function splitEqualBodies(first, second, collision) {
   createBody(downgradedLevel, firstPosition, {
     mass: LEVELS[downgradedLevel - 1].bodyMass,
     velocity: firstVelocity,
-    collisionCooldown: 0.48,
+    collisionCooldown: 0.55,
+    gravityGrace: 0.45,
   });
   createBody(downgradedLevel, secondPosition, {
     mass: LEVELS[downgradedLevel - 1].bodyMass,
     velocity: secondVelocity,
-    collisionCooldown: 0.48,
+    collisionCooldown: 0.55,
+    gravityGrace: 0.45,
   });
 
   createBurst(impactPosition, LEVELS[sourceLevel - 1].accent, 54, 4.8);
   for (let index = 0; index < 3; index += 1) {
     const angle = impactAngle + (index / 3) * Math.PI * 2;
     const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
-    const fragmentVelocity = centerVelocity.clone().addScaledVector(direction, 3.1);
+    const fragmentVelocity = centerVelocity.clone().addScaledVector(direction, 4.2);
     createBody(fragmentLevel, impactPosition.clone().addScaledVector(direction, ejectDistance), {
       mass: LEVELS[fragmentLevel - 1].bodyMass,
       sizeScale: 0.84,
       velocity: fragmentVelocity,
-      collisionCooldown: 0.5,
+      collisionCooldown: FRAGMENT_GRAVITY_GRACE,
+      gravityGrace: FRAGMENT_GRAVITY_GRACE,
     });
   }
 }
