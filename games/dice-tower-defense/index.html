@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#071226" />
+    <meta name="description" content="骰塔守境：擲出好點數，合成骰塔，守住最後一格城門。" />
+    <title>骰塔守境 · Puzzle Club</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="dice-page">
+      <a class="back-link" href="../../index.html"><span aria-hidden="true">←</span> 所有遊戲</a>
+
+      <header class="game-header">
+        <div>
+          <div class="eyebrow"><span class="eyebrow-dot"></span> DICE TOWER DEFENSE · MVP</div>
+          <h1>骰塔守境<span>.</span></h1>
+          <p class="game-tagline">擲出好點數，守住最後一格城門。</p>
+        </div>
+        <div class="header-actions">
+          <button class="button button-quiet" id="pause-button" type="button">暫停</button>
+          <button class="button button-primary" id="restart-button" type="button">重新開始 <span aria-hidden="true">↗</span></button>
+        </div>
+      </header>
+
+      <section class="hud" aria-label="遊戲資訊">
+        <div class="hud-card"><span>WAVE</span><strong id="wave-value">1 / 15</strong><small id="phase-value">準備中</small></div>
+        <div class="hud-card core-card"><span>CORE</span><strong id="core-value">20 / 20</strong><div class="core-meter"><i id="core-meter-fill"></i></div></div>
+        <div class="hud-card"><span>GOLD</span><strong id="gold-value">120</strong><small>購買骰子</small></div>
+        <div class="hud-card"><span>REROLL</span><strong id="reroll-value">2</strong><small>本波券</small></div>
+        <div class="hud-card"><span>BEST</span><strong id="best-value">0</strong><small>最高分</small></div>
+      </section>
+
+      <section class="game-shell" aria-label="骰塔守境遊戲">
+        <div class="board-panel">
+          <div class="board-topline">
+            <div>
+              <span class="section-kicker">BATTLEFIELD</span>
+              <strong id="status-line" role="status" aria-live="polite">準備你的防線。</strong>
+            </div>
+            <div class="wave-countdown" id="countdown-value">25s</div>
+          </div>
+          <div class="board-frame" id="board-frame">
+            <canvas id="game-canvas" aria-label="10 欄 8 列骰塔防守棋盤"></canvas>
+            <div class="board-badge entrance-badge">入口</div>
+            <div class="board-badge gate-badge">城門 <b id="gate-hp-badge">20</b></div>
+            <div class="board-toast" id="board-toast" aria-live="polite"></div>
+            <div class="pause-cover" id="pause-cover" hidden>
+              <div class="cover-card">
+                <span class="cover-kicker">BATTLE PAUSED</span>
+                <h2>戰場暫停中</h2>
+                <p>準備好後，繼續守住你的核心。</p>
+                <button class="button button-primary" id="resume-button" type="button">繼續戰鬥</button>
+              </div>
+            </div>
+            <div class="result-cover" id="result-cover" hidden>
+              <div class="cover-card result-card">
+                <span class="cover-kicker" id="result-kicker">CORE SECURED</span>
+                <h2 id="result-title">守住了！</h2>
+                <p id="result-copy">你成功守住城門。</p>
+                <div class="result-grid">
+                  <div><span>通關波次</span><strong id="result-wave">0</strong></div>
+                  <div><span>最終分數</span><strong id="result-score">0</strong></div>
+                  <div><span>核心耐久</span><strong id="result-core">0</strong></div>
+                </div>
+                <button class="button button-primary" id="result-restart" type="button">再次出發 <span aria-hidden="true">↗</span></button>
+              </div>
+            </div>
+          </div>
+          <div class="legend-row" aria-label="棋盤圖例">
+            <span><i class="legend-dot road-dot"></i>敵人道路</span>
+            <span><i class="legend-dot build-dot"></i>建造格</span>
+            <span><i class="legend-dot core-dot"></i>核心城門</span>
+            <span class="keyboard-hint">Space 暫停／開始</span>
+          </div>
+        </div>
+
+        <aside class="control-panel" aria-label="骰塔控制面板">
+          <div class="control-block wave-block">
+            <div class="block-heading"><span class="section-kicker">NEXT WAVE</span><strong id="next-wave-label">第 1 波</strong></div>
+            <p id="wave-preview">迅捷蟲 × 8</p>
+            <button class="button button-primary start-button" id="start-button" type="button">開始第 1 波 <span aria-hidden="true">→</span></button>
+          </div>
+
+          <div class="control-block shop-block">
+            <div class="block-heading"><span class="section-kicker">DICE SUPPLY</span><strong id="purchase-count">0 / 5</strong></div>
+            <div class="shop-row">
+              <p>隨機骰子 <small>25 金幣</small></p>
+              <button class="button button-quiet" id="buy-button" type="button">購買骰子</button>
+            </div>
+            <div class="dice-tray" id="dice-tray" aria-label="待放置骰子"></div>
+            <p class="tray-hint" id="tray-hint">選一顆骰子，再點擊空建造格放置。</p>
+          </div>
+
+          <div class="control-block inspector-block" id="inspector" aria-live="polite">
+            <div class="empty-inspector">
+              <span class="inspector-icon">✦</span>
+              <strong>選取一座骰塔</strong>
+              <p>查看骰面、射程與特殊能力。</p>
+            </div>
+          </div>
+
+          <div class="control-block mini-rules">
+            <div class="block-heading"><span class="section-kicker">QUICK RULES</span><span class="rule-face">6</span></div>
+            <p>兩座同種類、同階級骰塔可以合成。骰面 6 每次有效攻擊累積充能，滿 3 格施放特殊能力。</p>
+          </div>
+        </aside>
+      </section>
+
+      <footer class="page-footer">
+        <span>ROLL · MERGE · DEFEND</span>
+        <span class="footer-rule" aria-hidden="true"></span>
+        <span>每一點，都可能改變戰局</span>
+      </footer>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>

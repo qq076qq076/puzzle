@@ -18,6 +18,7 @@
 - `games/microorganism/`：150×150 Canvas 黑色與綠色微生物爬行遊戲與規劃文件。
 - `games/duquan/`：剪刀、石頭、布各 30 個圖示的 100ms 距離加權模擬遊戲。
 - `games/gravity-planet/`：Three.js 重力星球生存遊戲，吸收碎石、進化成 10 階星體並躲避大型星體。
+- `games/dice-tower-defense/`：骰塔守境骰子塔防遊戲，包含 15 波敵人、6 種骰塔、骰面充能、合成與首領波；規格與實作補充文件位於遊戲資料夾內。
 
 ## 執行
 
