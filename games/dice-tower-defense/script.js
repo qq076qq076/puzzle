@@ -5,12 +5,16 @@
   const ROWS = 8;
   const WAVE_REWARD = 35;
   const BUY_COST = 25;
+  const WAVE_COUNT_MULTIPLIER = 2.5;
+  const ENEMY_GOLD_MULTIPLIER = 1 / 3;
+  const GOLD_PRECISION = 100;
   const MAX_TIER = 6;
   const BUILD_TIMES = [1.2, 2.4, 4, 5.8, 7.8, 10];
   const INITIAL_CORE_HP = 20;
   const CRIT_CHANCES = [0.10, 0.20, 0.35, 0.48, 0.60, 0.72];
   const POISON_DURATIONS = [4, 5, 6, 7, 8, 9];
   const CRIT_DAMAGE_MULTIPLIER = 1.75;
+  const TOWER_DAMAGE_MULTIPLIER = 0.5;
   const ATTACK_PULSE_DURATION = 0.18;
   const MERGE_EFFECT_DURATION = 0.95;
   const ENEMY_VISUAL_SCALE = 3 / 4;
@@ -429,7 +433,7 @@
     if (state.phase !== "preparation" || state.paused) return;
     state.phase = "combat";
     state.spawnSegments = getWaveEntries(state.wave).map(function (entry) {
-      return { type: entry.type, remaining: entry.count, interval: entry.interval };
+      return { type: entry.type, remaining: Math.round(entry.count * WAVE_COUNT_MULTIPLIER), interval: entry.interval };
     });
     state.spawnTimer = 0;
     state.waveStats = { kills: 0, leaks: 0 };
@@ -439,7 +443,7 @@
 
   function beginNextWave() {
     state.wave += 1;
-    state.gold += WAVE_REWARD;
+    addGold(WAVE_REWARD);
     state.prepRemaining = getPreparationSeconds(state.wave);
     state.resultRemaining = 0;
     state.phase = "preparation";
@@ -451,12 +455,13 @@
   }
 
   function finishWave() {
+    const finalWave = state.wave >= WAVES.length;
     state.clearedWaves = Math.max(state.clearedWaves, state.wave);
     state.score = calculateScore();
-    state.effects = state.effects.filter(function (effect) { return effect.kind === "bossExplosion"; });
     state.phase = "waveResult";
-    state.resultRemaining = state.wave >= WAVES.length ? 1.5 : 2;
-    showToast(state.wave >= WAVES.length ? "最終首領已擊破！" : "第 " + state.wave + " 波守住了。", 2);
+    state.resultRemaining = finalWave ? 1.5 : 1.15;
+    addEffect({ kind: "waveTransition", wave: state.wave, finalWave, color: finalWave ? "#ffd477" : "#71d8f4", ttl: finalWave ? 1.5 : 1.35 });
+    showToast(finalWave ? "最終首領已擊破！" : "第 " + state.wave + " 波守住了。", finalWave ? 1.5 : 1.15);
     markUiDirty();
   }
 
@@ -481,7 +486,7 @@
   }
 
   function calculateScore() {
-    return state.killGold * 10 + state.clearedWaves * 100 + state.coreHp * 25 + state.bossKills * 250;
+    return Math.round(state.killGold * 10 + state.clearedWaves * 100 + state.coreHp * 25 + state.bossKills * 250);
   }
 
   function updatePreparation(deltaTime) {
@@ -493,6 +498,9 @@
   }
 
   function updateWaveResult(deltaTime) {
+    state.towers.forEach(function (tower) {
+      tower.attackPulseRemaining = Math.max(0, tower.attackPulseRemaining - deltaTime);
+    });
     state.resultRemaining -= deltaTime;
     if (state.resultRemaining > 0) return;
     if (state.wave >= WAVES.length) finishGame(true);
@@ -787,7 +795,7 @@
     triggerAttackPulse(tower);
     const critical = rollCritical(tower);
     let hit = false;
-    const baseDamage = tierData.damage * (critical ? CRIT_DAMAGE_MULTIPLIER : 1);
+    const baseDamage = tierData.damage * TOWER_DAMAGE_MULTIPLIER * (critical ? CRIT_DAMAGE_MULTIPLIER : 1);
 
     if (tower.type === "cannon") {
       addProjectileEffect(tower, target, "cannon", TOWER_TYPES.cannon.color, 0.34);
@@ -872,10 +880,19 @@
     const definition = ENEMY_TYPES[enemy.type];
     if (source === "direct" && definition.directResistance) finalDamage *= 1 - definition.directResistance;
     if (enemy.shield > 0) {
+      const shieldBeforeHit = enemy.shield;
       const absorbed = Math.min(enemy.shield, finalDamage);
       enemy.shield -= absorbed;
       finalDamage -= absorbed;
-      if (absorbed > 0) addEffect({ kind: "shield", x: getPathPosition(enemy.pathDistance).x, y: getPathPosition(enemy.pathDistance).y, color: "#ffe0a6", ttl: 0.28 });
+      if (absorbed > 0) {
+        const position = getPathPosition(enemy.pathDistance);
+        if (shieldBeforeHit > 0 && enemy.shield <= 0) {
+          enemy.shield = 0;
+          addEffect({ kind: "shieldBreak", x: position.x, y: position.y, color: "#ffe0a6", ttl: 0.72 });
+        } else {
+          addEffect({ kind: "shield", x: position.x, y: position.y, color: "#ffe0a6", ttl: 0.28 });
+        }
+      }
     }
     if (finalDamage > 0) enemy.hp -= finalDamage;
     addEffect({ kind: source === "poison" ? "poisonHit" : "hit", x: getPathPosition(enemy.pathDistance).x, y: getPathPosition(enemy.pathDistance).y, color: source === "poison" ? "#9ad86f" : definition.color, ttl: 0.32 });
@@ -904,10 +921,11 @@
     enemy.dead = true;
     const definition = ENEMY_TYPES[enemy.type];
     const position = getPathPosition(enemy.pathDistance);
+    const reward = getEnemyGoldReward(definition);
     state.waveStats.kills += 1;
-    state.killGold += definition.reward;
-    state.gold += definition.reward;
-    addEffect({ kind: "gold", x: position.x, y: position.y, amount: definition.reward, color: "#ffd477", ttl: 1 });
+    state.killGold = roundGold(state.killGold + reward);
+    addGold(reward);
+    addEffect({ kind: "gold", x: position.x, y: position.y, amount: reward, color: "#ffd477", ttl: 1 });
     if (definition.boss) {
       state.bossKills += 1;
       addEffect({ kind: "bossExplosion", x: position.x, y: position.y, color: definition.color, ttl: 1.35 });
@@ -969,6 +987,23 @@
     return state.diceBag.find(function (die) { return die.id === id; }) || null;
   }
 
+  function roundGold(value) {
+    return Math.round((value + Number.EPSILON) * GOLD_PRECISION) / GOLD_PRECISION;
+  }
+
+  function formatGold(value) {
+    const rounded = roundGold(value);
+    return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+  }
+
+  function addGold(amount) {
+    state.gold = roundGold(state.gold + amount);
+  }
+
+  function getEnemyGoldReward(definition) {
+    return roundGold(definition.reward * ENEMY_GOLD_MULTIPLIER);
+  }
+
   function purchaseDie() {
     if (!isMarketOpen()) return;
     if (state.gold < BUY_COST) {
@@ -977,7 +1012,7 @@
     }
     const types = Object.keys(TOWER_TYPES);
     const type = types[Math.floor(Math.random() * types.length)];
-    state.gold -= BUY_COST;
+    addGold(-BUY_COST);
     const purchasedDie = { id: createId("die"), type, tier: 1, totalInvested: BUY_COST };
     state.diceBag.push(purchasedDie);
     state.selectedDieId = purchasedDie.id;
@@ -1123,7 +1158,7 @@
     const tower = findTowerById(state.selectedTowerId);
     if (!isMarketOpen() || !tower) return;
     const refund = Math.floor(tower.totalInvested * 0.6);
-    state.gold += refund;
+    addGold(refund);
     state.towers = state.towers.filter(function (item) { return item.id !== tower.id; });
     state.selectedTowerId = null;
     showToast("出售骰塔，返還 " + refund + " 金幣。", 1.5);
@@ -1282,7 +1317,7 @@
     const tierData = type.tiers[tower.tier - 1];
     const damage = tower.type === "inspire"
       ? "+" + Math.round(TOWER_TYPES.inspire.bonus[tower.tier - 1] * 100) + "%"
-      : formatDamage(tierData.damage);
+      : formatDamage(tierData.damage * TOWER_DAMAGE_MULTIPLIER);
     const interval = getTowerInterval(tower).toFixed(2) + "s";
     const canEdit = isPreparation();
     const canSell = isMarketOpen();
@@ -1310,7 +1345,7 @@
     elements.phase.textContent = state.paused ? "已暫停" : phaseName;
     elements.core.textContent = state.coreHp + " / " + INITIAL_CORE_HP;
     elements.coreFill.style.transform = "scaleX(" + (state.coreHp / INITIAL_CORE_HP) + ")";
-    elements.gold.textContent = String(state.gold);
+    elements.gold.textContent = formatGold(state.gold);
     elements.best.textContent = String(Math.max(profile.bestScore, state.score));
     if (elements.purchaseCount) elements.purchaseCount.textContent = "不限";
     elements.status.textContent = getStatusText();
@@ -1322,7 +1357,7 @@
       elements.countdown.textContent = "LIVE";
       elements.start.textContent = "戰鬥進行中";
     } else if (state.phase === "waveResult") {
-      elements.countdown.textContent = Math.ceil(state.resultRemaining) + "s";
+      elements.countdown.textContent = state.wave >= WAVES.length ? "CLEAR" : "NEXT";
       elements.start.textContent = "準備下一波";
     } else {
       elements.countdown.textContent = "—";
@@ -1339,7 +1374,7 @@
     if (state.paused) return "戰場暫停中。";
     if (state.phase === "preparation") return state.selectedDieId ? "選好的骰子，現在可以部署。" : "準備你的防線。";
     if (state.phase === "combat") return "骰塔自動索敵；戰鬥中可購買、建造、合成與出售。";
-    if (state.phase === "waveResult") return "波次結算中，下一波很快開始。";
+    if (state.phase === "waveResult") return "防線掃描完成，正在平滑切換至下一波。";
     if (state.phase === "victory") return "所有波次完成，城門安全。";
     return "核心耐久歸零，防線需要重新部署。";
   }
@@ -1964,7 +1999,105 @@
     ctx.fillStyle = "#fff2a8";
     ctx.font = "950 " + Math.max(10, size * 0.17) + "px sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText("+" + effect.amount + " G", center.x - size * 0.06, y);
+    ctx.fillText("+" + formatGold(effect.amount) + " G", center.x - size * 0.06, y);
+    ctx.restore();
+  }
+
+  function drawShieldBreakEffect(effect, progress) {
+    const center = gridCenter(effect.x, effect.y);
+    const size = canvasMetrics.cell;
+    const baseAlpha = ctx.globalAlpha;
+    const expansion = 1 - Math.pow(1 - progress, 3);
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    const flashRadius = size * (0.16 + expansion * 0.62);
+    const flash = ctx.createRadialGradient(center.x, center.y, 0, center.x, center.y, flashRadius);
+    flash.addColorStop(0, "rgba(255,255,255,0.98)");
+    flash.addColorStop(0.28, "rgba(255,224,166,0.92)");
+    flash.addColorStop(0.62, "rgba(113,216,244,0.46)");
+    flash.addColorStop(1, "rgba(113,216,244,0)");
+    ctx.globalAlpha = baseAlpha * Math.max(0.18, 1 - progress * 0.72);
+    ctx.beginPath();
+    ctx.arc(center.x, center.y, flashRadius, 0, Math.PI * 2);
+    ctx.fillStyle = flash;
+    ctx.fill();
+
+    [0, 0.12].forEach(function (delay, index) {
+      const ringProgress = Math.max(0, Math.min(1, (progress - delay) / (0.78 - delay)));
+      if (ringProgress <= 0) return;
+      ctx.globalAlpha = baseAlpha * (1 - ringProgress) * (0.95 - index * 0.2);
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, size * (0.2 + ringProgress * (0.56 + index * 0.18)), 0, Math.PI * 2);
+      ctx.strokeStyle = index === 0 ? "#fff7d6" : "#71d8f4";
+      ctx.lineWidth = Math.max(2, size * (0.08 - index * 0.018));
+      ctx.stroke();
+    });
+
+    const fragmentProgress = Math.min(1, progress * 1.35);
+    for (let index = 0; index < 14; index += 1) {
+      const angle = index * (Math.PI * 2 / 14) + (index % 2) * 0.12;
+      const distance = size * fragmentProgress * (0.38 + (index % 4) * 0.1);
+      const fragmentSize = size * Math.max(0.018, 0.075 * (1 - progress));
+      ctx.save();
+      ctx.translate(center.x + Math.cos(angle) * distance, center.y + Math.sin(angle) * distance);
+      ctx.rotate(angle + progress * 3.5 * (index % 2 === 0 ? 1 : -1));
+      ctx.globalAlpha = baseAlpha * Math.max(0, 1 - progress * 0.88);
+      ctx.fillStyle = index % 3 === 0 ? "#ffffff" : index % 3 === 1 ? effect.color : "#71d8f4";
+      ctx.beginPath();
+      ctx.moveTo(fragmentSize, 0);
+      ctx.lineTo(-fragmentSize * 0.7, fragmentSize * 0.55);
+      ctx.lineTo(-fragmentSize * 0.42, -fragmentSize * 0.72);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  function drawWaveTransition(effect, progress) {
+    const width = canvasMetrics.width;
+    const height = canvasMetrics.height;
+    const cell = canvasMetrics.cell;
+    const fadeIn = Math.min(1, progress / 0.18);
+    const fadeOut = Math.min(1, (1 - progress) / 0.30);
+    const opacity = Math.max(0, Math.min(fadeIn, fadeOut));
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const cardWidth = Math.min(width * 0.56, cell * 5.8);
+    const cardHeight = cell * 1.25;
+    const sweepX = width * (-0.12 + progress * 1.24);
+
+    ctx.save();
+    ctx.globalAlpha = opacity;
+    ctx.fillStyle = "rgba(3, 11, 25, 0.38)";
+    ctx.fillRect(0, 0, width, height);
+
+    const sweep = ctx.createLinearGradient(sweepX - cell, 0, sweepX + cell, 0);
+    sweep.addColorStop(0, "rgba(113, 216, 244, 0)");
+    sweep.addColorStop(0.5, effect.finalWave ? "rgba(255, 212, 119, 0.22)" : "rgba(113, 216, 244, 0.18)");
+    sweep.addColorStop(1, "rgba(113, 216, 244, 0)");
+    ctx.fillStyle = sweep;
+    ctx.fillRect(sweepX - cell, 0, cell * 2, height);
+
+    roundedRect(ctx, centerX - cardWidth / 2, centerY - cardHeight / 2, cardWidth, cardHeight, cell * 0.18);
+    ctx.fillStyle = "rgba(5, 16, 34, 0.84)";
+    ctx.shadowColor = effect.color;
+    ctx.shadowBlur = cell * 0.22;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = effect.color;
+    ctx.lineWidth = Math.max(1.5, cell * 0.025);
+    ctx.stroke();
+
+    ctx.fillStyle = "#f4f8ff";
+    ctx.font = "950 " + Math.max(13, cell * 0.28) + "px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(effect.finalWave ? "FINAL WAVE CLEAR" : "WAVE " + effect.wave + " CLEAR", centerX, centerY - cell * 0.12);
+    ctx.fillStyle = effect.color;
+    ctx.font = "850 " + Math.max(8, cell * 0.11) + "px sans-serif";
+    ctx.fillText(effect.finalWave ? "CORE SECURED" : "NEXT WAVE PREPARATION", centerX, centerY + cell * 0.24);
     ctx.restore();
   }
 
@@ -1972,8 +2105,13 @@
     const progress = 1 - effect.ttl / effect.maxTtl;
     const alpha = Math.max(0, effect.ttl / effect.maxTtl);
     ctx.save();
-    ctx.globalAlpha = alpha;
     ctx.lineCap = "round";
+    if (effect.kind === "waveTransition") {
+      drawWaveTransition(effect, progress);
+      ctx.restore();
+      return;
+    }
+    ctx.globalAlpha = alpha;
     if (effect.kind === "gold") {
       drawGoldEffect(effect, progress);
     } else if (effect.kind === "critical") {
@@ -1982,6 +2120,8 @@
       drawMergeEffect(effect, progress);
     } else if (effect.kind === "bossExplosion") {
       drawBossExplosion(effect, progress);
+    } else if (effect.kind === "shieldBreak") {
+      drawShieldBreakEffect(effect, progress);
     } else if (effect.kind === "projectile") {
       drawProjectile(effect, progress);
     } else if (effect.kind === "lightning") {
