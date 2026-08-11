@@ -18,3 +18,16 @@ These sprites are selected from **Tiny Dungeon 1.0** by Kenney:
 | Shadow Bug | `shadow-ghost.png` | `tile_0121.png` |
 | Healer Bug | `healer-wizard.png` | `tile_0084.png` |
 | Armored King | `boss-demon.png` | `tile_0110.png` |
+
+## Procedural model variants
+
+The late-game enemies reuse the CC0 body sprites above and add code-drawn Canvas parts. This keeps the build offline-safe while giving each variant a distinct silhouette and casting animation.
+
+| Game enemy | Reused body | Canvas model parts | Ability effect |
+| --- | --- | --- | --- |
+| Warder Bug | `armored-knight.png` | Rotating cyan hex frame | Expanding hex ward |
+| Burrower Bug | `child-spider.png` | Ochre ground ring and orbiting debris | Three expanding dust ellipses |
+| Disruptor Bug | `shadow-ghost.png` | Magenta arc and three orbit nodes | Ring with eight timing ticks |
+| Rift Armored King | `boss-demon.png` | Double counter-rotating rings and three violet shards | Ward pulse followed by disrupt pulse |
+
+Future standalone replacements should be transparent 16×16 or 32×32 PNG files, nearest-neighbor friendly, and use no more than 12 main colors. They must preserve the same visual anchors so the health bar, status rings, model parts, and ability effects remain aligned.

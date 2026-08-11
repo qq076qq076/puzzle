@@ -6,7 +6,9 @@
   const WAVE_REWARD = 35;
   const BUY_COST = 25;
   const WAVE_COUNT_MULTIPLIER = 2.5;
+  const LATE_WAVE_COUNT_MULTIPLIER = 1.2;
   const ENEMY_GOLD_MULTIPLIER = 1 / 3;
+  const LATE_WAVE_GOLD_MULTIPLIER = 0.7;
   const TIER_ATTACK_RATE_MULTIPLIERS = [0.5, 0.75, 1, 1, 1, 1];
   const MAX_TIER = 6;
   const BUILD_TIMES = [1.2, 2.4, 4, 5.8, 7.8, 10];
@@ -19,7 +21,7 @@
   const MERGE_EFFECT_DURATION = 0.95;
   const ENEMY_VISUAL_SCALE = 3 / 4;
   const LEGAL_DROP_BRIGHTNESS = 0.65;
-  const SHIELDED_WAVE_START = 23;
+  const SHIELDED_WAVE_START = 28;
   const ROAD_TEXTURE_PATH = "assets/road/pebble-road.png";
   const PATH = [
     [0, 1], [1, 1], [2, 1], [3, 1], [4, 1], [5, 1], [6, 1], [7, 1], [8, 1],
@@ -133,7 +135,11 @@
     child: { name: "分裂幼體", symbol: "d", color: "#e4bf7b", hp: 20, speed: 1.35, leakDamage: 1, reward: 1 },
     ghost: { name: "幽影蟲", symbol: "G", color: "#b898ec", hp: 110, speed: 1.1, leakDamage: 1, reward: 4 },
     healer: { name: "治療蟲", symbol: "H", color: "#78d8ae", hp: 80, speed: 0.7, leakDamage: 2, reward: 5 },
-    boss: { name: "巨甲王", symbol: "B", color: "#ffbf62", hp: 900, speed: 0.45, leakDamage: 5, reward: 30, boss: true }
+    boss: { name: "巨甲王", symbol: "B", color: "#ffbf62", hp: 900, speed: 0.45, leakDamage: 5, reward: 30, boss: true },
+    warder: { name: "結界蟲", symbol: "W", color: "#69e7ef", hp: 145, speed: 0.74, leakDamage: 2, reward: 6 },
+    burrower: { name: "潛地蟲", symbol: "U", color: "#dfad73", hp: 105, speed: 1.18, leakDamage: 2, reward: 5 },
+    disruptor: { name: "干擾蟲", symbol: "J", color: "#ed82ff", hp: 175, speed: 0.68, leakDamage: 3, reward: 8 },
+    overlord: { name: "裂界巨甲王", symbol: "O", color: "#e36eff", hp: 1800, speed: 0.38, leakDamage: 8, reward: 60, boss: true }
   };
 
   const ENEMY_SPRITE_PATHS = {
@@ -143,7 +149,11 @@
     child: "assets/enemies/child-spider.png",
     ghost: "assets/enemies/shadow-ghost.png",
     healer: "assets/enemies/healer-wizard.png",
-    boss: "assets/enemies/boss-demon.png"
+    boss: "assets/enemies/boss-demon.png",
+    warder: "assets/enemies/armored-knight.png",
+    burrower: "assets/enemies/child-spider.png",
+    disruptor: "assets/enemies/shadow-ghost.png",
+    overlord: "assets/enemies/boss-demon.png"
   };
 
   const enemySprites = Object.keys(ENEMY_SPRITE_PATHS).reduce(function (sprites, type) {
@@ -202,7 +212,24 @@
       { type: "ghost", count: 18, interval: 0.46 }, { type: "healer", count: 12, interval: 0.54 },
       { type: "boss", count: 3, interval: 0.80 }
     ],
-    [{ type: "boss", count: 8, interval: 1.50 }]
+    [{ type: "boss", count: 8, interval: 1.50 }],
+    [
+      { type: "warder", count: 8, interval: 0.52 }, { type: "armor", count: 14, interval: 0.48 },
+      { type: "ghost", count: 12, interval: 0.46 }, { type: "healer", count: 6, interval: 0.56 }
+    ],
+    [
+      { type: "burrower", count: 12, interval: 0.48 }, { type: "runner", count: 18, interval: 0.40 },
+      { type: "split", count: 12, interval: 0.46 }, { type: "warder", count: 8, interval: 0.50 }
+    ],
+    [
+      { type: "disruptor", count: 8, interval: 0.54 }, { type: "armor", count: 16, interval: 0.44 },
+      { type: "healer", count: 10, interval: 0.50 }, { type: "boss", count: 2, interval: 0.82 }
+    ],
+    [
+      { type: "warder", count: 10, interval: 0.46 }, { type: "burrower", count: 14, interval: 0.42 },
+      { type: "disruptor", count: 10, interval: 0.48 }, { type: "boss", count: 3, interval: 0.76 }
+    ],
+    [{ type: "overlord", count: 3, interval: 1.35 }]
   ];
 
   const elements = {
@@ -301,6 +328,8 @@
   }
 
   function getPreparationSeconds(wave) {
+    if (wave >= 30) return 60;
+    if (wave >= 26) return 55;
     if (wave >= 23) return 50;
     if (wave >= 20) return 45;
     if (wave >= 15) return 40;
@@ -309,13 +338,28 @@
     return 25;
   }
 
-  function getEnemyHpMultiplier(wave) {
+  function getLegacyEnemyHpMultiplier(wave) {
     const standardGrowth = (wave - 1) * 0.12;
     const midGameGrowth = Math.max(0, wave - 4) * 0.03;
     const lateGameGrowth = Math.max(0, wave - 9) * 0.04;
     const baseMultiplier = 1 + standardGrowth + midGameGrowth + lateGameGrowth;
     const bracketMultiplier = wave >= 21 ? 2 : wave >= 16 ? 1.75 : wave >= 11 ? 1.5 : wave >= 6 ? 1.25 : 1;
     return baseMultiplier * bracketMultiplier;
+  }
+
+  function getProgressiveDifficultyMultiplier(wave) {
+    if (wave <= 10) return 1;
+    if (wave <= 20) return 1 + (wave - 10) * 0.2;
+    return Math.min(5, 3 + (wave - 20) * 0.2);
+  }
+
+  function getEnemyHpMultiplier(wave) {
+    if (wave <= 10) return getLegacyEnemyHpMultiplier(wave);
+    return getLegacyEnemyHpMultiplier(10) * getProgressiveDifficultyMultiplier(wave);
+  }
+
+  function getWaveCountMultiplier(wave) {
+    return WAVE_COUNT_MULTIPLIER * (wave > 10 ? LATE_WAVE_COUNT_MULTIPLIER : 1);
   }
 
   function createTower(type, x, y, tier, totalInvested, buildDuration) {
@@ -380,6 +424,7 @@
       coreHp: INITIAL_CORE_HP,
       score: 0,
       killGold: 0,
+      enemyGoldRemainder: 0,
       bossKills: 0,
       towers: [
         createTower("cannon", 1, 0, 1, 0),
@@ -517,7 +562,7 @@
   function spawnWaveEnemies() {
     let movementDelay = 0;
     getWaveEntries(state.wave).forEach(function (entry) {
-      const count = Math.round(entry.count * WAVE_COUNT_MULTIPLIER);
+      const count = Math.round(entry.count * getWaveCountMultiplier(state.wave));
       for (let index = 0; index < count; index += 1) {
         spawnEnemy(entry.type, undefined, movementDelay, true);
         if (index < count - 1) movementDelay += entry.interval;
@@ -551,6 +596,11 @@
       invisibleRemaining: 0,
       ghostTimer: type === "ghost" ? 6 : 0,
       healerTimer: type === "healer" ? 3 : 0,
+      wardTimer: type === "warder" ? 3.5 + (state.enemyOrder % 4) * 0.45 : 0,
+      burrowTimer: type === "burrower" ? 4 + (state.enemyOrder % 5) * 0.35 : 0,
+      burrowRemaining: 0,
+      disruptTimer: type === "disruptor" ? 4.5 + (state.enemyOrder % 6) * 0.4 : 0,
+      overlordTimer: type === "overlord" ? 5.5 + (state.enemyOrder % 3) * 0.55 : 0,
       bossTimer: definition.boss ? 8 : 0,
       dead: false
     };
@@ -563,6 +613,10 @@
     return Boolean(enemy && !enemy.dead && enemy.movementDelayRemaining <= 0);
   }
 
+  function isEnemyTargetable(enemy) {
+    return isEnemyOnField(enemy) && enemy.invisibleRemaining <= 0 && enemy.burrowRemaining <= 0;
+  }
+
   function getBossShield() {
     if (state.wave >= 20) return 14;
     if (state.wave >= 15) return 10;
@@ -573,7 +627,7 @@
   function getEnemyShield(definition, maximumHp) {
     const bossShield = definition.boss ? getBossShield() : 0;
     if (state.wave < SHIELDED_WAVE_START) return bossShield;
-    const shieldRatio = 0.12 + (state.wave - SHIELDED_WAVE_START) * 0.04;
+    const shieldRatio = Math.min(0.20, 0.12 + (state.wave - SHIELDED_WAVE_START) * 0.04);
     return Math.max(bossShield, Math.round(maximumHp * shieldRatio));
   }
 
@@ -589,10 +643,12 @@
           damageEnemy(enemy, enemy.poisonDps, "poison");
         }
       }
+      if (enemy.dead) return;
 
       enemy.slowRemaining = Math.max(0, enemy.slowRemaining - deltaTime);
       if (enemy.slowRemaining === 0) enemy.slow = 0;
       enemy.frozenRemaining = Math.max(0, enemy.frozenRemaining - deltaTime);
+      enemy.burrowRemaining = Math.max(0, enemy.burrowRemaining - deltaTime);
 
       if (enemy.type === "ghost") {
         enemy.ghostTimer -= deltaTime;
@@ -611,17 +667,52 @@
         }
       }
 
+      if (enemy.type === "warder") {
+        enemy.wardTimer -= deltaTime;
+        if (enemy.wardTimer <= 0) {
+          enemy.wardTimer = 5.25;
+          grantNearbyShields(enemy, 2.2, 0.08, false);
+        }
+      }
+
+      if (enemy.type === "burrower" && enemy.burrowRemaining <= 0) {
+        enemy.burrowTimer -= deltaTime;
+        if (enemy.burrowTimer <= 0) {
+          enemy.burrowTimer = 5.5;
+          enemy.burrowRemaining = 1.25;
+          const position = getPathPosition(enemy.pathDistance);
+          addEffect({ kind: "burrow", x: position.x, y: position.y, color: ENEMY_TYPES.burrower.color, ttl: 0.65 });
+        }
+      }
+
+      if (enemy.type === "disruptor") {
+        enemy.disruptTimer -= deltaTime;
+        if (enemy.disruptTimer <= 0) {
+          enemy.disruptTimer = 6;
+          disruptNearbyTowers(enemy, 2.6, 0.45);
+        }
+      }
+
+      if (enemy.type === "overlord") {
+        enemy.overlordTimer -= deltaTime;
+        if (enemy.overlordTimer <= 0) {
+          enemy.overlordTimer = 7;
+          grantNearbyShields(enemy, 3.2, 0.08, true);
+          disruptNearbyTowers(enemy, 3.6, 0.35);
+        }
+      }
+
       if (enemy.type === "boss") {
         enemy.bossTimer -= deltaTime;
         if (enemy.bossTimer <= 0) {
           enemy.bossTimer = 8;
           if (state.wave >= 15) {
             state.enemies.forEach(function (otherEnemy) {
-              if (isEnemyOnField(otherEnemy) && otherEnemy.type !== "boss") otherEnemy.speedBoostRemaining = 3;
+              if (isEnemyOnField(otherEnemy) && !ENEMY_TYPES[otherEnemy.type].boss) otherEnemy.speedBoostRemaining = 3;
             });
             addEffect({ kind: "bossPulse", x: getPathPosition(enemy.pathDistance).x, y: getPathPosition(enemy.pathDistance).y, color: "#ffbf62", ttl: 0.8 });
           }
-          if (state.wave >= 10 && state.wave < WAVES.length && enemy.hp <= enemy.maxHp * 0.5 && !enemy.hasSummoned) {
+          if (state.wave >= 10 && state.wave !== 25 && state.wave < WAVES.length && enemy.hp <= enemy.maxHp * 0.5 && !enemy.hasSummoned) {
             enemy.hasSummoned = true;
             for (let index = 0; index < 4; index += 1) spawnEnemy("runner", enemy.pathDistance - 0.1 - index * 0.04);
             showToast("巨甲王召喚了迅捷蟲！", 1.8);
@@ -645,6 +736,31 @@
     });
   }
 
+  function grantNearbyShields(source, radius, shieldRatio, includeSource) {
+    const sourcePosition = getPathPosition(source.pathDistance);
+    state.enemies.forEach(function (enemy) {
+      if (!isEnemyOnField(enemy) || (!includeSource && enemy === source)) return;
+      const position = getPathPosition(enemy.pathDistance);
+      if (Math.hypot(position.x - sourcePosition.x, position.y - sourcePosition.y) > radius) return;
+      const wardShield = Math.round(enemy.maxHp * shieldRatio);
+      if (wardShield <= enemy.shield) return;
+      enemy.shield = wardShield;
+      addEffect({ kind: "shield", x: position.x, y: position.y, color: source.type === "overlord" ? "#e36eff" : "#69e7ef", ttl: 0.38 });
+    });
+    addEffect({ kind: "wardPulse", x: sourcePosition.x, y: sourcePosition.y, color: source.type === "overlord" ? "#e36eff" : "#69e7ef", ttl: 0.8 });
+  }
+
+  function disruptNearbyTowers(source, radius, delay) {
+    const sourcePosition = getPathPosition(source.pathDistance);
+    state.towers.forEach(function (tower) {
+      if (isTowerConstructing(tower)) return;
+      if (Math.hypot(tower.x - sourcePosition.x, tower.y - sourcePosition.y) > radius) return;
+      const cooldownCap = getTowerInterval(tower) * 1.5;
+      tower.cooldown = Math.min(cooldownCap, Math.max(0, tower.cooldown) + delay);
+    });
+    addEffect({ kind: "disruptPulse", x: sourcePosition.x, y: sourcePosition.y, color: source.type === "overlord" ? "#e36eff" : "#ed82ff", ttl: 0.75 });
+  }
+
   function updateEnemyMovement(deltaTime) {
     state.enemies.forEach(function (enemy) {
       if (enemy.dead) return;
@@ -661,7 +777,8 @@
       if (enemy.frozenRemaining > 0) return;
       const slowMultiplier = 1 - (enemy.slowRemaining > 0 ? enemy.slow : 0);
       const boostMultiplier = enemy.speedBoostRemaining > 0 ? 1.2 : 1;
-      enemy.pathDistance += enemy.speed * slowMultiplier * boostMultiplier * movementDelta;
+      const burrowMultiplier = enemy.burrowRemaining > 0 ? 1.65 : 1;
+      enemy.pathDistance += enemy.speed * slowMultiplier * boostMultiplier * burrowMultiplier * movementDelta;
       if (enemy.pathDistance >= GATE_DISTANCE) leakEnemy(enemy);
     });
   }
@@ -769,7 +886,7 @@
   function findTowerTarget(tower, range) {
     return state.enemies
       .filter(function (enemy) {
-        if (!isEnemyOnField(enemy) || enemy.invisibleRemaining > 0) return false;
+        if (!isEnemyTargetable(enemy)) return false;
         return isTowerInRange(tower, getPathPosition(enemy.pathDistance).x, getPathPosition(enemy.pathDistance).y, range);
       })
       .sort(function (first, second) {
@@ -810,7 +927,7 @@
       if (critical && hit) {
         const targetPosition = getPathPosition(target.pathDistance);
         state.enemies.forEach(function (enemy) {
-          if (isEnemyOnField(enemy) && Math.hypot(getPathPosition(enemy.pathDistance).x - targetPosition.x, getPathPosition(enemy.pathDistance).y - targetPosition.y) <= 1) {
+          if (isEnemyTargetable(enemy) && Math.hypot(getPathPosition(enemy.pathDistance).x - targetPosition.x, getPathPosition(enemy.pathDistance).y - targetPosition.y) <= 1) {
             damageEnemy(enemy, baseDamage * 0.8, "direct");
           }
         });
@@ -852,7 +969,7 @@
     } else if (tower.type === "pierce") {
       const maximum = critical ? state.enemies.length : TOWER_TYPES.pierce.pierceCount[tower.tier - 1];
       const targets = state.enemies.filter(function (enemy) {
-        if (!isEnemyOnField(enemy) || enemy.invisibleRemaining > 0) return false;
+        if (!isEnemyTargetable(enemy)) return false;
         const position = getPathPosition(enemy.pathDistance);
         return isTowerInRange(tower, position.x, position.y, tierData.range);
       }).sort(function (first, second) {
@@ -873,7 +990,7 @@
 
   function getNearbyEnemies(x, y, range, excluded) {
     return state.enemies.filter(function (enemy) {
-      if (!isEnemyOnField(enemy) || enemy.invisibleRemaining > 0 || excluded.indexOf(enemy) !== -1) return false;
+      if (!isEnemyTargetable(enemy) || excluded.indexOf(enemy) !== -1) return false;
       const position = getPathPosition(enemy.pathDistance);
       return Math.hypot(position.x - x, position.y - y) <= range;
     }).sort(function (first, second) {
@@ -882,7 +999,7 @@
   }
 
   function damageEnemy(enemy, amount, source) {
-    if (!isEnemyOnField(enemy)) return false;
+    if (!isEnemyOnField(enemy) || (source === "direct" && !isEnemyTargetable(enemy))) return false;
     let finalDamage = amount;
     const definition = ENEMY_TYPES[enemy.type];
     if (source === "direct" && definition.directResistance) finalDamage *= 1 - definition.directResistance;
@@ -928,11 +1045,13 @@
     enemy.dead = true;
     const definition = ENEMY_TYPES[enemy.type];
     const position = getPathPosition(enemy.pathDistance);
-    const reward = getEnemyGoldReward(definition);
+    const reward = getEnemyGoldReward(definition, state.wave);
     state.waveStats.kills += 1;
     state.killGold = roundGold(state.killGold + reward);
-    addGold(reward);
-    addEffect({ kind: "gold", x: position.x, y: position.y, amount: reward, color: "#ffd477", ttl: 1 });
+    if (reward > 0) {
+      addGold(reward);
+      addEffect({ kind: "gold", x: position.x, y: position.y, amount: reward, color: "#ffd477", ttl: 1 });
+    }
     if (definition.boss) {
       state.bossKills += 1;
       addEffect({ kind: "bossExplosion", x: position.x, y: position.y, color: definition.color, ttl: 1.35 });
@@ -1011,8 +1130,13 @@
     state.gold = roundGold(state.gold + amount);
   }
 
-  function getEnemyGoldReward(definition) {
-    return Math.max(1, roundGold(definition.reward * ENEMY_GOLD_MULTIPLIER));
+  function getEnemyGoldReward(definition, wave) {
+    const baseReward = Math.max(1, roundGold(definition.reward * ENEMY_GOLD_MULTIPLIER));
+    if (wave <= 10) return baseReward;
+    const discountedReward = baseReward * LATE_WAVE_GOLD_MULTIPLIER + state.enemyGoldRemainder;
+    const reward = Math.floor(discountedReward + 1e-9);
+    state.enemyGoldRemainder = Math.max(0, discountedReward - reward);
+    return reward;
   }
 
   function purchaseDie() {
@@ -1656,17 +1780,89 @@
     ctx.restore();
   }
 
+  function drawEnemyModelAccents(enemy, center, radius) {
+    const time = performance.now() / 1000;
+    ctx.save();
+    ctx.lineWidth = Math.max(1.5, canvasMetrics.cell * 0.025 * ENEMY_VISUAL_SCALE);
+    ctx.shadowColor = ENEMY_TYPES[enemy.type].color;
+    ctx.shadowBlur = canvasMetrics.cell * 0.12;
+
+    if (enemy.type === "warder") {
+      const accentRadius = radius * 1.42;
+      ctx.globalAlpha = 0.84;
+      ctx.beginPath();
+      for (let index = 0; index < 6; index += 1) {
+        const angle = time * 0.22 + index * Math.PI / 3 - Math.PI / 2;
+        const x = center.x + Math.cos(angle) * accentRadius;
+        const y = center.y + Math.sin(angle) * accentRadius;
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.strokeStyle = "#88f7ff";
+      ctx.stroke();
+    } else if (enemy.type === "burrower") {
+      ctx.globalAlpha = enemy.burrowRemaining > 0 ? 0.92 : 0.58;
+      ctx.beginPath();
+      ctx.ellipse(center.x, center.y + radius * 0.7, radius * 1.28, radius * 0.46, 0, 0, Math.PI * 2);
+      ctx.strokeStyle = "#efc58e";
+      ctx.stroke();
+      for (let index = 0; index < 4; index += 1) {
+        const angle = time * 2.2 + index * Math.PI / 2;
+        ctx.beginPath();
+        ctx.arc(center.x + Math.cos(angle) * radius * 1.05, center.y + radius * 0.68 + Math.sin(angle) * radius * 0.28, radius * 0.11, 0, Math.PI * 2);
+        ctx.fillStyle = index % 2 === 0 ? "#dfad73" : "#8d6848";
+        ctx.fill();
+      }
+    } else if (enemy.type === "disruptor") {
+      ctx.globalAlpha = 0.82;
+      for (let index = 0; index < 3; index += 1) {
+        const angle = -time * 1.15 + index * Math.PI * 2 / 3;
+        const orbitRadius = radius * 1.42;
+        ctx.beginPath();
+        ctx.arc(center.x + Math.cos(angle) * orbitRadius, center.y + Math.sin(angle) * orbitRadius, radius * 0.13, 0, Math.PI * 2);
+        ctx.fillStyle = "#f2a0ff";
+        ctx.fill();
+      }
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, radius * 1.28, time, time + Math.PI * 1.25);
+      ctx.strokeStyle = "#ed82ff";
+      ctx.stroke();
+    } else if (enemy.type === "overlord") {
+      ctx.globalAlpha = 0.9;
+      [1.24, 1.52].forEach(function (scale, index) {
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, radius * scale, time * (index === 0 ? 0.35 : -0.28), time * (index === 0 ? 0.35 : -0.28) + Math.PI * 1.55);
+        ctx.strokeStyle = index === 0 ? "#ffb4ff" : "#b56cff";
+        ctx.stroke();
+      });
+      for (let index = 0; index < 3; index += 1) {
+        const angle = time * 0.75 + index * Math.PI * 2 / 3;
+        const shardX = center.x + Math.cos(angle) * radius * 1.72;
+        const shardY = center.y + Math.sin(angle) * radius * 1.72;
+        ctx.save();
+        ctx.translate(shardX, shardY);
+        ctx.rotate(angle + Math.PI / 2);
+        ctx.fillStyle = index === 0 ? "#ffd2ff" : "#e36eff";
+        ctx.fillRect(-radius * 0.08, -radius * 0.24, radius * 0.16, radius * 0.48);
+        ctx.restore();
+      }
+    }
+    ctx.restore();
+  }
+
   function drawEnemy(enemy) {
     const definition = ENEMY_TYPES[enemy.type];
     const position = getEnemyRenderPosition(enemy);
     const center = gridCenter(position.x, position.y);
     const radius = canvasMetrics.cell * (definition.boss ? 0.34 : 0.25) * ENEMY_VISUAL_SCALE;
     const sprite = enemySprites[enemy.type];
-    const spriteScale = definition.boss ? 0.82 : enemy.type === "child" ? 0.46 : 0.6;
+    const spriteScale = enemy.type === "overlord" ? 0.94 : definition.boss ? 0.82 : enemy.type === "child" ? 0.46 : 0.6;
     const spriteSize = canvasMetrics.cell * spriteScale * ENEMY_VISUAL_SCALE;
     const bob = Math.sin(performance.now() / 155 + enemy.order * 1.7) * canvasMetrics.cell * 0.025 * ENEMY_VISUAL_SCALE;
+    const burrowOffset = enemy.burrowRemaining > 0 ? canvasMetrics.cell * 0.08 : 0;
     ctx.save();
-    ctx.globalAlpha = enemy.invisibleRemaining > 0 ? 0.2 : 1;
+    ctx.globalAlpha = enemy.invisibleRemaining > 0 ? 0.2 : enemy.burrowRemaining > 0 ? 0.24 : 1;
     ctx.beginPath();
     ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
     ctx.fillStyle = "rgba(4, 12, 25, 0.72)";
@@ -1681,7 +1877,7 @@
     if (sprite && sprite.complete && sprite.naturalWidth > 0) {
       ctx.save();
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(sprite, center.x - spriteSize / 2, center.y - spriteSize / 2 + bob, spriteSize, spriteSize);
+      ctx.drawImage(sprite, center.x - spriteSize / 2, center.y - spriteSize / 2 + bob + burrowOffset, spriteSize, spriteSize);
       ctx.restore();
     } else {
       ctx.fillStyle = definition.color;
@@ -1690,6 +1886,8 @@
       ctx.textBaseline = "middle";
       ctx.fillText(definition.symbol, center.x, center.y + ENEMY_VISUAL_SCALE);
     }
+
+    drawEnemyModelAccents(enemy, center, radius);
 
     const barWidth = canvasMetrics.cell * (definition.boss ? 0.75 : 0.48) * ENEMY_VISUAL_SCALE;
     const barHeight = Math.max(3, canvasMetrics.cell * 0.055) * ENEMY_VISUAL_SCALE;
@@ -2112,6 +2310,54 @@
     ctx.restore();
   }
 
+  function drawEnemyAbilityEffect(effect, progress) {
+    const center = gridCenter(effect.x, effect.y);
+    const size = canvasMetrics.cell;
+    const expansion = 1 - Math.pow(1 - progress, 2);
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.strokeStyle = effect.color;
+    ctx.fillStyle = effect.color;
+    ctx.shadowColor = effect.color;
+    ctx.shadowBlur = size * 0.18;
+    ctx.lineWidth = Math.max(2, size * 0.045 * (1 - progress * 0.45));
+
+    if (effect.kind === "wardPulse") {
+      const radius = size * (0.24 + expansion * 1.05);
+      ctx.beginPath();
+      for (let index = 0; index < 6; index += 1) {
+        const angle = index * Math.PI / 3 - Math.PI / 2 + progress * 0.35;
+        const x = center.x + Math.cos(angle) * radius;
+        const y = center.y + Math.sin(angle) * radius;
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.stroke();
+    } else if (effect.kind === "disruptPulse") {
+      const radius = size * (0.2 + expansion * 1.25);
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
+      ctx.stroke();
+      for (let index = 0; index < 8; index += 1) {
+        const angle = index * Math.PI / 4 + progress * 0.5;
+        ctx.beginPath();
+        ctx.moveTo(center.x + Math.cos(angle) * radius * 0.78, center.y + Math.sin(angle) * radius * 0.78);
+        ctx.lineTo(center.x + Math.cos(angle) * radius * 1.08, center.y + Math.sin(angle) * radius * 1.08);
+        ctx.stroke();
+      }
+    } else {
+      for (let index = 0; index < 3; index += 1) {
+        const localProgress = Math.max(0, Math.min(1, progress * 1.35 - index * 0.12));
+        ctx.globalAlpha = Math.max(0, 0.82 - localProgress * 0.72);
+        ctx.beginPath();
+        ctx.ellipse(center.x, center.y + size * 0.14, size * (0.18 + localProgress * (0.55 + index * 0.12)), size * (0.08 + localProgress * 0.16), 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
   function drawEffect(effect) {
     const progress = 1 - effect.ttl / effect.maxTtl;
     const alpha = Math.max(0, effect.ttl / effect.maxTtl);
@@ -2133,6 +2379,8 @@
       drawBossExplosion(effect, progress);
     } else if (effect.kind === "shieldBreak") {
       drawShieldBreakEffect(effect, progress);
+    } else if (effect.kind === "wardPulse" || effect.kind === "disruptPulse" || effect.kind === "burrow") {
+      drawEnemyAbilityEffect(effect, progress);
     } else if (effect.kind === "projectile") {
       drawProjectile(effect, progress);
     } else if (effect.kind === "lightning") {
