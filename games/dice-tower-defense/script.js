@@ -7,7 +7,7 @@
   const BUY_COST = 25;
   const WAVE_COUNT_MULTIPLIER = 2.5;
   const ENEMY_GOLD_MULTIPLIER = 1 / 3;
-  const GOLD_PRECISION = 100;
+  const TIER_ATTACK_RATE_MULTIPLIERS = [0.5, 0.75, 1, 1, 1, 1];
   const MAX_TIER = 6;
   const BUILD_TIMES = [1.2, 2.4, 4, 5.8, 7.8, 10];
   const INITIAL_CORE_HP = 20;
@@ -389,8 +389,6 @@
       diceBag: [],
       enemies: [],
       effects: [],
-      spawnSegments: [],
-      spawnTimer: 0,
       enemyOrder: 0,
       waveStats: { kills: 0, leaks: 0 },
       selectedTowerId: null,
@@ -432,11 +430,8 @@
   function beginCombat() {
     if (state.phase !== "preparation" || state.paused) return;
     state.phase = "combat";
-    state.spawnSegments = getWaveEntries(state.wave).map(function (entry) {
-      return { type: entry.type, remaining: Math.round(entry.count * WAVE_COUNT_MULTIPLIER), interval: entry.interval };
-    });
-    state.spawnTimer = 0;
     state.waveStats = { kills: 0, leaks: 0 };
+    spawnWaveEnemies();
     showToast("第 " + state.wave + " 波開始！", 1.6);
     markUiDirty();
   }
@@ -509,38 +504,33 @@
 
   function updateCombat(deltaTime) {
     state.waveElapsed = (state.waveElapsed || 0) + deltaTime;
-    updateSpawner(deltaTime);
     updateEnemyStatuses(deltaTime);
     updateTowers(deltaTime);
     updateEnemyMovement(deltaTime);
     cleanupEntities();
 
-    if (state.phase === "combat" && state.spawnSegments.length === 0 && state.enemies.length === 0) {
+    if (state.phase === "combat" && state.enemies.length === 0) {
       finishWave();
     }
   }
 
-  function updateSpawner(deltaTime) {
-    if (state.spawnSegments.length === 0) return;
-    state.spawnTimer -= deltaTime;
-    if (state.spawnTimer > 0) return;
-
-    const segment = state.spawnSegments[0];
-    spawnEnemy(segment.type);
-    segment.remaining -= 1;
-    if (segment.remaining <= 0) {
-      state.spawnSegments.shift();
-      state.spawnTimer = 0;
-    } else {
-      state.spawnTimer = segment.interval;
-    }
+  function spawnWaveEnemies() {
+    let movementDelay = 0;
+    getWaveEntries(state.wave).forEach(function (entry) {
+      const count = Math.round(entry.count * WAVE_COUNT_MULTIPLIER);
+      for (let index = 0; index < count; index += 1) {
+        spawnEnemy(entry.type, undefined, movementDelay, true);
+        if (index < count - 1) movementDelay += entry.interval;
+      }
+    });
   }
 
-  function spawnEnemy(type, startingDistance) {
+  function spawnEnemy(type, startingDistance, movementDelay, showSpawnEffect) {
     const definition = ENEMY_TYPES[type];
     const waveMultiplier = getEnemyHpMultiplier(state.wave);
     const bossMultiplier = definition.boss ? 1.25 : 1;
     const maximumHp = Math.round(definition.hp * waveMultiplier * bossMultiplier);
+    const delay = Math.max(0, movementDelay || 0);
     const enemy = {
       id: createId("enemy"),
       order: state.enemyOrder,
@@ -549,6 +539,8 @@
       hp: maximumHp,
       maxHp: maximumHp,
       speed: Math.min(definition.speed * (1 + (state.wave - 1) * 0.015), definition.speed * 1.35),
+      movementDelayRemaining: delay,
+      spawnEffectPending: showSpawnEffect !== false && delay > 0,
       shield: getEnemyShield(definition, maximumHp),
       slow: 0,
       slowRemaining: 0,
@@ -564,7 +556,11 @@
     };
     state.enemyOrder += 1;
     state.enemies.push(enemy);
-    addEffect({ kind: "spawn", x: getPathPosition(enemy.pathDistance).x, y: getPathPosition(enemy.pathDistance).y, color: definition.color, ttl: 0.45 });
+    if (showSpawnEffect !== false && delay === 0) addEffect({ kind: "spawn", x: getPathPosition(enemy.pathDistance).x, y: getPathPosition(enemy.pathDistance).y, color: definition.color, ttl: 0.45 });
+  }
+
+  function isEnemyOnField(enemy) {
+    return Boolean(enemy && !enemy.dead && enemy.movementDelayRemaining <= 0);
   }
 
   function getBossShield() {
@@ -583,7 +579,7 @@
 
   function updateEnemyStatuses(deltaTime) {
     state.enemies.forEach(function (enemy) {
-      if (enemy.dead) return;
+      if (!isEnemyOnField(enemy)) return;
 
       if (enemy.poisonRemaining > 0) {
         enemy.poisonRemaining -= deltaTime;
@@ -621,7 +617,7 @@
           enemy.bossTimer = 8;
           if (state.wave >= 15) {
             state.enemies.forEach(function (otherEnemy) {
-              if (!otherEnemy.dead && otherEnemy.type !== "boss") otherEnemy.speedBoostRemaining = 3;
+              if (isEnemyOnField(otherEnemy) && otherEnemy.type !== "boss") otherEnemy.speedBoostRemaining = 3;
             });
             addEffect({ kind: "bossPulse", x: getPathPosition(enemy.pathDistance).x, y: getPathPosition(enemy.pathDistance).y, color: "#ffbf62", ttl: 0.8 });
           }
@@ -640,7 +636,7 @@
   function healNearbyEnemies(source) {
     const sourcePosition = getPathPosition(source.pathDistance);
     state.enemies.forEach(function (enemy) {
-      if (enemy.dead || enemy === source) return;
+      if (!isEnemyOnField(enemy) || enemy === source) return;
       const position = getPathPosition(enemy.pathDistance);
       if (Math.hypot(position.x - sourcePosition.x, position.y - sourcePosition.y) <= 2) {
         enemy.hp = Math.min(enemy.maxHp, enemy.hp + enemy.maxHp * 0.08);
@@ -652,10 +648,20 @@
   function updateEnemyMovement(deltaTime) {
     state.enemies.forEach(function (enemy) {
       if (enemy.dead) return;
+      let movementDelta = deltaTime;
+      if (enemy.movementDelayRemaining > 0) {
+        movementDelta = Math.max(0, deltaTime - enemy.movementDelayRemaining);
+        enemy.movementDelayRemaining = Math.max(0, enemy.movementDelayRemaining - deltaTime);
+        if (enemy.movementDelayRemaining === 0 && enemy.spawnEffectPending) {
+          enemy.spawnEffectPending = false;
+          addEffect({ kind: "spawn", x: PATH[0][0], y: PATH[0][1], color: ENEMY_TYPES[enemy.type].color, ttl: 0.45 });
+        }
+        if (movementDelta === 0) return;
+      }
       if (enemy.frozenRemaining > 0) return;
       const slowMultiplier = 1 - (enemy.slowRemaining > 0 ? enemy.slow : 0);
       const boostMultiplier = enemy.speedBoostRemaining > 0 ? 1.2 : 1;
-      enemy.pathDistance += enemy.speed * slowMultiplier * boostMultiplier * deltaTime;
+      enemy.pathDistance += enemy.speed * slowMultiplier * boostMultiplier * movementDelta;
       if (enemy.pathDistance >= GATE_DISTANCE) leakEnemy(enemy);
     });
   }
@@ -700,7 +706,8 @@
 
   function getTowerInterval(tower) {
     const tierData = TOWER_TYPES[tower.type].tiers[tower.tier - 1];
-    let interval = tierData.interval;
+    const tierIndex = Math.max(0, Math.min(TIER_ATTACK_RATE_MULTIPLIERS.length - 1, tower.tier - 1));
+    let interval = tierData.interval / TIER_ATTACK_RATE_MULTIPLIERS[tierIndex];
     const auraBonus = getStrongestInspireBonus(tower);
     interval /= 1 + auraBonus;
     return interval;
@@ -762,7 +769,7 @@
   function findTowerTarget(tower, range) {
     return state.enemies
       .filter(function (enemy) {
-        if (enemy.dead || enemy.invisibleRemaining > 0) return false;
+        if (!isEnemyOnField(enemy) || enemy.invisibleRemaining > 0) return false;
         return isTowerInRange(tower, getPathPosition(enemy.pathDistance).x, getPathPosition(enemy.pathDistance).y, range);
       })
       .sort(function (first, second) {
@@ -803,7 +810,7 @@
       if (critical && hit) {
         const targetPosition = getPathPosition(target.pathDistance);
         state.enemies.forEach(function (enemy) {
-          if (!enemy.dead && Math.hypot(getPathPosition(enemy.pathDistance).x - targetPosition.x, getPathPosition(enemy.pathDistance).y - targetPosition.y) <= 1) {
+          if (isEnemyOnField(enemy) && Math.hypot(getPathPosition(enemy.pathDistance).x - targetPosition.x, getPathPosition(enemy.pathDistance).y - targetPosition.y) <= 1) {
             damageEnemy(enemy, baseDamage * 0.8, "direct");
           }
         });
@@ -845,7 +852,7 @@
     } else if (tower.type === "pierce") {
       const maximum = critical ? state.enemies.length : TOWER_TYPES.pierce.pierceCount[tower.tier - 1];
       const targets = state.enemies.filter(function (enemy) {
-        if (enemy.dead || enemy.invisibleRemaining > 0) return false;
+        if (!isEnemyOnField(enemy) || enemy.invisibleRemaining > 0) return false;
         const position = getPathPosition(enemy.pathDistance);
         return isTowerInRange(tower, position.x, position.y, tierData.range);
       }).sort(function (first, second) {
@@ -866,7 +873,7 @@
 
   function getNearbyEnemies(x, y, range, excluded) {
     return state.enemies.filter(function (enemy) {
-      if (enemy.dead || enemy.invisibleRemaining > 0 || excluded.indexOf(enemy) !== -1) return false;
+      if (!isEnemyOnField(enemy) || enemy.invisibleRemaining > 0 || excluded.indexOf(enemy) !== -1) return false;
       const position = getPathPosition(enemy.pathDistance);
       return Math.hypot(position.x - x, position.y - y) <= range;
     }).sort(function (first, second) {
@@ -875,7 +882,7 @@
   }
 
   function damageEnemy(enemy, amount, source) {
-    if (!enemy || enemy.dead) return false;
+    if (!isEnemyOnField(enemy)) return false;
     let finalDamage = amount;
     const definition = ENEMY_TYPES[enemy.type];
     if (source === "direct" && definition.directResistance) finalDamage *= 1 - definition.directResistance;
@@ -971,6 +978,11 @@
     return { x: first[0] + (second[0] - first[0]) * progress, y: first[1] + (second[1] - first[1]) * progress };
   }
 
+  function getEnemyRenderPosition(enemy) {
+    if (enemy.movementDelayRemaining > 0) return { x: -1.5, y: PATH[0][1] };
+    return getPathPosition(enemy.pathDistance);
+  }
+
   function getSlotIndex(x, y) {
     return BUILD_SLOTS.findIndex(function (slot) { return slot[0] === x && slot[1] === y; });
   }
@@ -988,12 +1000,11 @@
   }
 
   function roundGold(value) {
-    return Math.round((value + Number.EPSILON) * GOLD_PRECISION) / GOLD_PRECISION;
+    return Math.round(value);
   }
 
   function formatGold(value) {
-    const rounded = roundGold(value);
-    return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+    return String(roundGold(value));
   }
 
   function addGold(amount) {
@@ -1001,7 +1012,7 @@
   }
 
   function getEnemyGoldReward(definition) {
-    return roundGold(definition.reward * ENEMY_GOLD_MULTIPLIER);
+    return Math.max(1, roundGold(definition.reward * ENEMY_GOLD_MULTIPLIER));
   }
 
   function purchaseDie() {
@@ -1647,7 +1658,7 @@
 
   function drawEnemy(enemy) {
     const definition = ENEMY_TYPES[enemy.type];
-    const position = getPathPosition(enemy.pathDistance);
+    const position = getEnemyRenderPosition(enemy);
     const center = gridCenter(position.x, position.y);
     const radius = canvasMetrics.cell * (definition.boss ? 0.34 : 0.25) * ENEMY_VISUAL_SCALE;
     const sprite = enemySprites[enemy.type];

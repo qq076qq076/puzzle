@@ -292,6 +292,34 @@ h1 span { color: var(--gold); }
 .shop-row small { display: block; margin-top: 3px; color: var(--soft); font-size: 0.61rem; font-weight: 600; }
 .shop-row .button { min-height: 35px; padding: 0 11px; font-size: 0.68rem; }
 
+.shop-row .buy-dice-button {
+  width: 100%;
+  min-height: 48px;
+  justify-content: space-between;
+  padding: 0 14px;
+  border-color: rgba(255, 224, 148, 0.9);
+  color: #111d2f;
+  background: linear-gradient(135deg, #ffc95f, #fff0b8);
+  box-shadow: 0 10px 26px rgba(255, 193, 72, 0.25), inset 0 1px rgba(255, 255, 255, 0.72);
+  font-size: 0.78rem;
+  font-weight: 950;
+}
+
+.shop-row .buy-dice-button:hover {
+  border-color: #fff4cf;
+  background: linear-gradient(135deg, #ffda7c, #fff7d8);
+  box-shadow: 0 14px 32px rgba(255, 193, 72, 0.34), inset 0 1px rgba(255, 255, 255, 0.82);
+}
+
+.buy-dice-button strong {
+  padding: 5px 8px;
+  border-radius: 8px;
+  color: #fff4c8;
+  background: #14233a;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+}
+
 .dice-tray {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
