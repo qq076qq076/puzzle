@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#071226" />
-    <meta name="description" content="骰塔守境：擲出好點數，合成骰塔，守住最後一格城門。" />
+    <meta name="description" content="骰塔守境：合成骰塔、提高爆擊率，守住最後一格城門。" />
     <title>骰塔守境 · Puzzle Club</title>
     <link rel="stylesheet" href="style.css" />
   </head>
@@ -16,7 +16,7 @@
         <div>
           <div class="eyebrow"><span class="eyebrow-dot"></span> DICE TOWER DEFENSE · MVP</div>
           <h1>骰塔守境<span>.</span></h1>
-          <p class="game-tagline">擲出好點數，守住最後一格城門。</p>
+          <p class="game-tagline">合成更高等級，守住最後一格城門。</p>
         </div>
         <div class="header-actions">
           <button class="button button-quiet" id="pause-button" type="button">暫停</button>
@@ -28,7 +28,6 @@
         <div class="hud-card"><span>WAVE</span><strong id="wave-value">1 / 15</strong><small id="phase-value">準備中</small></div>
         <div class="hud-card core-card"><span>CORE</span><strong id="core-value">20 / 20</strong><div class="core-meter"><i id="core-meter-fill"></i></div></div>
         <div class="hud-card"><span>GOLD</span><strong id="gold-value">120</strong><small>購買骰子</small></div>
-        <div class="hud-card"><span>REROLL</span><strong id="reroll-value">2</strong><small>本波券</small></div>
         <div class="hud-card"><span>BEST</span><strong id="best-value">0</strong><small>最高分</small></div>
       </section>
 
@@ -39,7 +38,10 @@
               <span class="section-kicker">BATTLEFIELD</span>
               <strong id="status-line" role="status" aria-live="polite">準備你的防線。</strong>
             </div>
-            <div class="wave-countdown" id="countdown-value">25s</div>
+            <div class="board-actions">
+              <div class="wave-countdown" id="countdown-value">25s</div>
+              <button class="button button-primary board-start-button" id="start-button" type="button">開始第 1 波 <span aria-hidden="true">→</span></button>
+            </div>
           </div>
           <div class="board-frame" id="board-frame">
             <canvas id="game-canvas" aria-label="10 欄 8 列骰塔防守棋盤"></canvas>
@@ -77,16 +79,10 @@
         </div>
 
         <aside class="control-panel" aria-label="骰塔控制面板">
-          <div class="control-block wave-block">
-            <div class="block-heading"><span class="section-kicker">NEXT WAVE</span><strong id="next-wave-label">第 1 波</strong></div>
-            <p id="wave-preview">迅捷蟲 × 8</p>
-            <button class="button button-primary start-button" id="start-button" type="button">開始第 1 波 <span aria-hidden="true">→</span></button>
-          </div>
-
           <div class="control-block shop-block">
             <div class="block-heading"><span class="section-kicker">DICE SUPPLY</span><strong id="purchase-count">0 / 5</strong></div>
             <div class="shop-row">
-              <p>隨機骰子 <small>25 金幣</small></p>
+              <p>隨機類型骰子 <small>25 金幣 · 固定 1 級 · 準備／戰鬥皆可購買</small></p>
               <button class="button button-quiet" id="buy-button" type="button">購買骰子</button>
             </div>
             <div class="dice-tray" id="dice-tray" aria-label="待放置骰子"></div>
@@ -97,24 +93,25 @@
             <div class="empty-inspector">
               <span class="inspector-icon">✦</span>
               <strong>選取一座骰塔</strong>
-              <p>查看骰面、射程與特殊能力。</p>
+              <p>查看等級、爆擊率、射程與能力。</p>
             </div>
           </div>
 
           <div class="control-block mini-rules">
-            <div class="block-heading"><span class="section-kicker">QUICK RULES</span><span class="rule-face">6</span></div>
-            <p>兩座同種類、同階級骰塔可以合成。骰面 6 每次有效攻擊累積充能，滿 3 格施放特殊能力。</p>
+            <div class="block-heading"><span class="section-kicker">QUICK RULES</span><span class="rule-crit">%</span></div>
+            <p>兩座同種類、同等級骰塔可以合成。等級 1／2／3 的爆擊率為 10%／20%／35%，爆擊會觸發各類型能力。</p>
           </div>
         </aside>
       </section>
 
       <footer class="page-footer">
-        <span>ROLL · MERGE · DEFEND</span>
+        <span>MERGE · CRIT · DEFEND</span>
         <span class="footer-rule" aria-hidden="true"></span>
-        <span>每一點，都可能改變戰局</span>
+        <span>每次爆擊，都可能改變戰局</span>
       </footer>
     </main>
 
+    <div class="drag-preview" id="drag-preview" aria-hidden="true" hidden></div>
     <script src="script.js"></script>
   </body>
 </html>
