@@ -25,7 +25,7 @@
       </header>
 
       <section class="hud" aria-label="遊戲資訊">
-        <div class="hud-card"><span>WAVE</span><strong id="wave-value">1 / 15</strong><small id="phase-value">準備中</small></div>
+        <div class="hud-card"><span>WAVE</span><strong id="wave-value">1 / 25</strong><small id="phase-value">準備中</small></div>
         <div class="hud-card core-card"><span>CORE</span><strong id="core-value">20 / 20</strong><div class="core-meter"><i id="core-meter-fill"></i></div></div>
         <div class="hud-card"><span>GOLD</span><strong id="gold-value">120</strong><small>購買骰子</small></div>
         <div class="hud-card"><span>BEST</span><strong id="best-value">0</strong><small>最高分</small></div>
@@ -45,8 +45,6 @@
           </div>
           <div class="board-frame" id="board-frame">
             <canvas id="game-canvas" aria-label="10 欄 8 列骰塔防守棋盤"></canvas>
-            <div class="board-badge entrance-badge">入口</div>
-            <div class="board-badge gate-badge">城門 <b id="gate-hp-badge">20</b></div>
             <div class="board-toast" id="board-toast" aria-live="polite"></div>
             <div class="pause-cover" id="pause-cover" hidden>
               <div class="cover-card">
@@ -80,11 +78,10 @@
 
         <aside class="control-panel" aria-label="骰塔控制面板">
           <div class="control-block shop-block">
-            <div class="block-heading"><span class="section-kicker">DICE SUPPLY</span><strong id="purchase-count">0 / 5</strong></div>
+            <div class="block-heading"><span class="section-kicker">DICE SUPPLY</span>
             <div class="shop-row">
-              <p>隨機類型骰子 <small>25 金幣 · 固定 1 級 · 準備／戰鬥皆可購買</small></p>
               <button class="button button-quiet" id="buy-button" type="button">購買骰子</button>
-            </div>
+            </div></div>
             <div class="dice-tray" id="dice-tray" aria-label="待放置骰子"></div>
             <p class="tray-hint" id="tray-hint">選一顆骰子，再點擊空建造格放置。</p>
           </div>
@@ -99,7 +96,7 @@
 
           <div class="control-block mini-rules">
             <div class="block-heading"><span class="section-kicker">QUICK RULES</span><span class="rule-crit">%</span></div>
-            <p>兩座同種類、同等級骰塔可以合成。等級 1／2／3 的爆擊率為 10%／20%／35%，爆擊會觸發各類型能力。</p>
+            <p>準備階段立即建造；戰鬥中建造與升級需要時間。骰塔最高 6 級，等級越高，爆擊率越高。</p>
           </div>
         </aside>
       </section>
