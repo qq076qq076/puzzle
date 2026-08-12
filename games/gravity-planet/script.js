@@ -1,14 +1,14 @@
 const LEVELS = [
   { name: "碎星微石", mass: 0, bodyMass: 1, radius: 0.5, drift: 3.5, gravity: 3.5, color: 0x8190a7, accent: 0xb7c7df, spin: 0.45, description: "最初的漂浮碎石。它很輕，能快速穿過星塵帶，靠近小碎片就能將它們吸入核心。" },
   { name: "小行星", mass: 10, bodyMass: 4, radius: 0.78, drift: 3.2, gravity: 4.5, color: 0x8f7773, accent: 0xe0b19c, spin: 0.38, description: "核心聚合成穩定的小行星，隕石坑與碎石環開始受到自身引力牽引。" },
-  { name: "月岩", mass: 40, bodyMass: 12, radius: 1.18, drift: 2.9, gravity: 5.5, color: 0xa9bedc, accent: 0xd9e6ff, spin: 0.32, description: "冷色月岩擁有更寬廣的引力場，漂浮碎石會在靠近時自然改變方向。" },
-  { name: "行星胚", mass: 120, bodyMass: 35, radius: 1.8, drift: 2.6, gravity: 7, color: 0xd75948, accent: 0xffb347, spin: 0.28, description: "熔岩核心正在成形。熱裂縫讓你的引力變得明亮，也更容易捕捉遠處碎片。" },
-  { name: "岩質行星", mass: 350, bodyMass: 100, radius: 2.7, drift: 2.3, gravity: 9, color: 0x297db9, accent: 0x76e2d3, spin: 0.24, description: "大氣層包住藍綠色地表，你已經足以影響周圍星體的漂移軌跡。" },
-  { name: "氣體巨行星", mass: 900, bodyMass: 280, radius: 4, drift: 2, gravity: 12, color: 0xd58fae, accent: 0xffd09d, spin: 0.2, description: "氣體條紋與巨大風暴圍繞核心旋轉，鄰近星體會被你的引力慢慢拉成群。" },
-  { name: "冰巨星", mass: 2200, bodyMass: 750, radius: 5.8, drift: 1.7, gravity: 15, color: 0x5dbddc, accent: 0x9e9cff, spin: 0.16, description: "藍紫冰晶與極光形成新的重力景觀，你的引力場已能改寫更大的星體路線。" },
-  { name: "棕矮星", mass: 5200, bodyMass: 2000, radius: 8.2, drift: 1.4, gravity: 19, color: 0xd07b45, accent: 0xffb96d, spin: 0.13, description: "等離子體在核心周圍翻湧，磁場與引力同時牽引著附近的星塵與小星體。" },
-  { name: "恆星", mass: 12000, bodyMass: 5500, radius: 11.6, drift: 1.1, gravity: 24, color: 0xffa522, accent: 0xffe69b, spin: 0.1, description: "耀斑與日冕照亮黑暗，你已經成為一個會讓其他星體繞行的恆星。" },
-  { name: "黑洞", mass: 27000, bodyMass: 15000, radius: 16, drift: 0.8, gravity: 30, color: 0x0a0818, accent: 0xff8e52, spin: 0.07, description: "最後的形態。吸積盤吞吐星光，連光線與空間都開始在你的核心周圍彎曲。" },
+  { name: "月岩", mass: 50, bodyMass: 12, radius: 1.18, drift: 2.9, gravity: 5.5, color: 0xa9bedc, accent: 0xd9e6ff, spin: 0.32, description: "冷色月岩擁有更寬廣的引力場，漂浮碎石會在靠近時自然改變方向。" },
+  { name: "行星胚", mass: 180, bodyMass: 35, radius: 1.8, drift: 2.6, gravity: 7, color: 0xd75948, accent: 0xffb347, spin: 0.28, description: "熔岩核心正在成形。熱裂縫讓你的引力變得明亮，也更容易捕捉遠處碎片。" },
+  { name: "岩質行星", mass: 600, bodyMass: 100, radius: 2.7, drift: 2.3, gravity: 9, color: 0x297db9, accent: 0x76e2d3, spin: 0.24, description: "大氣層包住藍綠色地表，你已經足以影響周圍星體的漂移軌跡。" },
+  { name: "氣體巨行星", mass: 1800, bodyMass: 280, radius: 4, drift: 2, gravity: 12, color: 0xd58fae, accent: 0xffd09d, spin: 0.2, description: "氣體條紋與巨大風暴圍繞核心旋轉，鄰近星體會被你的引力慢慢拉成群。" },
+  { name: "冰巨星", mass: 5000, bodyMass: 750, radius: 5.8, drift: 1.7, gravity: 15, color: 0x5dbddc, accent: 0x9e9cff, spin: 0.16, description: "藍紫冰晶與極光形成新的重力景觀，你的引力場已能改寫更大的星體路線。" },
+  { name: "棕矮星", mass: 14000, bodyMass: 2000, radius: 8.2, drift: 1.4, gravity: 19, color: 0xd07b45, accent: 0xffb96d, spin: 0.13, description: "等離子體在核心周圍翻湧，磁場與引力同時牽引著附近的星塵與小星體。" },
+  { name: "恆星", mass: 38000, bodyMass: 5500, radius: 11.6, drift: 1.1, gravity: 24, color: 0xffa522, accent: 0xffe69b, spin: 0.1, description: "耀斑與日冕照亮黑暗，你已經成為一個會讓其他星體繞行的恆星。" },
+  { name: "黑洞", mass: 100000, bodyMass: 15000, radius: 16, drift: 0.8, gravity: 30, color: 0x0a0818, accent: 0xff8e52, spin: 0.07, description: "最後的形態。吸積盤吞吐星光，連光線與空間都開始在你的核心周圍彎曲。" },
 ];
 
 const WORLD = { maxBodies: 90, recycleRadius: 96, spawnRadius: 72, gridTileSize: 70 };
