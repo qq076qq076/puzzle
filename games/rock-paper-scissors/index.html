@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#17151f" />
+    <meta name="description" content="不用註冊、直接以 WebRTC 連線的雙人剪刀石頭布。" />
+    <title>剪刀石頭布 · P2P 對戰</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <nav class="topbar" aria-label="頁面導覽">
+        <a class="back-link" href="../../index.html"><span aria-hidden="true">←</span> 所有遊戲</a>
+        <span class="connection-pill" id="connection-pill" data-state="offline">
+          <span class="connection-dot" aria-hidden="true"></span>
+          <span id="connection-label">尚未連線</span>
+        </span>
+      </nav>
+
+      <section class="pairing-view" id="pairing-view" aria-labelledby="game-title">
+        <header class="hero">
+          <p class="eyebrow">PEER TO PEER · ONE ROUND AT A TIME</p>
+          <h1 id="game-title">剪刀、石頭、<em>布。</em></h1>
+          <p class="hero-copy">不用帳號，也不用房號。交換一次連線資訊，出拳只在你和對手之間傳送。</p>
+        </header>
+
+        <section class="pairing-card" aria-labelledby="pairing-title">
+          <div class="card-heading">
+            <div>
+              <span class="step-label">START HERE</span>
+              <h2 id="pairing-title">開始配對</h2>
+            </div>
+            <span class="privacy-note">P2P · DTLS 加密</span>
+          </div>
+
+          <label class="field-label" for="player-name">你的名稱</label>
+          <input class="text-input" id="player-name" maxlength="20" autocomplete="nickname" value="玩家" />
+
+          <div class="mode-tabs" role="tablist" aria-label="配對角色">
+            <button class="mode-tab is-active" id="host-tab" type="button" role="tab" aria-selected="true" aria-controls="host-panel">建立遊戲</button>
+            <button class="mode-tab" id="guest-tab" type="button" role="tab" aria-selected="false" aria-controls="guest-panel">加入遊戲</button>
+          </div>
+
+          <section class="mode-panel" id="host-panel" role="tabpanel" aria-labelledby="host-tab">
+            <div class="instruction">
+              <span class="instruction-number">1</span>
+              <div><strong>建立邀請</strong><span>產生邀請後，讓對手掃描或複製內容。</span></div>
+            </div>
+            <button class="primary-button" id="create-offer" type="button">建立連線邀請 <span aria-hidden="true">↗</span></button>
+
+            <div class="exchange-block" id="host-offer-block" hidden>
+              <div class="qr-frame" id="host-offer-qr" aria-label="連線邀請 QR Code"></div>
+              <label class="field-label" for="host-offer-output">邀請內容</label>
+              <textarea class="payload-field" id="host-offer-output" rows="4" readonly></textarea>
+              <button class="secondary-button" type="button" data-copy-target="host-offer-output">複製邀請</button>
+
+              <div class="instruction instruction-spaced">
+                <span class="instruction-number">2</span>
+                <div><strong>匯入對手回覆</strong><span>掃描對手的回覆 QR Code，或貼上回覆內容。</span></div>
+              </div>
+              <label class="field-label" for="host-answer-input">對手回覆</label>
+              <textarea class="payload-field" id="host-answer-input" rows="4" placeholder="在這裡貼上 Answer…"></textarea>
+              <div class="button-row">
+                <button class="secondary-button" id="scan-answer" type="button">掃描 QR</button>
+                <button class="primary-button" id="import-answer" type="button">完成連線</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="mode-panel" id="guest-panel" role="tabpanel" aria-labelledby="guest-tab" hidden>
+            <div class="instruction">
+              <span class="instruction-number">1</span>
+              <div><strong>匯入邀請</strong><span>掃描建立者的 QR Code，或貼上邀請內容。</span></div>
+            </div>
+            <label class="field-label" for="guest-offer-input">邀請內容</label>
+            <textarea class="payload-field" id="guest-offer-input" rows="4" placeholder="在這裡貼上 Offer…"></textarea>
+            <div class="button-row">
+              <button class="secondary-button" id="scan-offer" type="button">掃描 QR</button>
+              <button class="primary-button" id="import-offer" type="button">加入遊戲</button>
+            </div>
+
+            <div class="exchange-block" id="guest-answer-block" hidden>
+              <div class="instruction instruction-spaced">
+                <span class="instruction-number">2</span>
+                <div><strong>把回覆交給建立者</strong><span>對方匯入後，連線便會自動開始。</span></div>
+              </div>
+              <div class="qr-frame" id="guest-answer-qr" aria-label="連線回覆 QR Code"></div>
+              <label class="field-label" for="guest-answer-output">回覆內容</label>
+              <textarea class="payload-field" id="guest-answer-output" rows="4" readonly></textarea>
+              <button class="secondary-button" type="button" data-copy-target="guest-answer-output">複製回覆</button>
+            </div>
+          </section>
+
+          <p class="pairing-status" id="pairing-status" role="status" aria-live="polite">選擇建立或加入遊戲。</p>
+          <button class="text-button" id="cancel-pairing" type="button" hidden>取消並重新配對</button>
+        </section>
+
+        <aside class="how-it-works" aria-labelledby="how-title">
+          <span class="step-label">HOW IT WORKS</span>
+          <h2 id="how-title">公平出拳，沒有偷看。</h2>
+          <div class="feature-grid">
+            <article><span aria-hidden="true">01</span><strong>先鎖定</strong><p>雙方先交換出拳雜湊，不公開答案。</p></article>
+            <article><span aria-hidden="true">02</span><strong>再揭曉</strong><p>兩邊都鎖定後，才同時驗證並揭曉。</p></article>
+            <article><span aria-hidden="true">03</span><strong>一起繼續</strong><p>兩邊都選下一把，遊戲才會繼續。</p></article>
+          </div>
+        </aside>
+      </section>
+
+      <section class="game-view" id="game-view" aria-labelledby="round-title" hidden>
+        <header class="game-header">
+          <div>
+            <p class="eyebrow">LIVE P2P MATCH</p>
+            <h1 id="round-title">第 <span id="round-number">1</span> 把</h1>
+          </div>
+          <div class="peer-card">
+            <span>對手</span>
+            <strong id="peer-name">連線中</strong>
+          </div>
+        </header>
+
+        <section class="arena" aria-label="出拳區">
+          <p class="game-status" id="game-status" role="status" aria-live="polite">選一個拳，確認後就不能更改。</p>
+
+          <div class="choice-grid" id="choice-grid" role="radiogroup" aria-label="選擇出拳">
+            <button class="choice-button" type="button" role="radio" aria-checked="false" data-choice="rock">
+              <span class="choice-icon" aria-hidden="true">✊</span><strong>石頭</strong><span>ROCK</span>
+            </button>
+            <button class="choice-button" type="button" role="radio" aria-checked="false" data-choice="paper">
+              <span class="choice-icon" aria-hidden="true">✋</span><strong>布</strong><span>PAPER</span>
+            </button>
+            <button class="choice-button" type="button" role="radio" aria-checked="false" data-choice="scissors">
+              <span class="choice-icon" aria-hidden="true">✌️</span><strong>剪刀</strong><span>SCISSORS</span>
+            </button>
+          </div>
+
+          <button class="primary-button confirm-button" id="confirm-choice" type="button" disabled>確認出拳</button>
+
+          <section class="result-panel" id="result-panel" aria-labelledby="result-title" hidden>
+            <p class="result-kicker">ROUND RESULT</p>
+            <h2 id="result-title">這一把</h2>
+            <div class="showdown">
+              <div class="result-choice"><span>你</span><strong id="local-result-icon">?</strong><em id="local-result-name">—</em></div>
+              <div class="versus">VS</div>
+              <div class="result-choice"><span id="result-peer-label">對手</span><strong id="remote-result-icon">?</strong><em id="remote-result-name">—</em></div>
+            </div>
+            <p class="result-message" id="result-message"></p>
+            <div class="result-actions">
+              <button class="primary-button" id="next-round" type="button">下一把</button>
+              <button class="secondary-button danger-button" id="leave-game" type="button">退出</button>
+            </div>
+            <p class="next-status" id="next-status" aria-live="polite"></p>
+          </section>
+        </section>
+      </section>
+    </main>
+
+    <dialog class="scanner-dialog" id="scanner-dialog" aria-labelledby="scanner-title">
+      <div class="scanner-heading">
+        <div><span class="step-label">CAMERA</span><h2 id="scanner-title">掃描 QR Code</h2></div>
+        <button class="icon-button" id="close-scanner" type="button" aria-label="關閉掃描器">×</button>
+      </div>
+      <div class="video-frame"><video id="scanner-video"></video></div>
+      <p id="scanner-status" role="status">將 QR Code 放進框內。</p>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+    <script type="module" src="script.js"></script>
+  </body>
+</html>

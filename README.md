@@ -8,7 +8,7 @@
 
 ## 頁面
 
-- `index.html`：遊戲入口，目前列出 2048、1A2B、五子棋、射飛刀、SubaraCity、菌境、microorganism 與賭拳。
+- `index.html`：遊戲入口，列出專案內所有可遊玩的網頁遊戲。
 - `games/2048/`：2048 遊戲本體與規則文件。
 - `games/1a2b/`：單機版 1A2B 遊戲與規則文件，電腦自動出題。
 - `games/gomoku/`：15×15 本機雙人五子棋與規則文件。
@@ -19,6 +19,7 @@
 - `games/duquan/`：剪刀、石頭、布各 30 個圖示的 100ms 距離加權模擬遊戲。
 - `games/gravity-planet/`：Three.js 重力星球生存遊戲，吸收碎石、進化成 10 階星體並躲避大型星體。
 - `games/dice-tower-defense/`：骰塔守境骰子塔防遊戲，包含 15 波敵人、6 種骰塔、骰面充能、合成與首領波；規格與實作補充文件位於遊戲資料夾內。
+- `games/rock-paper-scissors/`：使用 WebRTC DataChannel 的雙人 P2P 剪刀石頭布，以 QR Code 或複製貼上交換連線資料，並使用 commit-reveal 驗證出拳。
 
 ## 執行
 
@@ -29,6 +30,8 @@ python3 -m http.server 8000
 ```
 
 接著開啟 `http://localhost:8000`。
+
+P2P 剪刀石頭布在正式部署時需使用 HTTPS；本機開發可使用 `localhost`。本版使用 STUN 協助穿越 NAT，未配置 TURN，因此部分受限網路可能無法建立 P2P 連線。
 
 ## 操作
 
