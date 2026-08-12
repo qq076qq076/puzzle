@@ -14,14 +14,28 @@
   const BUILD_TIMES = [1.2, 2.4, 4, 5.8, 7.8, 10];
   const INITIAL_CORE_HP = 20;
   const CRIT_CHANCES = [0.10, 0.20, 0.35, 0.48, 0.60, 0.72];
+  const FROST_CRIT_CHANCES = [0.02, 0.03, 0.04, 0.06, 0.08, 0.10];
   const POISON_DURATIONS = [4, 5, 6, 7, 8, 9];
   const CRIT_DAMAGE_MULTIPLIER = 1.75;
   const TOWER_DAMAGE_MULTIPLIER = 0.5;
   const ATTACK_PULSE_DURATION = 0.18;
   const MERGE_EFFECT_DURATION = 0.95;
-  const ENEMY_VISUAL_SCALE = 3 / 4;
+  const BOSS_LANDING_DURATION = 0.9;
+  const ENEMY_VISUAL_SCALE = (3 / 4) * 1.5;
   const LEGAL_DROP_BRIGHTNESS = 0.65;
   const SHIELDED_WAVE_START = 28;
+  const ENEMY_RESISTANCE_START_WAVE = 12;
+  const ENEMY_RESISTANCE_PER_WAVE = 0.02;
+  const ENEMY_RESISTANCE_CAP = 0.36;
+  const RESISTANCE_STYLES = {
+    freeze: { label: "冰凍", icon: "❄", color: "#71d8f4" },
+    lightning: { label: "雷電", icon: "⚡", color: "#f6cf63" },
+    poison: { label: "毒素", icon: "☣", color: "#9ad86f" },
+    physical: { label: "物理", icon: "◆", color: "#c5ced9" }
+  };
+  const MAGE_DISABLE_RADIUS = 2.6;
+  const MAGE_DISABLE_DURATION = 1;
+  const MAGE_DISABLE_COOLDOWN = 12;
   const ROAD_TEXTURE_PATH = "assets/road/pebble-road.png";
   const PATH = [
     [0, 1], [1, 1], [2, 1], [3, 1], [4, 1], [5, 1], [6, 1], [7, 1], [8, 1],
@@ -71,7 +85,7 @@
       name: "毒蝕骰",
       symbol: "☣",
       color: "#9ad86f",
-      description: "施加持續毒傷；爆擊造成 1.75 倍傷害並跳向附近敵人。",
+      description: "施加持續毒傷；爆擊對目標周圍 1 格內所有敵人造成毒傷。",
       tiers: [
         { damage: 1.6, range: 2.5, interval: 0.38 },
         { damage: 3.2, range: 3, interval: 0.36 },
@@ -88,12 +102,12 @@
       description: "讓傷害跳向敵群；爆擊造成 1.75 倍傷害且連鎖不衰減。",
       chainCount: [2, 3, 5, 7, 9, 12],
       tiers: [
-        { damage: 3.2, range: 3, interval: 0.46 },
-        { damage: 7.2, range: 3.5, interval: 0.42 },
-        { damage: 17.1, range: 4, interval: 0.38 },
-        { damage: 30.6, range: 4.5, interval: 0.35 },
-        { damage: 58, range: 5, interval: 0.32 },
-        { damage: 96, range: 5.5, interval: 0.29 }
+        { damage: 3.2, range: 3, interval: 0.59 },
+        { damage: 7.2, range: 3.5, interval: 0.53 },
+        { damage: 17.1, range: 4, interval: 0.46 },
+        { damage: 30.6, range: 4.5, interval: 0.42 },
+        { damage: 58, range: 5, interval: 0.38 },
+        { damage: 96, range: 5.5, interval: 0.34 }
       ]
     },
     pierce: {
@@ -103,12 +117,12 @@
       description: "沿道路順序穿透敵人；爆擊造成 1.75 倍傷害並貫穿所有合法目標。",
       pierceCount: [2, 4, 7, 10, 14, 20],
       tiers: [
-        { damage: 4, range: 4, interval: 0.59 },
-        { damage: 8.8, range: 4.5, interval: 0.53 },
-        { damage: 21.6, range: 5, interval: 0.46 },
-        { damage: 37.8, range: 5.5, interval: 0.42 },
-        { damage: 72, range: 6, interval: 0.38 },
-        { damage: 120, range: 6.5, interval: 0.34 }
+        { damage: 4, range: 4, interval: 0.46 },
+        { damage: 8.8, range: 4.5, interval: 0.42 },
+        { damage: 21.6, range: 5, interval: 0.38 },
+        { damage: 37.8, range: 5.5, interval: 0.35 },
+        { damage: 72, range: 6, interval: 0.32 },
+        { damage: 120, range: 6.5, interval: 0.29 }
       ]
     },
     inspire: {
@@ -129,17 +143,20 @@
   };
 
   const ENEMY_TYPES = {
-    runner: { name: "迅捷蟲", symbol: "S", color: "#ff8d83", hp: 35, speed: 1.8, leakDamage: 1, reward: 2 },
-    armor: { name: "裝甲蟲", symbol: "A", color: "#b3bdca", hp: 95, speed: 0.8, leakDamage: 1, reward: 3, directResistance: 0.35 },
-    split: { name: "分裂蟲", symbol: "D", color: "#dc9b76", hp: 70, speed: 1.0, leakDamage: 1, reward: 3, splits: true },
-    child: { name: "分裂幼體", symbol: "d", color: "#e4bf7b", hp: 20, speed: 1.35, leakDamage: 1, reward: 1 },
-    ghost: { name: "幽影蟲", symbol: "G", color: "#b898ec", hp: 110, speed: 1.1, leakDamage: 1, reward: 4 },
-    healer: { name: "治療蟲", symbol: "H", color: "#78d8ae", hp: 80, speed: 0.7, leakDamage: 2, reward: 5 },
-    boss: { name: "巨甲王", symbol: "B", color: "#ffbf62", hp: 900, speed: 0.45, leakDamage: 5, reward: 30, boss: true },
-    warder: { name: "結界蟲", symbol: "W", color: "#69e7ef", hp: 145, speed: 0.74, leakDamage: 2, reward: 6 },
-    burrower: { name: "潛地蟲", symbol: "U", color: "#dfad73", hp: 105, speed: 1.18, leakDamage: 2, reward: 5 },
-    disruptor: { name: "干擾蟲", symbol: "J", color: "#ed82ff", hp: 175, speed: 0.68, leakDamage: 3, reward: 8 },
-    overlord: { name: "裂界巨甲王", symbol: "O", color: "#e36eff", hp: 1800, speed: 0.38, leakDamage: 8, reward: 60, boss: true }
+    runner: { name: "迅捷蟲", symbol: "S", color: "#ff8d83", hp: 35, speed: 1.8, leakDamage: 1, reward: 2, waveResistanceTypes: ["freeze"] },
+    armor: { name: "裝甲蟲", symbol: "A", color: "#b3bdca", hp: 95, speed: 0.8, leakDamage: 1, reward: 3, baseResistances: { physical: 0.35 }, waveResistanceTypes: ["physical"] },
+    split: { name: "分裂蟲", symbol: "D", color: "#dc9b76", hp: 70, speed: 1.0, leakDamage: 1, reward: 3, splits: true, waveResistanceTypes: ["lightning"] },
+    child: { name: "分裂幼體", symbol: "d", color: "#e4bf7b", hp: 20, speed: 1.35, leakDamage: 1, reward: 1, waveResistanceTypes: ["poison"] },
+    ghost: { name: "幽影蟲", symbol: "G", color: "#b898ec", hp: 110, speed: 1.1, leakDamage: 1, reward: 4, waveResistanceTypes: ["physical"] },
+    healer: { name: "治療法師", symbol: "H", color: "#78d8ae", hp: 80, speed: 0.7, leakDamage: 2, reward: 5, waveResistanceTypes: ["poison"] },
+    boss: { name: "巨甲王", symbol: "B", color: "#ffbf62", hp: 900, speed: 0.45, leakDamage: 5, reward: 30, boss: true, waveResistanceTypes: ["physical"] },
+    warder: { name: "結界蟲", symbol: "W", color: "#69e7ef", hp: 145, speed: 0.74, leakDamage: 2, reward: 6, waveResistanceTypes: ["lightning"] },
+    burrower: { name: "潛地蟲", symbol: "U", color: "#dfad73", hp: 105, speed: 1.18, leakDamage: 2, reward: 5, waveResistanceTypes: ["freeze"] },
+    disruptor: { name: "干擾蟲", symbol: "J", color: "#ed82ff", hp: 175, speed: 0.68, leakDamage: 3, reward: 8, waveResistanceTypes: ["lightning"] },
+    overlord: { name: "裂界巨甲王", symbol: "O", color: "#e36eff", hp: 1800, speed: 0.38, leakDamage: 8, reward: 60, boss: true, waveResistanceTypes: ["lightning", "physical"] },
+    regenerator: { name: "再生蟲", symbol: "R", color: "#70e58c", hp: 150, speed: 0.78, leakDamage: 2, reward: 6, waveResistanceTypes: ["poison"] },
+    berserker: { name: "狂暴蟲", symbol: "K", color: "#ff665f", hp: 120, speed: 1.0, leakDamage: 2, reward: 6, waveResistanceTypes: ["freeze"] },
+    thief: { name: "掠金蟲", symbol: "T", color: "#ffd45d", hp: 85, speed: 1.45, leakDamage: 1, reward: 9, goldSteal: 12, waveResistanceTypes: ["freeze"] }
   };
 
   const ENEMY_SPRITE_PATHS = {
@@ -153,7 +170,10 @@
     warder: "assets/enemies/armored-knight.png",
     burrower: "assets/enemies/child-spider.png",
     disruptor: "assets/enemies/shadow-ghost.png",
-    overlord: "assets/enemies/boss-demon.png"
+    overlord: "assets/enemies/boss-demon.png",
+    regenerator: "assets/enemies/splitter-slime.png",
+    berserker: "assets/enemies/armored-knight.png",
+    thief: "assets/enemies/child-spider.png"
   };
 
   const enemySprites = Object.keys(ENEMY_SPRITE_PATHS).reduce(function (sprites, type) {
@@ -169,23 +189,23 @@
     [{ type: "runner", count: 6, interval: 1.35 }, { type: "armor", count: 2, interval: 1.50 }, { type: "runner", count: 4, interval: 1.25 }],
     [{ type: "armor", count: 4, interval: 1.25 }, { type: "runner", count: 8, interval: 1.10 }],
     [{ type: "runner", count: 10, interval: 0.95 }, { type: "armor", count: 6, interval: 1.10 }, { type: "boss", count: 1, interval: 1.40 }],
-    [{ type: "runner", count: 12, interval: 0.95 }, { type: "split", count: 4, interval: 1.15 }],
+    [{ type: "runner", count: 14, interval: 0.95 }, { type: "split", count: 7, interval: 1.15 }],
     [{ type: "armor", count: 7, interval: 1.00 }, { type: "split", count: 5, interval: 1.00 }, { type: "runner", count: 8, interval: 0.90 }],
     [{ type: "ghost", count: 5, interval: 1.05 }, { type: "runner", count: 12, interval: 0.85 }, { type: "armor", count: 6, interval: 0.95 }],
     [{ type: "split", count: 8, interval: 0.90 }, { type: "ghost", count: 7, interval: 0.90 }, { type: "armor", count: 8, interval: 0.90 }],
     [{ type: "runner", count: 12, interval: 0.80 }, { type: "ghost", count: 8, interval: 0.90 }, { type: "boss", count: 1, interval: 1.20 }],
     [{ type: "healer", count: 4, interval: 1.00 }, { type: "armor", count: 9, interval: 0.85 }, { type: "runner", count: 12, interval: 0.75 }],
     [{ type: "healer", count: 5, interval: 0.90 }, { type: "split", count: 9, interval: 0.80 }, { type: "ghost", count: 8, interval: 0.80 }],
-    [{ type: "armor", count: 12, interval: 0.75 }, { type: "healer", count: 6, interval: 0.85 }, { type: "runner", count: 14, interval: 0.65 }],
+    [{ type: "armor", count: 12, interval: 0.75 }, { type: "healer", count: 6, interval: 0.85 }, { type: "runner", count: 14, interval: 0.65 }, { type: "regenerator", count: 4, interval: 0.82 }],
     [{ type: "ghost", count: 12, interval: 0.70 }, { type: "split", count: 11, interval: 0.72 }, { type: "healer", count: 7, interval: 0.80 }],
     [
       { type: "runner", count: 14, interval: 0.65 }, { type: "armor", count: 12, interval: 0.70 },
       { type: "split", count: 10, interval: 0.70 }, { type: "ghost", count: 10, interval: 0.70 },
       { type: "healer", count: 6, interval: 0.80 }, { type: "boss", count: 1, interval: 1.00 }
     ],
-    [{ type: "runner", count: 20, interval: 0.58 }, { type: "split", count: 12, interval: 0.66 }, { type: "ghost", count: 8, interval: 0.72 }],
+    [{ type: "runner", count: 20, interval: 0.58 }, { type: "split", count: 12, interval: 0.66 }, { type: "ghost", count: 8, interval: 0.72 }, { type: "berserker", count: 6, interval: 0.68 }],
     [{ type: "armor", count: 16, interval: 0.68 }, { type: "healer", count: 8, interval: 0.75 }, { type: "ghost", count: 12, interval: 0.65 }],
-    [{ type: "split", count: 16, interval: 0.62 }, { type: "runner", count: 20, interval: 0.55 }, { type: "healer", count: 7, interval: 0.72 }],
+    [{ type: "split", count: 16, interval: 0.62 }, { type: "runner", count: 20, interval: 0.55 }, { type: "healer", count: 7, interval: 0.72 }, { type: "thief", count: 6, interval: 0.64 }],
     [{ type: "ghost", count: 18, interval: 0.58 }, { type: "armor", count: 14, interval: 0.62 }, { type: "healer", count: 9, interval: 0.70 }],
     [
       { type: "armor", count: 14, interval: 0.60 }, { type: "split", count: 12, interval: 0.62 },
@@ -195,7 +215,7 @@
     [
       { type: "runner", count: 24, interval: 0.48 }, { type: "armor", count: 16, interval: 0.55 },
       { type: "split", count: 14, interval: 0.56 }, { type: "ghost", count: 12, interval: 0.54 },
-      { type: "healer", count: 8, interval: 0.65 }
+      { type: "healer", count: 8, interval: 0.65 }, { type: "regenerator", count: 6, interval: 0.62 }
     ],
     [
       { type: "armor", count: 18, interval: 0.52 }, { type: "split", count: 16, interval: 0.54 },
@@ -205,29 +225,30 @@
     [
       { type: "runner", count: 20, interval: 0.46 }, { type: "armor", count: 16, interval: 0.52 },
       { type: "split", count: 14, interval: 0.52 }, { type: "ghost", count: 14, interval: 0.50 },
-      { type: "healer", count: 10, interval: 0.58 }, { type: "boss", count: 2, interval: 0.85 }
+      { type: "healer", count: 10, interval: 0.58 }, { type: "berserker", count: 6, interval: 0.58 }, { type: "boss", count: 2, interval: 0.85 }
     ],
     [
       { type: "armor", count: 20, interval: 0.46 }, { type: "split", count: 18, interval: 0.48 },
-      { type: "ghost", count: 18, interval: 0.46 }, { type: "healer", count: 12, interval: 0.54 },
+      { type: "ghost", count: 18, interval: 0.46 }, { type: "healer", count: 12, interval: 0.54 }, { type: "thief", count: 6, interval: 0.50 },
       { type: "boss", count: 3, interval: 0.80 }
     ],
     [{ type: "boss", count: 8, interval: 1.50 }],
     [
       { type: "warder", count: 8, interval: 0.52 }, { type: "armor", count: 14, interval: 0.48 },
-      { type: "ghost", count: 12, interval: 0.46 }, { type: "healer", count: 6, interval: 0.56 }
+      { type: "ghost", count: 12, interval: 0.46 }, { type: "healer", count: 6, interval: 0.56 }, { type: "regenerator", count: 8, interval: 0.54 }
     ],
     [
       { type: "burrower", count: 12, interval: 0.48 }, { type: "runner", count: 18, interval: 0.40 },
-      { type: "split", count: 12, interval: 0.46 }, { type: "warder", count: 8, interval: 0.50 }
+      { type: "split", count: 12, interval: 0.46 }, { type: "warder", count: 8, interval: 0.50 }, { type: "berserker", count: 8, interval: 0.48 }
     ],
     [
       { type: "disruptor", count: 8, interval: 0.54 }, { type: "armor", count: 16, interval: 0.44 },
-      { type: "healer", count: 10, interval: 0.50 }, { type: "boss", count: 2, interval: 0.82 }
+      { type: "healer", count: 10, interval: 0.50 }, { type: "thief", count: 8, interval: 0.48 }, { type: "boss", count: 2, interval: 0.82 }
     ],
     [
       { type: "warder", count: 10, interval: 0.46 }, { type: "burrower", count: 14, interval: 0.42 },
-      { type: "disruptor", count: 10, interval: 0.48 }, { type: "boss", count: 3, interval: 0.76 }
+      { type: "disruptor", count: 10, interval: 0.48 }, { type: "regenerator", count: 4, interval: 0.46 },
+      { type: "berserker", count: 4, interval: 0.44 }, { type: "thief", count: 4, interval: 0.42 }, { type: "boss", count: 3, interval: 0.76 }
     ],
     [{ type: "overlord", count: 3, interval: 1.35 }]
   ];
@@ -353,9 +374,58 @@
     return Math.min(5, 3 + (wave - 20) * 0.2);
   }
 
+  function getDifficultyHpMultiplier(wave) {
+    if (wave <= 7) return 1;
+    if (wave <= 15) return 1.85;
+    if (wave <= 25) return 2.55;
+    return 4.1;
+  }
+
+  function getDifficultySpeedMultiplier(wave) {
+    if (wave <= 7) return 1;
+    if (wave <= 15) return 1.08;
+    if (wave <= 25) return 1.1;
+    return 1.12;
+  }
+
+  function getDifficultyResistanceBonus(wave) {
+    if (wave <= 12) return 0;
+    if (wave <= 15) return 0.03;
+    if (wave <= 25) return 0.06;
+    return 0.1;
+  }
+
   function getEnemyHpMultiplier(wave) {
-    if (wave <= 10) return getLegacyEnemyHpMultiplier(wave);
-    return getLegacyEnemyHpMultiplier(10) * getProgressiveDifficultyMultiplier(wave);
+    if (wave === 5) return getLegacyEnemyHpMultiplier(wave) * 0.59;
+    const baseMultiplier = wave <= 10
+      ? getLegacyEnemyHpMultiplier(wave)
+      : getLegacyEnemyHpMultiplier(10) * getProgressiveDifficultyMultiplier(wave);
+    return baseMultiplier * getDifficultyHpMultiplier(wave);
+  }
+
+  function getWaveResistanceStrength(wave) {
+    if (wave <= ENEMY_RESISTANCE_START_WAVE) return 0;
+    const baseResistance = Math.min(ENEMY_RESISTANCE_CAP, (wave - ENEMY_RESISTANCE_START_WAVE) * ENEMY_RESISTANCE_PER_WAVE);
+    return combineResistances(baseResistance, getDifficultyResistanceBonus(wave));
+  }
+
+  function combineResistances(first, second) {
+    return 1 - (1 - first) * (1 - second);
+  }
+
+  function getEnemyResistances(definition, wave) {
+    const resistances = Object.assign({}, definition.baseResistances || {});
+    const waveStrength = getWaveResistanceStrength(wave);
+    if (waveStrength <= 0) return resistances;
+    (definition.waveResistanceTypes || []).forEach(function (type) {
+      resistances[type] = combineResistances(resistances[type] || 0, waveStrength);
+    });
+    return resistances;
+  }
+
+  function getEnemyResistance(enemy, type) {
+    if (!enemy || !type || !enemy.resistances) return 0;
+    return enemy.resistances[type] || 0;
   }
 
   function getWaveCountMultiplier(wave) {
@@ -375,7 +445,8 @@
       forcedCrit: false,
       buildDuration: constructionTime,
       buildRemaining: constructionTime,
-      attackPulseRemaining: 0
+      attackPulseRemaining: 0,
+      attackDisabledRemaining: 0
     };
   }
 
@@ -499,6 +570,7 @@
     state.clearedWaves = Math.max(state.clearedWaves, state.wave);
     state.score = calculateScore();
     state.phase = "waveResult";
+    state.towers.forEach(function (tower) { tower.attackDisabledRemaining = 0; });
     state.resultRemaining = finalWave ? 1.5 : 1.15;
     addEffect({ kind: "waveTransition", wave: state.wave, finalWave, color: finalWave ? "#ffd477" : "#71d8f4", ttl: finalWave ? 1.5 : 1.35 });
     showToast(finalWave ? "最終首領已擊破！" : "第 " + state.wave + " 波守住了。", finalWave ? 1.5 : 1.15);
@@ -583,7 +655,11 @@
       pathDistance: startingDistance === undefined ? 0 : startingDistance,
       hp: maximumHp,
       maxHp: maximumHp,
-      speed: Math.min(definition.speed * (1 + (state.wave - 1) * 0.015), definition.speed * 1.35),
+      resistances: getEnemyResistances(definition, state.wave),
+      speed: Math.min(
+        Math.min(definition.speed * (1 + (state.wave - 1) * 0.015), definition.speed * 1.35) * getDifficultySpeedMultiplier(state.wave),
+        definition.speed * 1.5
+      ),
       movementDelayRemaining: delay,
       spawnEffectPending: showSpawnEffect !== false && delay > 0,
       shield: getEnemyShield(definition, maximumHp),
@@ -596,21 +672,37 @@
       invisibleRemaining: 0,
       ghostTimer: type === "ghost" ? 6 : 0,
       healerTimer: type === "healer" ? 3 : 0,
+      mageTimer: type === "healer" ? MAGE_DISABLE_COOLDOWN : 0,
       wardTimer: type === "warder" ? 3.5 + (state.enemyOrder % 4) * 0.45 : 0,
       burrowTimer: type === "burrower" ? 4 + (state.enemyOrder % 5) * 0.35 : 0,
       burrowRemaining: 0,
       disruptTimer: type === "disruptor" ? 4.5 + (state.enemyOrder % 6) * 0.4 : 0,
       overlordTimer: type === "overlord" ? 5.5 + (state.enemyOrder % 3) * 0.55 : 0,
+      regenDelayRemaining: type === "regenerator" ? 2.5 : 0,
+      regenEffectRemaining: 0,
+      berserkTriggered: false,
       bossTimer: definition.boss ? 8 : 0,
+      bossLandingRemaining: definition.boss && delay === 0 ? BOSS_LANDING_DURATION : 0,
       dead: false
     };
     state.enemyOrder += 1;
     state.enemies.push(enemy);
-    if (showSpawnEffect !== false && delay === 0) addEffect({ kind: "spawn", x: getPathPosition(enemy.pathDistance).x, y: getPathPosition(enemy.pathDistance).y, color: definition.color, ttl: 0.45 });
+    if (showSpawnEffect !== false && delay === 0) playEnemyEntrance(enemy);
+  }
+
+  function playEnemyEntrance(enemy) {
+    const definition = ENEMY_TYPES[enemy.type];
+    const position = getPathPosition(enemy.pathDistance);
+    if (definition.boss) {
+      enemy.bossLandingRemaining = BOSS_LANDING_DURATION;
+      addEffect({ kind: "bossLanding", x: position.x, y: position.y, color: definition.color, ttl: BOSS_LANDING_DURATION });
+      return;
+    }
+    addEffect({ kind: "spawn", x: position.x, y: position.y, color: definition.color, ttl: 0.45 });
   }
 
   function isEnemyOnField(enemy) {
-    return Boolean(enemy && !enemy.dead && enemy.movementDelayRemaining <= 0);
+    return Boolean(enemy && !enemy.dead && enemy.movementDelayRemaining <= 0 && enemy.bossLandingRemaining <= 0);
   }
 
   function isEnemyTargetable(enemy) {
@@ -640,7 +732,7 @@
         enemy.poisonTick -= deltaTime;
         if (enemy.poisonTick <= 0) {
           enemy.poisonTick += 1;
-          damageEnemy(enemy, enemy.poisonDps, "poison");
+          damageEnemy(enemy, enemy.poisonDps, "poison", "poison");
         }
       }
       if (enemy.dead) return;
@@ -665,6 +757,30 @@
           enemy.healerTimer = 3;
           healNearbyEnemies(enemy);
         }
+        enemy.mageTimer -= deltaTime;
+        if (enemy.mageTimer <= 0) {
+          enemy.mageTimer = MAGE_DISABLE_COOLDOWN;
+          disableNearbyTowers(enemy, MAGE_DISABLE_RADIUS, MAGE_DISABLE_DURATION);
+        }
+      }
+
+      if (enemy.type === "regenerator") {
+        enemy.regenDelayRemaining = Math.max(0, enemy.regenDelayRemaining - deltaTime);
+        enemy.regenEffectRemaining = Math.max(0, enemy.regenEffectRemaining - deltaTime);
+        if (enemy.regenDelayRemaining === 0 && enemy.hp < enemy.maxHp) {
+          enemy.hp = Math.min(enemy.maxHp, enemy.hp + enemy.maxHp * 0.02 * deltaTime);
+          if (enemy.regenEffectRemaining === 0) {
+            enemy.regenEffectRemaining = 0.6;
+            const position = getPathPosition(enemy.pathDistance);
+            addEffect({ kind: "heal", x: position.x, y: position.y, color: ENEMY_TYPES.regenerator.color, ttl: 0.45 });
+          }
+        }
+      }
+
+      if (enemy.type === "berserker" && enemy.hp <= enemy.maxHp * 0.5 && !enemy.berserkTriggered) {
+        enemy.berserkTriggered = true;
+        const position = getPathPosition(enemy.pathDistance);
+        addEffect({ kind: "bossPulse", x: position.x, y: position.y, color: ENEMY_TYPES.berserker.color, ttl: 0.65 });
       }
 
       if (enemy.type === "warder") {
@@ -761,6 +877,17 @@
     addEffect({ kind: "disruptPulse", x: sourcePosition.x, y: sourcePosition.y, color: source.type === "overlord" ? "#e36eff" : "#ed82ff", ttl: 0.75 });
   }
 
+  function disableNearbyTowers(source, radius, duration) {
+    const sourcePosition = getPathPosition(source.pathDistance);
+    state.towers.forEach(function (tower) {
+      if (isTowerConstructing(tower)) return;
+      if (Math.hypot(tower.x - sourcePosition.x, tower.y - sourcePosition.y) > radius) return;
+      tower.attackDisabledRemaining = Math.max(tower.attackDisabledRemaining || 0, duration);
+      addEffect({ kind: "towerDisable", x: tower.x, y: tower.y, color: "#aa8cff", ttl: duration });
+    });
+    addEffect({ kind: "magePulse", x: sourcePosition.x, y: sourcePosition.y, color: "#aa8cff", ttl: 0.85 });
+  }
+
   function updateEnemyMovement(deltaTime) {
     state.enemies.forEach(function (enemy) {
       if (enemy.dead) return;
@@ -770,15 +897,20 @@
         enemy.movementDelayRemaining = Math.max(0, enemy.movementDelayRemaining - deltaTime);
         if (enemy.movementDelayRemaining === 0 && enemy.spawnEffectPending) {
           enemy.spawnEffectPending = false;
-          addEffect({ kind: "spawn", x: PATH[0][0], y: PATH[0][1], color: ENEMY_TYPES[enemy.type].color, ttl: 0.45 });
+          playEnemyEntrance(enemy);
         }
         if (movementDelta === 0) return;
+      }
+      if (enemy.bossLandingRemaining > 0) {
+        enemy.bossLandingRemaining = Math.max(0, enemy.bossLandingRemaining - movementDelta);
+        return;
       }
       if (enemy.frozenRemaining > 0) return;
       const slowMultiplier = 1 - (enemy.slowRemaining > 0 ? enemy.slow : 0);
       const boostMultiplier = enemy.speedBoostRemaining > 0 ? 1.2 : 1;
       const burrowMultiplier = enemy.burrowRemaining > 0 ? 1.65 : 1;
-      enemy.pathDistance += enemy.speed * slowMultiplier * boostMultiplier * burrowMultiplier * movementDelta;
+      const berserkMultiplier = enemy.type === "berserker" && enemy.berserkTriggered ? 1.7 : 1;
+      enemy.pathDistance += enemy.speed * slowMultiplier * boostMultiplier * burrowMultiplier * berserkMultiplier * movementDelta;
       if (enemy.pathDistance >= GATE_DISTANCE) leakEnemy(enemy);
     });
   }
@@ -786,21 +918,34 @@
   function leakEnemy(enemy) {
     if (enemy.dead) return;
     enemy.dead = true;
+    const definition = ENEMY_TYPES[enemy.type];
     state.waveStats.leaks += 1;
-    state.coreHp = Math.max(0, state.coreHp - ENEMY_TYPES[enemy.type].leakDamage);
+    state.coreHp = Math.max(0, state.coreHp - definition.leakDamage);
     const position = getPathPosition(GATE_DISTANCE);
     addEffect({ kind: "leak", x: position.x, y: position.y, color: "#ff7d78", ttl: 0.8 });
-    showToast("核心受到 " + ENEMY_TYPES[enemy.type].leakDamage + " 點傷害！", 1.5);
+    const stolenGold = Math.min(state.gold, definition.goldSteal || 0);
+    if (stolenGold > 0) {
+      addGold(-stolenGold);
+      addEffect({ kind: "goldLoss", x: position.x, y: position.y, amount: stolenGold, color: "#ffcf5b", ttl: 1.1 });
+    }
+    showToast(stolenGold > 0
+      ? "掠金蟲突破！核心受到 " + definition.leakDamage + " 點傷害並損失 " + stolenGold + " 金幣。"
+      : "核心受到 " + definition.leakDamage + " 點傷害！", 1.8);
     if (state.coreHp <= 0) finishGame(false);
   }
 
   function updateTowers(deltaTime) {
     state.towers.forEach(function (tower) {
       tower.attackPulseRemaining = Math.max(0, tower.attackPulseRemaining - deltaTime);
+      tower.attackDisabledRemaining = Math.max(0, (tower.attackDisabledRemaining || 0) - deltaTime);
       if (isTowerConstructing(tower)) {
         tower.buildRemaining = Math.max(0, tower.buildRemaining - deltaTime);
         if (tower.buildRemaining === 0) finishTowerConstruction(tower, true);
         else if (state.selectedTowerId === tower.id) markUiDirty();
+        return;
+      }
+      if (tower.attackDisabledRemaining > 0) {
+        if (state.selectedTowerId === tower.id) markUiDirty();
         return;
       }
       tower.cooldown -= deltaTime;
@@ -840,8 +985,9 @@
   }
 
   function getCritChance(tower) {
-    const tierIndex = Math.max(0, Math.min(CRIT_CHANCES.length - 1, tower.tier - 1));
-    return CRIT_CHANCES[tierIndex];
+    const chances = tower.type === "frost" ? FROST_CRIT_CHANCES : CRIT_CHANCES;
+    const tierIndex = Math.max(0, Math.min(chances.length - 1, tower.tier - 1));
+    return chances[tierIndex];
   }
 
   function rollCritical(tower) {
@@ -923,12 +1069,12 @@
 
     if (tower.type === "cannon") {
       addProjectileEffect(tower, target, "cannon", TOWER_TYPES.cannon.color, 0.34);
-      hit = damageEnemy(target, baseDamage, "direct");
+      hit = damageEnemy(target, baseDamage, "direct", "physical");
       if (critical && hit) {
         const targetPosition = getPathPosition(target.pathDistance);
         state.enemies.forEach(function (enemy) {
           if (isEnemyTargetable(enemy) && Math.hypot(getPathPosition(enemy.pathDistance).x - targetPosition.x, getPathPosition(enemy.pathDistance).y - targetPosition.y) <= 1) {
-            damageEnemy(enemy, baseDamage * 0.8, "direct");
+            damageEnemy(enemy, baseDamage * 0.8, "direct", "physical");
           }
         });
         addEffect({ kind: "burst", x: targetPosition.x, y: targetPosition.y, color: TOWER_TYPES.cannon.color, ttl: 0.45 });
@@ -938,18 +1084,19 @@
       hit = damageEnemy(target, baseDamage, "direct");
       if (hit) applySlow(target, TOWER_TYPES.frost.slow[tower.tier - 1], 2);
       if (critical && hit) {
-        target.frozenRemaining = Math.max(target.frozenRemaining, 1.2);
+        const freezeDuration = 1.2 * (1 - getEnemyResistance(target, "freeze"));
+        target.frozenRemaining = Math.max(target.frozenRemaining, freezeDuration);
         addEffect({ kind: "freeze", x: getPathPosition(target.pathDistance).x, y: getPathPosition(target.pathDistance).y, color: TOWER_TYPES.frost.color, ttl: 0.7 });
       }
     } else if (tower.type === "poison") {
       addProjectileEffect(tower, target, "poison", TOWER_TYPES.poison.color, 0.36);
-      hit = damageEnemy(target, baseDamage, "direct");
+      hit = damageEnemy(target, baseDamage, "direct", "poison");
       if (hit) applyPoison(target, baseDamage, tower.tier);
       if (critical && hit) {
         const targetPosition = getPathPosition(target.pathDistance);
-        const nearby = getNearbyEnemies(targetPosition.x, targetPosition.y, 1.5, [target]).slice(0, 2);
+        const nearby = getNearbyEnemies(targetPosition.x, targetPosition.y, 1, [target]);
         nearby.forEach(function (enemy) {
-          damageEnemy(enemy, baseDamage, "direct");
+          damageEnemy(enemy, baseDamage, "direct", "poison");
           applyPoison(enemy, baseDamage, tower.tier);
         });
         addEffect({ kind: "burst", x: targetPosition.x, y: targetPosition.y, color: TOWER_TYPES.poison.color, ttl: 0.45 });
@@ -960,7 +1107,7 @@
       const chainTargets = [target].concat(targets);
       chainTargets.forEach(function (enemy, index) {
         const attenuation = critical ? 1 : [1, 0.65, 0.45, 0.32, 0.24][index] || 0.2;
-        hit = damageEnemy(enemy, baseDamage * attenuation, "direct") || hit;
+        hit = damageEnemy(enemy, baseDamage * attenuation, "direct", "lightning") || hit;
         if (index > 0) {
           addEffect({ kind: "lightning", x1: getPathPosition(chainTargets[index - 1].pathDistance).x, y1: getPathPosition(chainTargets[index - 1].pathDistance).y, x2: getPathPosition(enemy.pathDistance).x, y2: getPathPosition(enemy.pathDistance).y, color: TOWER_TYPES.chain.color, ttl: 0.3 });
         }
@@ -976,7 +1123,7 @@
         return first.pathDistance - second.pathDistance;
       }).slice(0, maximum);
       targets.forEach(function (enemy) {
-        hit = damageEnemy(enemy, baseDamage, "direct") || hit;
+        hit = damageEnemy(enemy, baseDamage, "direct", "physical") || hit;
       });
       if (targets.length > 0) addProjectileEffect(tower, targets[targets.length - 1], "pierce", TOWER_TYPES.pierce.color, 0.3);
     }
@@ -998,11 +1145,13 @@
     });
   }
 
-  function damageEnemy(enemy, amount, source) {
+  function damageEnemy(enemy, amount, source, damageType) {
     if (!isEnemyOnField(enemy) || (source === "direct" && !isEnemyTargetable(enemy))) return false;
     let finalDamage = amount;
     const definition = ENEMY_TYPES[enemy.type];
-    if (source === "direct" && definition.directResistance) finalDamage *= 1 - definition.directResistance;
+    if (enemy.type === "regenerator" && amount > 0) enemy.regenDelayRemaining = 2.5;
+    const typedResistance = getEnemyResistance(enemy, damageType);
+    if (typedResistance > 0) finalDamage *= 1 - typedResistance;
     if (enemy.shield > 0) {
       const shieldBeforeHit = enemy.shield;
       const absorbed = Math.min(enemy.shield, finalDamage);
@@ -1028,7 +1177,8 @@
     if (!enemy || enemy.dead) return;
     if (enemy.frozenRemaining > 0) return;
     if (amount >= enemy.slow) enemy.slow = amount;
-    enemy.slowRemaining = Math.max(enemy.slowRemaining, duration);
+    const adjustedDuration = duration * (1 - getEnemyResistance(enemy, "freeze"));
+    enemy.slowRemaining = Math.max(enemy.slowRemaining, adjustedDuration);
   }
 
   function applyPoison(enemy, damage, tier) {
@@ -1457,17 +1607,21 @@
     const canEdit = isPreparation();
     const canSell = isMarketOpen();
     const constructing = isTowerConstructing(tower);
+    const attackDisabled = tower.attackDisabledRemaining > 0;
     const constructionHtml = constructing
       ? '<div class="construction-row"><span>施工中</span><strong>' + tower.buildRemaining.toFixed(1) + 's</strong><b>暫停所有功能</b></div>'
+      : "";
+    const disableHtml = !constructing && attackDisabled
+      ? '<div class="construction-row"><span>法術封印</span><strong>' + tower.attackDisabledRemaining.toFixed(1) + 's</strong><b>暫停攻擊</b></div>'
       : "";
     const actionHtml = canSell
       ? (canEdit ? "" : '<div class="inspector-mode-note">戰鬥中可建造、拖曳合成與出售；移動及交換位置需等到準備階段。</div>') + '<div class="inspector-actions is-single"><button class="button button-danger" data-inspector-action="sell" type="button">出售（' + Math.floor(tower.totalInvested * 0.6) + ' G）</button></div>'
       : '<div class="inspector-mode-note">目前只能查看骰塔資訊。</div>';
-    const critStatus = constructing ? '<b>施工中停用</b>' : tower.forcedCrit ? '<b class="is-ready">下一擊必定爆擊</b>' : '<b>自然爆擊</b>';
+    const critStatus = constructing ? '<b>施工中停用</b>' : attackDisabled ? '<b>封印中停火</b>' : tower.forcedCrit ? '<b class="is-ready">下一擊必定爆擊</b>' : '<b>自然爆擊</b>';
     elements.inspector.innerHTML = '<div class="tower-inspector">' +
       '<div class="tower-inspector-heading"><span class="tower-symbol" style="--tower-color:' + type.color + '">' + type.symbol + '</span><div><strong>' + type.name + ' · 等級 ' + tower.tier + '</strong><small>位置 ' + tower.x + ',' + tower.y + '</small></div></div>' +
       '<div class="tower-stat-grid"><div class="tower-stat"><span>傷害／增益</span><strong>' + damage + '</strong></div><div class="tower-stat"><span>射程</span><strong>' + tierData.range + '</strong></div><div class="tower-stat"><span>間隔</span><strong>' + interval + '</strong></div></div>' +
-      constructionHtml +
+      constructionHtml + disableHtml +
       '<div class="crit-row"><span>爆擊機率</span><strong>' + Math.round(getCritChance(tower) * 100) + '%</strong>' + critStatus + '</div>' +
       '<p class="inspector-description">' + type.description + '</p>' +
       actionHtml +
@@ -1615,6 +1769,10 @@
     ctx.fillStyle = "#07162a";
     ctx.fillRect(0, 0, width, height);
 
+    const shake = getBoardShakeOffset();
+    ctx.save();
+    ctx.translate(shake.x, shake.y);
+
     for (let y = 0; y < ROWS; y += 1) {
       for (let x = 0; x < COLS; x += 1) {
         const px = x * cell;
@@ -1684,6 +1842,25 @@
     state.towers.forEach(drawTower);
     state.enemies.forEach(drawEnemy);
     state.effects.forEach(drawEffect);
+    ctx.restore();
+  }
+
+  function getBoardShakeOffset() {
+    if (profile.settings.reducedEffects) return { x: 0, y: 0 };
+    const landing = state.effects.find(function (effect) {
+      if (effect.kind !== "bossLanding") return false;
+      const progress = 1 - effect.ttl / effect.maxTtl;
+      return progress >= 0.58;
+    });
+    if (!landing) return { x: 0, y: 0 };
+    const progress = 1 - landing.ttl / landing.maxTtl;
+    const impactProgress = Math.min(1, (progress - 0.58) / 0.42);
+    const strength = canvasMetrics.cell * 0.075 * (1 - impactProgress);
+    const phase = performance.now() * 0.095;
+    return {
+      x: Math.sin(phase) * strength,
+      y: Math.cos(phase * 1.37) * strength * 0.72
+    };
   }
 
   function resizeCanvasIfNeeded() {
@@ -1752,6 +1929,25 @@
       ctx.strokeStyle = "rgba(255, 212, 119, 0.82)";
       ctx.lineWidth = Math.max(2, canvasMetrics.cell * 0.035);
       ctx.stroke();
+    }
+    if (!constructing && tower.attackDisabledRemaining > 0) {
+      ctx.globalAlpha = 1;
+      roundedRect(ctx, -size / 2, -size / 2, size, size, canvasMetrics.cell * 0.12);
+      ctx.fillStyle = "rgba(36, 18, 67, 0.58)";
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(0, 0, size * 0.57, 0, Math.PI * 2);
+      ctx.strokeStyle = "#bd9cff";
+      ctx.lineWidth = Math.max(2, canvasMetrics.cell * 0.04);
+      ctx.shadowColor = "#9f72ff";
+      ctx.shadowBlur = canvasMetrics.cell * 0.16;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "#f3eaff";
+      ctx.font = "950 " + Math.max(11, canvasMetrics.cell * 0.22) + "px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("×", 0, 0);
     }
     if (constructing) {
       const progress = tower.buildDuration > 0 ? 1 - tower.buildRemaining / tower.buildDuration : 1;
@@ -1847,7 +2043,104 @@
         ctx.fillRect(-radius * 0.08, -radius * 0.24, radius * 0.16, radius * 0.48);
         ctx.restore();
       }
+    } else if (enemy.type === "regenerator") {
+      ctx.globalAlpha = 0.88;
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, radius * 1.3, time * 0.55, time * 0.55 + Math.PI * 1.55);
+      ctx.strokeStyle = "#8cff9f";
+      ctx.stroke();
+      for (let index = 0; index < 4; index += 1) {
+        const angle = time * 0.85 + index * Math.PI / 2;
+        const leafX = center.x + Math.cos(angle) * radius * 1.45;
+        const leafY = center.y + Math.sin(angle) * radius * 1.45;
+        ctx.save();
+        ctx.translate(leafX, leafY);
+        ctx.rotate(angle + Math.PI / 4);
+        ctx.fillStyle = index % 2 === 0 ? "#b9ffc4" : "#70e58c";
+        ctx.fillRect(-radius * 0.08, -radius * 0.18, radius * 0.16, radius * 0.36);
+        ctx.restore();
+      }
+    } else if (enemy.type === "berserker") {
+      const enraged = enemy.berserkTriggered;
+      ctx.globalAlpha = enraged ? 0.96 : 0.72;
+      [-1, 1].forEach(function (direction) {
+        ctx.beginPath();
+        ctx.moveTo(center.x + direction * radius * 0.35, center.y - radius * 0.62);
+        ctx.lineTo(center.x + direction * radius * 1.18, center.y - radius * (enraged ? 1.34 : 1.08));
+        ctx.lineTo(center.x + direction * radius * 0.76, center.y - radius * 0.35);
+        ctx.closePath();
+        ctx.fillStyle = enraged ? "#ff4f49" : "#ff9b7f";
+        ctx.fill();
+      });
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, radius * (enraged ? 1.5 + Math.sin(time * 8) * 0.08 : 1.28), 0, Math.PI * 2);
+      ctx.strokeStyle = enraged ? "#ff665f" : "rgba(255, 155, 127, 0.72)";
+      ctx.stroke();
+    } else if (enemy.type === "thief") {
+      ctx.globalAlpha = 0.9;
+      for (let index = 0; index < 3; index += 1) {
+        const angle = -time * 1.05 + index * Math.PI * 2 / 3;
+        const coinX = center.x + Math.cos(angle) * radius * 1.46;
+        const coinY = center.y + Math.sin(angle) * radius * 1.46;
+        ctx.beginPath();
+        ctx.arc(coinX, coinY, radius * 0.16, 0, Math.PI * 2);
+        ctx.fillStyle = index === 0 ? "#fff2a3" : "#ffd45d";
+        ctx.fill();
+        ctx.strokeStyle = "#9b6618";
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, radius * 1.25, -time, -time + Math.PI * 1.35);
+      ctx.strokeStyle = "#ffd45d";
+      ctx.stroke();
     }
+    ctx.restore();
+  }
+
+  function drawEnemyResistanceIndicators(enemy, center, radius) {
+    const activeResistances = Object.keys(RESISTANCE_STYLES).filter(function (type) {
+      return getEnemyResistance(enemy, type) > 0;
+    });
+    if (activeResistances.length === 0) return;
+
+    const fullCircle = Math.PI * 2;
+    const segmentSize = fullCircle / activeResistances.length;
+    const arcRadius = radius * 1.2;
+    const badgeOrbit = radius * 1.48;
+    const badgeRadius = Math.max(4, radius * 0.23);
+    ctx.save();
+    ctx.setLineDash([Math.max(2, radius * 0.2), Math.max(2, radius * 0.12)]);
+    ctx.lineWidth = Math.max(1.5, canvasMetrics.cell * 0.02 * ENEMY_VISUAL_SCALE);
+    activeResistances.forEach(function (type, index) {
+      const style = RESISTANCE_STYLES[type];
+      const resistance = getEnemyResistance(enemy, type);
+      const startAngle = -Math.PI / 2 + index * segmentSize + 0.1;
+      const endAngle = -Math.PI / 2 + (index + 1) * segmentSize - 0.1;
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, arcRadius, startAngle, endAngle);
+      ctx.strokeStyle = style.color;
+      ctx.globalAlpha = Math.min(0.95, 0.62 + resistance);
+      ctx.shadowColor = style.color;
+      ctx.shadowBlur = radius * 0.24;
+      ctx.stroke();
+
+      const badgeAngle = -Math.PI / 4 + index * Math.min(0.72, segmentSize);
+      const badgeX = center.x + Math.cos(badgeAngle) * badgeOrbit;
+      const badgeY = center.y + Math.sin(badgeAngle) * badgeOrbit;
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 0.94;
+      ctx.beginPath();
+      ctx.arc(badgeX, badgeY, badgeRadius, 0, fullCircle);
+      ctx.fillStyle = "rgba(5, 12, 25, 0.9)";
+      ctx.fill();
+      ctx.strokeStyle = style.color;
+      ctx.stroke();
+      ctx.fillStyle = style.color;
+      ctx.font = "950 " + Math.max(7, badgeRadius * 1.35) + "px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(style.icon, badgeX, badgeY + badgeRadius * 0.06);
+    });
     ctx.restore();
   }
 
@@ -1861,7 +2154,14 @@
     const spriteSize = canvasMetrics.cell * spriteScale * ENEMY_VISUAL_SCALE;
     const bob = Math.sin(performance.now() / 155 + enemy.order * 1.7) * canvasMetrics.cell * 0.025 * ENEMY_VISUAL_SCALE;
     const burrowOffset = enemy.burrowRemaining > 0 ? canvasMetrics.cell * 0.08 : 0;
+    const landingProgress = enemy.bossLandingRemaining > 0
+      ? 1 - enemy.bossLandingRemaining / BOSS_LANDING_DURATION
+      : 1;
+    const landingOffset = enemy.bossLandingRemaining > 0
+      ? -canvasMetrics.cell * 2.8 * Math.pow(1 - landingProgress, 2)
+      : 0;
     ctx.save();
+    ctx.translate(0, landingOffset);
     ctx.globalAlpha = enemy.invisibleRemaining > 0 ? 0.2 : enemy.burrowRemaining > 0 ? 0.24 : 1;
     ctx.beginPath();
     ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
@@ -1887,7 +2187,11 @@
       ctx.fillText(definition.symbol, center.x, center.y + ENEMY_VISUAL_SCALE);
     }
 
+    if (enemy.frozenRemaining > 0) drawFrozenEnemyOverlay(enemy, center, radius, spriteSize);
+
     drawEnemyModelAccents(enemy, center, radius);
+
+    drawEnemyResistanceIndicators(enemy, center, radius);
 
     const barWidth = canvasMetrics.cell * (definition.boss ? 0.75 : 0.48) * ENEMY_VISUAL_SCALE;
     const barHeight = Math.max(3, canvasMetrics.cell * 0.055) * ENEMY_VISUAL_SCALE;
@@ -1906,6 +2210,45 @@
       ctx.strokeStyle = "rgba(154, 216, 111, 0.75)";
       ctx.lineWidth = ENEMY_VISUAL_SCALE; ctx.stroke();
     }
+    ctx.restore();
+  }
+
+  function drawFrozenEnemyOverlay(enemy, center, radius, spriteSize) {
+    const size = canvasMetrics.cell;
+    const pulse = 0.88 + Math.sin(performance.now() / 95 + enemy.order) * 0.12;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = 0.34;
+    ctx.beginPath();
+    ctx.arc(center.x, center.y, Math.max(radius, spriteSize * 0.42), 0, Math.PI * 2);
+    ctx.fillStyle = "#8eeaff";
+    ctx.shadowColor = "#d8fbff";
+    ctx.shadowBlur = size * 0.2;
+    ctx.fill();
+
+    ctx.globalAlpha = 0.9;
+    for (let index = 0; index < 6; index += 1) {
+      const angle = index * Math.PI / 3 - Math.PI / 2;
+      const inner = radius * 0.72;
+      const outer = radius + size * (0.12 + (index % 2) * 0.05) * pulse;
+      const spread = size * 0.045;
+      ctx.beginPath();
+      ctx.moveTo(center.x + Math.cos(angle) * inner, center.y + Math.sin(angle) * inner);
+      ctx.lineTo(center.x + Math.cos(angle - 0.12) * outer - Math.sin(angle) * spread, center.y + Math.sin(angle - 0.12) * outer + Math.cos(angle) * spread);
+      ctx.lineTo(center.x + Math.cos(angle + 0.12) * outer + Math.sin(angle) * spread, center.y + Math.sin(angle + 0.12) * outer - Math.cos(angle) * spread);
+      ctx.closePath();
+      ctx.fillStyle = index % 2 === 0 ? "#e7fdff" : "#71d8f4";
+      ctx.fill();
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#f2feff";
+    ctx.font = "950 " + Math.max(10, size * 0.17) + "px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.shadowColor = "#71d8f4";
+    ctx.shadowBlur = size * 0.12;
+    ctx.fillText("❄", center.x, center.y - Math.max(radius, spriteSize / 2) - size * 0.16);
     ctx.restore();
   }
 
@@ -2212,6 +2555,28 @@
     ctx.restore();
   }
 
+  function drawGoldLossEffect(effect, progress) {
+    const center = gridCenter(effect.x, effect.y);
+    const size = canvasMetrics.cell;
+    const y = center.y - size * (0.16 + progress * 0.68);
+    ctx.save();
+    ctx.shadowColor = "rgba(255, 92, 82, 0.9)";
+    ctx.shadowBlur = 9;
+    ctx.fillStyle = "#ffcf5b";
+    ctx.beginPath();
+    ctx.arc(center.x - size * 0.2, y, size * 0.09, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#ff665f";
+    ctx.lineWidth = Math.max(1.5, size * 0.025);
+    ctx.stroke();
+    ctx.fillStyle = "#ff8b75";
+    ctx.font = "950 " + Math.max(10, size * 0.17) + "px sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText("−" + formatGold(effect.amount) + " G", center.x - size * 0.07, y);
+    ctx.restore();
+  }
+
   function drawShieldBreakEffect(effect, progress) {
     const center = gridCenter(effect.x, effect.y);
     const size = canvasMetrics.cell;
@@ -2358,6 +2723,95 @@
     ctx.restore();
   }
 
+  function drawBossLanding(effect, progress) {
+    const center = gridCenter(effect.x, effect.y);
+    const size = canvasMetrics.cell;
+    const impactProgress = Math.max(0, Math.min(1, (progress - 0.58) / 0.42));
+    const descentProgress = Math.min(1, progress / 0.58);
+    ctx.save();
+
+    const shadowScale = 0.28 + descentProgress * 0.72;
+    ctx.globalAlpha = 0.18 + descentProgress * 0.42;
+    ctx.beginPath();
+    ctx.ellipse(center.x, center.y + size * 0.22, size * 0.5 * shadowScale, size * 0.16 * shadowScale, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "#020711";
+    ctx.fill();
+
+    if (progress < 0.68) {
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = Math.max(0, 0.8 - progress * 0.7);
+      for (let index = -2; index <= 2; index += 1) {
+        ctx.beginPath();
+        ctx.moveTo(center.x + index * size * 0.12, center.y - size * (1.65 - descentProgress * 1.15));
+        ctx.lineTo(center.x + index * size * 0.07, center.y - size * (0.35 - descentProgress * 0.2));
+        ctx.strokeStyle = index % 2 === 0 ? "#fff1bd" : effect.color;
+        ctx.lineWidth = Math.max(2, size * 0.045);
+        ctx.shadowColor = effect.color;
+        ctx.shadowBlur = size * 0.16;
+        ctx.stroke();
+      }
+    }
+
+    if (impactProgress > 0) {
+      const eased = 1 - Math.pow(1 - impactProgress, 3);
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = Math.max(0, 1 - impactProgress);
+      for (let ring = 0; ring < 2; ring += 1) {
+        const local = Math.max(0, Math.min(1, impactProgress * 1.2 - ring * 0.16));
+        if (local <= 0) continue;
+        ctx.beginPath();
+        ctx.ellipse(center.x, center.y + size * 0.18, size * (0.3 + eased * (0.9 + ring * 0.28)), size * (0.1 + eased * (0.24 + ring * 0.06)), 0, 0, Math.PI * 2);
+        ctx.strokeStyle = ring === 0 ? "#fff2bd" : effect.color;
+        ctx.lineWidth = Math.max(2, size * (0.075 - ring * 0.018) * (1 - local * 0.55));
+        ctx.shadowColor = effect.color;
+        ctx.shadowBlur = size * 0.2;
+        ctx.stroke();
+      }
+      for (let index = 0; index < 12; index += 1) {
+        const angle = Math.PI + index * Math.PI / 11;
+        const distance = size * eased * (0.36 + (index % 3) * 0.13);
+        const particleSize = size * Math.max(0.015, 0.065 * (1 - impactProgress));
+        ctx.beginPath();
+        ctx.arc(center.x + Math.cos(angle) * distance, center.y + size * 0.2 + Math.sin(angle) * distance * 0.32, particleSize, 0, Math.PI * 2);
+        ctx.fillStyle = index % 2 === 0 ? effect.color : "#d7b980";
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawFreezeEffect(effect, progress) {
+    const center = gridCenter(effect.x, effect.y);
+    const size = canvasMetrics.cell;
+    const expansion = 1 - Math.pow(1 - progress, 2);
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.strokeStyle = "#dffcff";
+    ctx.fillStyle = effect.color;
+    ctx.shadowColor = effect.color;
+    ctx.shadowBlur = size * 0.18;
+    ctx.lineWidth = Math.max(2, size * 0.04 * (1 - progress * 0.5));
+    ctx.beginPath();
+    ctx.arc(center.x, center.y, size * (0.12 + expansion * 0.42), 0, Math.PI * 2);
+    ctx.stroke();
+    for (let index = 0; index < 8; index += 1) {
+      const angle = index * Math.PI / 4 + progress * 0.18;
+      const distance = size * expansion * (0.22 + (index % 3) * 0.1);
+      const shard = size * Math.max(0.018, 0.075 * (1 - progress));
+      ctx.save();
+      ctx.translate(center.x + Math.cos(angle) * distance, center.y + Math.sin(angle) * distance);
+      ctx.rotate(angle);
+      ctx.beginPath();
+      ctx.moveTo(shard, 0);
+      ctx.lineTo(-shard * 0.55, shard * 0.42);
+      ctx.lineTo(-shard * 0.3, -shard * 0.42);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
   function drawEffect(effect) {
     const progress = 1 - effect.ttl / effect.maxTtl;
     const alpha = Math.max(0, effect.ttl / effect.maxTtl);
@@ -2371,12 +2825,16 @@
     ctx.globalAlpha = alpha;
     if (effect.kind === "gold") {
       drawGoldEffect(effect, progress);
+    } else if (effect.kind === "goldLoss") {
+      drawGoldLossEffect(effect, progress);
     } else if (effect.kind === "critical") {
       drawCriticalEffect(effect, progress);
     } else if (effect.kind === "merge") {
       drawMergeEffect(effect, progress);
     } else if (effect.kind === "bossExplosion") {
       drawBossExplosion(effect, progress);
+    } else if (effect.kind === "bossLanding") {
+      drawBossLanding(effect, progress);
     } else if (effect.kind === "shieldBreak") {
       drawShieldBreakEffect(effect, progress);
     } else if (effect.kind === "wardPulse" || effect.kind === "disruptPulse" || effect.kind === "burrow") {
@@ -2385,12 +2843,14 @@
       drawProjectile(effect, progress);
     } else if (effect.kind === "lightning") {
       drawLightning(effect, progress);
-    } else if (effect.kind === "burst" || effect.kind === "bossPulse" || effect.kind === "inspire" || effect.kind === "pulse" || effect.kind === "critReady" || effect.kind === "buildComplete") {
+    } else if (effect.kind === "burst" || effect.kind === "bossPulse" || effect.kind === "magePulse" || effect.kind === "towerDisable" || effect.kind === "inspire" || effect.kind === "pulse" || effect.kind === "critReady" || effect.kind === "buildComplete") {
       const center = gridCenter(effect.x, effect.y);
-      const expansion = effect.kind === "bossPulse" ? 1.5 : effect.kind === "critReady" ? 0.45 : 0.75;
+      const expansion = effect.kind === "bossPulse" ? 1.5 : effect.kind === "magePulse" ? 1.3 : effect.kind === "critReady" || effect.kind === "towerDisable" ? 0.45 : 0.75;
       ctx.beginPath(); ctx.arc(center.x, center.y, canvasMetrics.cell * (0.22 + progress * expansion), 0, Math.PI * 2);
       ctx.strokeStyle = effect.color; ctx.lineWidth = Math.max(2, canvasMetrics.cell * 0.055); ctx.shadowColor = effect.color; ctx.shadowBlur = 12; ctx.stroke();
-    } else if (effect.kind === "hit" || effect.kind === "poisonHit" || effect.kind === "shield" || effect.kind === "heal" || effect.kind === "freeze" || effect.kind === "death" || effect.kind === "spawn" || effect.kind === "leak") {
+    } else if (effect.kind === "freeze") {
+      drawFreezeEffect(effect, progress);
+    } else if (effect.kind === "hit" || effect.kind === "poisonHit" || effect.kind === "shield" || effect.kind === "heal" || effect.kind === "death" || effect.kind === "spawn" || effect.kind === "leak") {
       const center = gridCenter(effect.x, effect.y);
       ctx.beginPath(); ctx.arc(center.x, center.y, canvasMetrics.cell * (0.1 + progress * 0.34), 0, Math.PI * 2);
       ctx.strokeStyle = effect.color; ctx.lineWidth = Math.max(2, canvasMetrics.cell * 0.04); ctx.shadowColor = effect.color; ctx.shadowBlur = 8; ctx.stroke();

@@ -281,6 +281,12 @@ h1 span { color: var(--gold); }
 .road-dot { background: #737b79; box-shadow: inset 0 0 0 2px rgba(26, 38, 43, 0.5); }
 .build-dot { background: rgba(113, 227, 244, 0.85); box-shadow: 0 0 0 3px rgba(113, 227, 244, 0.1); }
 .core-dot { background: var(--gold); box-shadow: 0 0 0 3px rgba(255, 212, 119, 0.12); }
+.resistance-legend { gap: 7px !important; }
+.resistance-legend b { font-size: 0.6rem; font-weight: 900; }
+.resistance-freeze { color: #71d8f4; }
+.resistance-lightning { color: #f6cf63; }
+.resistance-poison { color: #9ad86f; }
+.resistance-physical { color: #c5ced9; }
 .keyboard-hint { margin-left: auto; color: var(--soft); }
 
 .control-panel { display: grid; gap: 12px; }
