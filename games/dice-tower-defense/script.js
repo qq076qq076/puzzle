@@ -281,8 +281,6 @@
     wave: document.getElementById("wave-value"),
     phase: document.getElementById("phase-value"),
     countdown: document.getElementById("countdown-value"),
-    core: document.getElementById("core-value"),
-    coreFill: document.getElementById("core-meter-fill"),
     gold: document.getElementById("gold-value"),
     best: document.getElementById("best-value"),
     start: document.getElementById("start-button"),
@@ -291,7 +289,6 @@
     restart: document.getElementById("restart-button"),
     resultRestart: document.getElementById("result-restart"),
     buy: document.getElementById("buy-button"),
-    purchaseCount: document.getElementById("purchase-count"),
     tray: document.getElementById("dice-tray"),
     trayHint: document.getElementById("tray-hint"),
     dragPreview: document.getElementById("drag-preview"),
@@ -301,6 +298,8 @@
     startupCopy: document.getElementById("startup-copy"),
     continueGame: document.getElementById("continue-button"),
     newGame: document.getElementById("new-game-button"),
+    tutorialCover: document.getElementById("tutorial-cover"),
+    tutorialButton: document.getElementById("tutorial-button"),
     resultCover: document.getElementById("result-cover"),
     resultKicker: document.getElementById("result-kicker"),
     resultTitle: document.getElementById("result-title"),
@@ -324,6 +323,7 @@
   let uiDirty = true;
   let profile = loadProfile();
   let startupCheckpoint = null;
+  let tutorialVisible = false;
 
   roadTexture.addEventListener("load", function () {
     const tile = document.createElement("canvas");
@@ -390,13 +390,18 @@
       const stored = window.localStorage.getItem(RUN_STORAGE_KEY);
       if (!stored) return null;
       const parsed = JSON.parse(stored);
+      const expectedCoreMaxHp = parsed && Number.isInteger(parsed.clearedWaves)
+        ? INITIAL_CORE_HP + parsed.clearedWaves
+        : INITIAL_CORE_HP;
       const validHeader = parsed && parsed.version === 1 &&
         Number.isInteger(parsed.wave) && parsed.wave >= 1 && parsed.wave <= WAVES.length &&
         Number.isInteger(parsed.clearedWaves) && parsed.clearedWaves === parsed.wave - 1 &&
         Number.isInteger(parsed.gold) && parsed.gold >= 0 &&
-        Number.isInteger(parsed.coreHp) && parsed.coreHp > 0 && parsed.coreHp <= INITIAL_CORE_HP &&
+        Number.isInteger(parsed.coreHp) && parsed.coreHp > 0 && parsed.coreHp <= expectedCoreMaxHp &&
+        (parsed.coreMaxHp === undefined || parsed.coreMaxHp === expectedCoreMaxHp) &&
         Array.isArray(parsed.towers) && Array.isArray(parsed.diceBag);
       if (!validHeader || !parsed.towers.every(isValidSavedDie) || !parsed.diceBag.every(isValidSavedDie)) throw new Error("Invalid checkpoint");
+      parsed.coreMaxHp = expectedCoreMaxHp;
 
       const occupied = new Set();
       for (const tower of parsed.towers) {
@@ -420,6 +425,7 @@
       clearedWaves: state.wave,
       gold: roundGold(state.gold + WAVE_REWARD),
       coreHp: state.coreHp,
+      coreMaxHp: state.coreMaxHp,
       score: state.score,
       killGold: state.killGold,
       enemyGoldRemainder: state.enemyGoldRemainder,
@@ -447,6 +453,7 @@
       clearedWaves: state.clearedWaves,
       gold: roundGold(state.gold),
       coreHp: state.coreHp,
+      coreMaxHp: state.coreMaxHp,
       score: state.score,
       killGold: state.killGold,
       enemyGoldRemainder: state.enemyGoldRemainder,
@@ -616,6 +623,7 @@
       resultRemaining: 0,
       gold: 120,
       coreHp: INITIAL_CORE_HP,
+      coreMaxHp: INITIAL_CORE_HP,
       score: 0,
       killGold: 0,
       enemyGoldRemainder: 0,
@@ -644,6 +652,7 @@
     restored.prepRemaining = getPreparationSeconds(checkpoint.wave);
     restored.gold = checkpoint.gold;
     restored.coreHp = checkpoint.coreHp;
+    restored.coreMaxHp = checkpoint.coreMaxHp || INITIAL_CORE_HP + checkpoint.clearedWaves;
     restored.score = isFiniteNumber(checkpoint.score) ? checkpoint.score : 0;
     restored.killGold = isFiniteNumber(checkpoint.killGold) ? checkpoint.killGold : 0;
     restored.enemyGoldRemainder = isFiniteNumber(checkpoint.enemyGoldRemainder) ? checkpoint.enemyGoldRemainder : 0;
@@ -696,8 +705,11 @@
     elements.resultCover.hidden = true;
     elements.pauseCover.hidden = true;
     elements.startupCover.hidden = true;
+    elements.tutorialCover.hidden = true;
+    tutorialVisible = false;
     showToast("準備你的防線。", 2.5);
     savePreparationCheckpoint();
+    showTutorialIfNeeded();
     markUiDirty();
   }
 
@@ -708,6 +720,7 @@
       state = createInitialState();
       showToast("準備你的防線。", 2.5);
       savePreparationCheckpoint();
+      showTutorialIfNeeded();
       return;
     }
     state = createStateFromCheckpoint(startupCheckpoint);
@@ -720,7 +733,29 @@
     state.paused = false;
     startupCheckpoint = null;
     elements.startupCover.hidden = true;
+    if (showTutorialIfNeeded()) return;
     showToast("已恢復第 " + state.wave + " 波的防線配置。", 2.5);
+    markUiDirty();
+  }
+
+  function showTutorialIfNeeded() {
+    if (profile.settings.tutorialCompleted) return false;
+    tutorialVisible = true;
+    state.paused = true;
+    elements.pauseCover.hidden = true;
+    elements.tutorialCover.hidden = false;
+    markUiDirty();
+    return true;
+  }
+
+  function completeTutorial() {
+    if (!tutorialVisible) return;
+    tutorialVisible = false;
+    profile.settings.tutorialCompleted = true;
+    saveProfile();
+    elements.tutorialCover.hidden = true;
+    state.paused = false;
+    showToast("拖曳同類同級骰塔即可合成。", 2.8);
     markUiDirty();
   }
 
@@ -754,13 +789,15 @@
     finishAllConstruction();
     state.selectedTowerId = null;
     state.selectedDieId = null;
-    showToast("獲得 " + WAVE_REWARD + " 金幣。", 2.5);
+    showToast("核心 +1，獲得 " + WAVE_REWARD + " 金幣。", 2.5);
     markUiDirty();
   }
 
   function finishWave() {
     const finalWave = state.wave >= WAVES.length;
     state.clearedWaves = Math.max(state.clearedWaves, state.wave);
+    state.coreMaxHp += 1;
+    state.coreHp = Math.min(state.coreMaxHp, state.coreHp + 1);
     state.score = calculateScore();
     if (finalWave) clearRunCheckpoint();
     else saveRunCheckpoint();
@@ -768,7 +805,7 @@
     state.towers.forEach(function (tower) { tower.attackDisabledRemaining = 0; });
     state.resultRemaining = finalWave ? 1.5 : 1.15;
     addEffect({ kind: "waveTransition", wave: state.wave, finalWave, color: finalWave ? "#ffd477" : "#71d8f4", ttl: finalWave ? 1.5 : 1.35 });
-    showToast(finalWave ? "最終首領已擊破！" : "第 " + state.wave + " 波守住了。", finalWave ? 1.5 : 1.15);
+    showToast(finalWave ? "最終首領已擊破，核心 +1！" : "第 " + state.wave + " 波守住了，核心 +1。", finalWave ? 1.5 : 1.15);
     markUiDirty();
   }
 
@@ -789,7 +826,7 @@
       : "核心耐久歸零了。調整塔的位置與合成時機，再試一次。";
     elements.resultWave.textContent = String(state.clearedWaves);
     elements.resultScore.textContent = String(state.score);
-    elements.resultCore.textContent = String(state.coreHp);
+    elements.resultCore.textContent = state.coreHp + " / " + state.coreMaxHp;
     markUiDirty();
   }
 
@@ -1887,11 +1924,8 @@
     const phaseName = { preparation: "準備中", combat: "戰鬥中", waveResult: "結算中", victory: "已勝利", defeat: "已失守" }[state.phase];
     elements.wave.textContent = state.wave + " / " + WAVES.length;
     elements.phase.textContent = state.paused ? "已暫停" : phaseName;
-    elements.core.textContent = state.coreHp + " / " + INITIAL_CORE_HP;
-    elements.coreFill.style.transform = "scaleX(" + (state.coreHp / INITIAL_CORE_HP) + ")";
     elements.gold.textContent = formatGold(state.gold);
     elements.best.textContent = String(Math.max(profile.bestScore, state.score));
-    if (elements.purchaseCount) elements.purchaseCount.textContent = "不限";
     elements.status.textContent = getStatusText();
 
     if (state.phase === "preparation") {
@@ -2097,6 +2131,7 @@
     state.towers.forEach(drawTower);
     state.enemies.forEach(drawEnemy);
     state.effects.forEach(drawEffect);
+    drawCoreHealthBar();
     ctx.restore();
   }
 
@@ -2132,6 +2167,35 @@
     ctx.shadowBlur = canvasMetrics.cell * 0.25;
     roundedRect(ctx, -canvasMetrics.cell * 0.18, -canvasMetrics.cell * 0.34, canvasMetrics.cell * 0.36, canvasMetrics.cell * 0.68, canvasMetrics.cell * 0.08);
     ctx.fill();
+    ctx.restore();
+  }
+
+  function drawCoreHealthBar() {
+    const position = gridCenter(9, 6);
+    const cell = canvasMetrics.cell;
+    const width = cell * 0.82;
+    const height = Math.max(6, cell * 0.11);
+    const x = position.x - width / 2;
+    const y = position.y - cell * 0.47;
+    const ratio = Math.max(0, Math.min(1, state.coreHp / state.coreMaxHp));
+    const color = ratio > 0.55 ? "#7ce0ae" : ratio > 0.25 ? "#ffd477" : "#ff7d78";
+    ctx.save();
+    roundedRect(ctx, x - 2, y - 2, width + 4, height + 4, height * 0.5);
+    ctx.fillStyle = "rgba(3, 9, 20, 0.86)";
+    ctx.fill();
+    if (ratio > 0) {
+      roundedRect(ctx, x, y, width * ratio, height, height * 0.42);
+      ctx.fillStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = cell * 0.12;
+      ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#f4f8ff";
+    ctx.font = "850 " + Math.max(8, cell * 0.13) + "px Avenir Next, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.fillText("CORE " + state.coreHp + "/" + state.coreMaxHp, position.x, y - cell * 0.05);
     ctx.restore();
   }
 
@@ -3209,7 +3273,7 @@
   }
 
   function togglePause() {
-    if (startupCheckpoint) return;
+    if (startupCheckpoint || tutorialVisible) return;
     if (state.phase === "victory" || state.phase === "defeat") return;
     state.paused = !state.paused;
     elements.pauseCover.hidden = !state.paused;
@@ -3218,7 +3282,7 @@
   }
 
   function handleKeyDown(event) {
-    if (startupCheckpoint) return;
+    if (startupCheckpoint || tutorialVisible) return;
     if (event.code === "Space") {
       event.preventDefault();
       if (state.phase === "preparation") beginCombat();
@@ -3248,6 +3312,7 @@
   elements.resume.addEventListener("click", togglePause);
   elements.continueGame.addEventListener("click", continueSavedGame);
   elements.newGame.addEventListener("click", resetGame);
+  elements.tutorialButton.addEventListener("click", completeTutorial);
   elements.restart.addEventListener("click", function () {
     if (window.confirm("要重新開始這一局嗎？")) resetGame();
   });

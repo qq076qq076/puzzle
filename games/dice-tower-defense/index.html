@@ -26,8 +26,6 @@
 
       <section class="hud" aria-label="遊戲資訊">
         <div class="hud-card"><span>WAVE</span><strong id="wave-value">1 / 30</strong><small id="phase-value">準備中</small></div>
-        <div class="hud-card core-card"><span>CORE</span><strong id="core-value">20 / 20</strong><div class="core-meter"><i id="core-meter-fill"></i></div></div>
-        <div class="hud-card"><span>GOLD</span><strong id="gold-value">120</strong><small>購買骰子</small></div>
         <div class="hud-card"><span>BEST</span><strong id="best-value">0</strong><small>最高分</small></div>
       </section>
 
@@ -65,6 +63,25 @@
                 </div>
               </div>
             </div>
+            <div class="tutorial-cover" id="tutorial-cover" hidden>
+              <div class="cover-card tutorial-card">
+                <span class="cover-kicker">QUICK TUTORIAL</span>
+                <h2>合成強化防線</h2>
+                <p>將同類型、同等級的骰塔拖到一起，就能合成更高一級的骰塔。</p>
+                <div class="tutorial-merge" aria-label="兩座一級炮擊骰合成為二級炮擊骰">
+                  <span class="tutorial-die">✹<small>1</small></span>
+                  <b>＋</b>
+                  <span class="tutorial-die">✹<small>1</small></span>
+                  <b>→</b>
+                  <span class="tutorial-die is-upgraded">✹✹<small>2</small></span>
+                </div>
+                <ul class="tutorial-points">
+                  <li>拖曳骰子到道路外的空格即可建造。</li>
+                  <li>相同類型與等級才能合成，最高可升到 6 級。</li>
+                </ul>
+                <button class="button button-primary" id="tutorial-button" type="button">開始遊戲 <span aria-hidden="true">→</span></button>
+              </div>
+            </div>
             <div class="result-cover" id="result-cover" hidden>
               <div class="cover-card result-card">
                 <span class="cover-kicker" id="result-kicker">CORE SECURED</span>
@@ -92,10 +109,13 @@
 
         <aside class="control-panel" aria-label="骰塔控制面板">
           <div class="control-block shop-block">
-            <div class="block-heading"><span class="section-kicker">DICE SUPPLY</span>
+            <div class="block-heading">
+              <span class="section-kicker">DICE SUPPLY</span>
+              <div class="shop-balance"><span>現有金幣</span><strong><b id="gold-value">120</b> G</strong></div>
+            </div>
             <div class="shop-row">
               <button class="button buy-dice-button" id="buy-button" type="button"><span>＋ 購買骰子</span><strong>25 G</strong></button>
-            </div></div>
+            </div>
             <div class="dice-tray" id="dice-tray" aria-label="待放置骰子"></div>
             <p class="tray-hint" id="tray-hint">選一顆骰子，再點擊空建造格放置。</p>
           </div>

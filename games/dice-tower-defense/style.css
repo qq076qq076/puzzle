@@ -154,7 +154,7 @@ h1 span { color: var(--gold); }
 
 .hud {
   display: grid;
-  grid-template-columns: 1.05fr 1.25fr repeat(2, 0.85fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 18px;
 }
@@ -187,26 +187,6 @@ h1 span { color: var(--gold); }
 }
 
 .hud-card small { margin-top: 6px; color: var(--muted); font-size: 0.58rem; letter-spacing: 0.03em; text-transform: none; }
-.core-card strong { color: var(--green); }
-
-.core-meter {
-  height: 5px;
-  margin-top: 10px;
-  overflow: hidden;
-  border-radius: 99px;
-  background: rgba(124, 224, 174, 0.12);
-}
-
-.core-meter i {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--coral), var(--gold), var(--green));
-  transform-origin: left center;
-  transition: transform 180ms ease;
-}
-
 .game-shell {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(300px, 0.78fr);
@@ -292,6 +272,10 @@ h1 span { color: var(--gold); }
 .control-panel { display: grid; gap: 12px; }
 .control-block { padding: 17px; border-radius: 18px; }
 .block-heading strong { color: var(--gold); font-size: 0.82rem; font-weight: 850; }
+.shop-balance { text-align: right; }
+.shop-balance span { display: block; color: var(--soft); font-size: 0.53rem; font-weight: 800; }
+.shop-balance strong { display: block; margin-top: 3px; font-variant-numeric: tabular-nums; }
+.shop-balance b { font-size: 1rem; }
 
 .shop-row { margin-top: 13px; }
 .shop-row p { color: var(--ink); font-size: 0.76rem; font-weight: 800; }
@@ -482,6 +466,7 @@ body.is-dragging { cursor: grabbing; user-select: none; }
 
 .pause-cover,
 .startup-cover,
+.tutorial-cover,
 .result-cover {
   position: absolute;
   z-index: 10;
@@ -510,6 +495,17 @@ body.is-dragging { cursor: grabbing; user-select: none; }
 .cover-card p { margin-top: 10px; color: var(--muted); font-size: 0.74rem; line-height: 1.6; }
 .cover-card .button { width: 100%; margin-top: 21px; }
 .startup-card { width: min(100%, 390px); }
+.tutorial-card { width: min(100%, 440px); }
+.tutorial-cover { align-items: start; overflow-y: auto; }
+.tutorial-cover .tutorial-card { margin-block: auto; }
+.tutorial-merge { display: flex; align-items: center; justify-content: center; gap: 9px; margin-top: 18px; }
+.tutorial-merge > b { color: var(--muted); font-size: 1rem; }
+.tutorial-die { position: relative; display: grid; place-items: center; width: 48px; height: 48px; border-radius: 11px; color: #071226; background: #ff9b65; box-shadow: inset 0 -4px rgba(0, 0, 0, 0.13), 0 7px 16px rgba(0, 0, 0, 0.24); font-size: 1.05rem; font-weight: 950; }
+.tutorial-die.is-upgraded { width: 54px; height: 54px; border: 2px solid #ffe49b; box-shadow: inset 0 -4px rgba(0, 0, 0, 0.13), 0 0 22px rgba(255, 212, 119, 0.38); }
+.tutorial-die small { position: absolute; right: 5px; bottom: 3px; color: rgba(7, 18, 38, 0.72); font-size: 0.58rem; }
+.tutorial-points { display: grid; gap: 7px; margin: 18px 0 0; padding: 0; list-style: none; color: var(--muted); font-size: 0.68rem; line-height: 1.45; text-align: left; }
+.tutorial-points li { position: relative; padding-left: 17px; }
+.tutorial-points li::before { position: absolute; left: 0; color: var(--gold); content: "◆"; font-size: 0.54rem; }
 .startup-actions { display: grid; grid-template-columns: 1.25fr 0.9fr; gap: 9px; margin-top: 21px; }
 .startup-actions .button { margin-top: 0; }
 .result-card { width: min(100%, 390px); }
@@ -536,7 +532,7 @@ body.is-dragging { cursor: grabbing; user-select: none; }
 
 @media (max-width: 960px) {
   .game-shell { grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.8fr); }
-  .hud { grid-template-columns: repeat(4, 1fr); }
+  .hud { grid-template-columns: repeat(2, 1fr); }
   .hud-card { padding-inline: 11px; }
   .hud-card strong { font-size: 1rem; }
 }
@@ -548,7 +544,6 @@ body.is-dragging { cursor: grabbing; user-select: none; }
   .header-actions .button { flex: 1; }
   .hud { grid-template-columns: repeat(2, 1fr); }
   .hud-card { min-height: 72px; }
-  .hud-card.core-card { grid-column: span 2; }
   .game-shell { grid-template-columns: 1fr; }
   .control-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .shop-block, .inspector-block, .mini-rules { grid-column: span 2; }
