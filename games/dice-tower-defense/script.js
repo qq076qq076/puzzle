@@ -10,7 +10,6 @@
   const WAVE_COUNT_MULTIPLIER = 2.5;
   const LATE_WAVE_COUNT_MULTIPLIER = 1.2;
   const ENEMY_GOLD_MULTIPLIER = 1 / 3;
-  const LATE_WAVE_GOLD_MULTIPLIER = 0.7;
   const TIER_ATTACK_RATE_MULTIPLIERS = [0.5, 0.75, 1, 1, 1, 1];
   const MAX_TIER = 6;
   const BUILD_TIMES = [1.2, 2.4, 4, 5.8, 7.8, 10];
@@ -1471,7 +1470,7 @@
     enemy.dead = true;
     const definition = ENEMY_TYPES[enemy.type];
     const position = getPathPosition(enemy.pathDistance);
-    const reward = getEnemyGoldReward(definition, state.wave);
+    const reward = getEnemyGoldReward(definition);
     state.waveStats.kills += 1;
     state.killGold = roundGold(state.killGold + reward);
     if (reward > 0) {
@@ -1556,13 +1555,9 @@
     state.gold = roundGold(state.gold + amount);
   }
 
-  function getEnemyGoldReward(definition, wave) {
+  function getEnemyGoldReward(definition) {
     const baseReward = Math.max(1, roundGold(definition.reward * ENEMY_GOLD_MULTIPLIER));
-    if (wave <= 10) return baseReward;
-    const discountedReward = baseReward * LATE_WAVE_GOLD_MULTIPLIER + state.enemyGoldRemainder;
-    const reward = Math.floor(discountedReward + 1e-9);
-    state.enemyGoldRemainder = Math.max(0, discountedReward - reward);
-    return reward;
+    return baseReward;
   }
 
   function purchaseDie() {
