@@ -5,6 +5,8 @@
   const ROWS = 8;
   const WAVE_REWARD = 35;
   const BUY_COST = 25;
+  const PROFILE_STORAGE_KEY = "puzzle.diceTowerDefense.v1";
+  const RUN_STORAGE_KEY = "puzzle.diceTowerDefense.run.v1";
   const WAVE_COUNT_MULTIPLIER = 2.5;
   const LATE_WAVE_COUNT_MULTIPLIER = 1.2;
   const ENEMY_GOLD_MULTIPLIER = 1 / 3;
@@ -34,7 +36,7 @@
     physical: { label: "物理", icon: "◆", color: "#c5ced9" }
   };
   const MAGE_DISABLE_RADIUS = 2.6;
-  const MAGE_DISABLE_DURATION = 1;
+  const MAGE_DISABLE_DURATION = 0.7;
   const MAGE_DISABLE_COOLDOWN = 12;
   const ROAD_TEXTURE_PATH = "assets/road/pebble-road.png";
   const PATH = [
@@ -123,6 +125,20 @@
         { damage: 37.8, range: 5.5, interval: 0.35 },
         { damage: 72, range: 6, interval: 0.32 },
         { damage: 120, range: 6.5, interval: 0.29 }
+      ]
+    },
+    blade: {
+      name: "刃擊骰",
+      symbol: "⚔",
+      color: "#ff718f",
+      description: "近距離物理攻擊；命中讓目標沿道路後退 0.5 格。",
+      tiers: [
+        { damage: 7.2, range: 1, interval: 1.20 },
+        { damage: 15.2, range: 1, interval: 1.12 },
+        { damage: 35, range: 1, interval: 1.04 },
+        { damage: 63, range: 2, interval: 0.98 },
+        { damage: 118, range: 2, interval: 0.92 },
+        { damage: 200, range: 2, interval: 0.86 }
       ]
     },
     inspire: {
@@ -277,6 +293,10 @@
     dragPreview: document.getElementById("drag-preview"),
     inspector: document.getElementById("inspector"),
     pauseCover: document.getElementById("pause-cover"),
+    startupCover: document.getElementById("startup-cover"),
+    startupCopy: document.getElementById("startup-copy"),
+    continueGame: document.getElementById("continue-button"),
+    newGame: document.getElementById("new-game-button"),
     resultCover: document.getElementById("result-cover"),
     resultKicker: document.getElementById("result-kicker"),
     resultTitle: document.getElementById("result-title"),
@@ -299,6 +319,7 @@
   let trayDragState = null;
   let uiDirty = true;
   let profile = loadProfile();
+  let startupCheckpoint = null;
 
   roadTexture.addEventListener("load", function () {
     const tile = document.createElement("canvas");
@@ -320,7 +341,7 @@
     };
 
     try {
-      const stored = window.localStorage.getItem("puzzle.diceTowerDefense.v1");
+      const stored = window.localStorage.getItem(PROFILE_STORAGE_KEY);
       if (!stored) return fallback;
       const parsed = JSON.parse(stored);
       if (!parsed || parsed.version !== 1) return fallback;
@@ -336,7 +357,78 @@
 
   function saveProfile() {
     try {
-      window.localStorage.setItem("puzzle.diceTowerDefense.v1", JSON.stringify(profile));
+      window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+    } catch (error) {
+      // The game remains playable when browser storage is unavailable.
+    }
+  }
+
+  function clearRunCheckpoint() {
+    try {
+      window.localStorage.removeItem(RUN_STORAGE_KEY);
+    } catch (error) {
+      // The game remains playable when browser storage is unavailable.
+    }
+  }
+
+  function isFiniteNumber(value) {
+    return typeof value === "number" && Number.isFinite(value);
+  }
+
+  function isValidSavedDie(die) {
+    return Boolean(die && typeof die.id === "string" && TOWER_TYPES[die.type] &&
+      Number.isInteger(die.tier) && die.tier >= 1 && die.tier <= MAX_TIER &&
+      isFiniteNumber(die.totalInvested) && die.totalInvested >= 0);
+  }
+
+  function loadRunCheckpoint() {
+    try {
+      const stored = window.localStorage.getItem(RUN_STORAGE_KEY);
+      if (!stored) return null;
+      const parsed = JSON.parse(stored);
+      const validHeader = parsed && parsed.version === 1 &&
+        Number.isInteger(parsed.wave) && parsed.wave >= 2 && parsed.wave <= WAVES.length &&
+        Number.isInteger(parsed.clearedWaves) && parsed.clearedWaves === parsed.wave - 1 &&
+        Number.isInteger(parsed.gold) && parsed.gold >= 0 &&
+        Number.isInteger(parsed.coreHp) && parsed.coreHp > 0 && parsed.coreHp <= INITIAL_CORE_HP &&
+        Array.isArray(parsed.towers) && Array.isArray(parsed.diceBag);
+      if (!validHeader || !parsed.towers.every(isValidSavedDie) || !parsed.diceBag.every(isValidSavedDie)) throw new Error("Invalid checkpoint");
+
+      const occupied = new Set();
+      for (const tower of parsed.towers) {
+        const key = tower.x + "," + tower.y;
+        if (!Number.isInteger(tower.x) || !Number.isInteger(tower.y) || getSlotIndex(tower.x, tower.y) < 0 || occupied.has(key)) throw new Error("Invalid tower position");
+        occupied.add(key);
+      }
+      return parsed;
+    } catch (error) {
+      clearRunCheckpoint();
+      return null;
+    }
+  }
+
+  function saveRunCheckpoint() {
+    if (state.wave >= WAVES.length || state.coreHp <= 0) return;
+    const checkpoint = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      wave: state.wave + 1,
+      clearedWaves: state.wave,
+      gold: roundGold(state.gold + WAVE_REWARD),
+      coreHp: state.coreHp,
+      score: state.score,
+      killGold: state.killGold,
+      enemyGoldRemainder: state.enemyGoldRemainder,
+      bossKills: state.bossKills,
+      towers: state.towers.map(function (tower) {
+        return { id: tower.id, type: tower.type, x: tower.x, y: tower.y, tier: tower.tier, totalInvested: tower.totalInvested };
+      }),
+      diceBag: state.diceBag.map(function (die) {
+        return { id: die.id, type: die.type, tier: die.tier, totalInvested: die.totalInvested };
+      })
+    };
+    try {
+      window.localStorage.setItem(RUN_STORAGE_KEY, JSON.stringify(checkpoint));
     } catch (error) {
       // The game remains playable when browser storage is unavailable.
     }
@@ -514,20 +606,88 @@
     };
   }
 
+  function createStateFromCheckpoint(checkpoint) {
+    const restored = createInitialState();
+    restored.wave = checkpoint.wave;
+    restored.clearedWaves = checkpoint.clearedWaves;
+    restored.prepRemaining = getPreparationSeconds(checkpoint.wave);
+    restored.gold = checkpoint.gold;
+    restored.coreHp = checkpoint.coreHp;
+    restored.score = isFiniteNumber(checkpoint.score) ? checkpoint.score : 0;
+    restored.killGold = isFiniteNumber(checkpoint.killGold) ? checkpoint.killGold : 0;
+    restored.enemyGoldRemainder = isFiniteNumber(checkpoint.enemyGoldRemainder) ? checkpoint.enemyGoldRemainder : 0;
+    restored.bossKills = Number.isInteger(checkpoint.bossKills) ? checkpoint.bossKills : 0;
+    restored.towers = checkpoint.towers.map(function (tower) {
+      return {
+        id: tower.id,
+        type: tower.type,
+        x: tower.x,
+        y: tower.y,
+        tier: tower.tier,
+        cooldown: 0.2,
+        totalInvested: tower.totalInvested,
+        forcedCrit: false,
+        buildDuration: 0,
+        buildRemaining: 0,
+        attackPulseRemaining: 0,
+        attackDisabledRemaining: 0
+      };
+    });
+    restored.diceBag = checkpoint.diceBag.map(function (die) {
+      return { id: die.id, type: die.type, tier: die.tier, totalInvested: die.totalInvested };
+    });
+    restored.paused = true;
+    syncNextId(restored);
+    return restored;
+  }
+
+  function syncNextId(restoredState) {
+    const ids = restoredState.towers.concat(restoredState.diceBag).map(function (item) {
+      const match = /-(\d+)$/.exec(item.id);
+      return match ? Number(match[1]) : 0;
+    });
+    nextId = Math.max(0, ...ids) + 1;
+  }
+
   function markUiDirty() {
     uiDirty = true;
   }
 
   function resetGame() {
+    clearRunCheckpoint();
     nextId = 1;
     state = createInitialState();
+    startupCheckpoint = null;
     pointerStart = null;
     canvasDragState = null;
     trayDragState = null;
     hideDragPreview();
     elements.resultCover.hidden = true;
     elements.pauseCover.hidden = true;
+    elements.startupCover.hidden = true;
     showToast("準備你的防線。", 2.5);
+    markUiDirty();
+  }
+
+  function initializeGame() {
+    nextId = 1;
+    startupCheckpoint = loadRunCheckpoint();
+    if (!startupCheckpoint) {
+      state = createInitialState();
+      showToast("準備你的防線。", 2.5);
+      return;
+    }
+    state = createStateFromCheckpoint(startupCheckpoint);
+    elements.startupCopy.textContent = "已守住第 " + startupCheckpoint.clearedWaves + " 波，將從第 " + startupCheckpoint.wave + " 波準備階段繼續。";
+    elements.startupCover.hidden = false;
+  }
+
+  function continueSavedGame() {
+    if (!startupCheckpoint) return;
+    state.paused = false;
+    startupCheckpoint = null;
+    elements.startupCover.hidden = true;
+    showToast("已恢復第 " + state.wave + " 波的防線配置。", 2.5);
     markUiDirty();
   }
 
@@ -569,6 +729,8 @@
     const finalWave = state.wave >= WAVES.length;
     state.clearedWaves = Math.max(state.clearedWaves, state.wave);
     state.score = calculateScore();
+    if (finalWave) clearRunCheckpoint();
+    else saveRunCheckpoint();
     state.phase = "waveResult";
     state.towers.forEach(function (tower) { tower.attackDisabledRemaining = 0; });
     state.resultRemaining = finalWave ? 1.5 : 1.15;
@@ -584,6 +746,7 @@
     profile.bestScore = Math.max(profile.bestScore, state.score);
     profile.bestWave = Math.max(profile.bestWave, state.clearedWaves);
     saveProfile();
+    clearRunCheckpoint();
     elements.pauseCover.hidden = true;
     elements.resultCover.hidden = false;
     elements.resultKicker.textContent = won ? "CORE SECURED" : "DEFENSE BROKEN";
@@ -669,6 +832,7 @@
       poisonRemaining: 0,
       poisonDps: 0,
       poisonTick: 1,
+      knockbackCooldown: 0,
       invisibleRemaining: 0,
       ghostTimer: type === "ghost" ? 6 : 0,
       healerTimer: type === "healer" ? 3 : 0,
@@ -740,6 +904,7 @@
       enemy.slowRemaining = Math.max(0, enemy.slowRemaining - deltaTime);
       if (enemy.slowRemaining === 0) enemy.slow = 0;
       enemy.frozenRemaining = Math.max(0, enemy.frozenRemaining - deltaTime);
+      enemy.knockbackCooldown = Math.max(0, (enemy.knockbackCooldown || 0) - deltaTime);
       enemy.burrowRemaining = Math.max(0, enemy.burrowRemaining - deltaTime);
 
       if (enemy.type === "ghost") {
@@ -879,12 +1044,13 @@
 
   function disableNearbyTowers(source, radius, duration) {
     const sourcePosition = getPathPosition(source.pathDistance);
-    state.towers.forEach(function (tower) {
-      if (isTowerConstructing(tower)) return;
-      if (Math.hypot(tower.x - sourcePosition.x, tower.y - sourcePosition.y) > radius) return;
-      tower.attackDisabledRemaining = Math.max(tower.attackDisabledRemaining || 0, duration);
-      addEffect({ kind: "towerDisable", x: tower.x, y: tower.y, color: "#aa8cff", ttl: duration });
+    const candidates = state.towers.filter(function (tower) {
+      return !isTowerConstructing(tower) && Math.hypot(tower.x - sourcePosition.x, tower.y - sourcePosition.y) <= radius;
     });
+    if (candidates.length === 0) return;
+    const tower = candidates[Math.floor(Math.random() * candidates.length)];
+    tower.attackDisabledRemaining = Math.max(tower.attackDisabledRemaining || 0, duration);
+    addEffect({ kind: "towerDisable", x: tower.x, y: tower.y, color: "#aa8cff", ttl: duration });
     addEffect({ kind: "magePulse", x: sourcePosition.x, y: sourcePosition.y, color: "#aa8cff", ttl: 0.85 });
   }
 
@@ -1126,6 +1292,10 @@
         hit = damageEnemy(enemy, baseDamage, "direct", "physical") || hit;
       });
       if (targets.length > 0) addProjectileEffect(tower, targets[targets.length - 1], "pierce", TOWER_TYPES.pierce.color, 0.3);
+    } else if (tower.type === "blade") {
+      addProjectileEffect(tower, target, "blade", TOWER_TYPES.blade.color, 0.24);
+      hit = damageEnemy(target, baseDamage, "direct", "physical");
+      if (hit && !target.dead) applyKnockback(target, 0.5);
     }
 
     if (critical && hit) {
@@ -1179,6 +1349,18 @@
     if (amount >= enemy.slow) enemy.slow = amount;
     const adjustedDuration = duration * (1 - getEnemyResistance(enemy, "freeze"));
     enemy.slowRemaining = Math.max(enemy.slowRemaining, adjustedDuration);
+  }
+
+  function applyKnockback(enemy, distance) {
+    if (!enemy || enemy.dead || enemy.knockbackCooldown > 0) return false;
+    const from = getPathPosition(enemy.pathDistance);
+    const previousDistance = enemy.pathDistance;
+    enemy.pathDistance = Math.max(0, enemy.pathDistance - distance);
+    if (enemy.pathDistance === previousDistance) return false;
+    enemy.knockbackCooldown = 0.75;
+    const to = getPathPosition(enemy.pathDistance);
+    addEffect({ kind: "knockback", x1: from.x, y1: from.y, x2: to.x, y2: to.y, color: TOWER_TYPES.blade.color, ttl: 0.42 });
+    return true;
   }
 
   function applyPoison(enemy, damage, tier) {
@@ -2325,6 +2507,24 @@
       ctx.strokeStyle = effect.color;
       ctx.lineWidth = 1.4;
       ctx.stroke();
+    } else if (effect.style === "blade") {
+      ctx.rotate(progress * Math.PI * 5);
+      ctx.fillStyle = "#fff0f4";
+      ctx.strokeStyle = effect.color;
+      ctx.lineWidth = Math.max(1.4, size * 0.025);
+      for (let index = 0; index < 4; index += 1) {
+        ctx.rotate(Math.PI / 2);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(size * 0.11, -size * 0.055, size * 0.2, 0);
+        ctx.quadraticCurveTo(size * 0.1, size * 0.075, 0, 0);
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.arc(0, 0, size * 0.045, 0, Math.PI * 2);
+      ctx.fillStyle = effect.color;
+      ctx.fill();
     } else if (effect.style === "inspire") {
       ctx.rotate(-angle + progress * Math.PI * 2);
       ctx.fillStyle = "#fff2b5";
@@ -2812,6 +3012,30 @@
     ctx.restore();
   }
 
+  function drawKnockbackEffect(effect, progress) {
+    const first = gridCenter(effect.x1, effect.y1);
+    const second = gridCenter(effect.x2, effect.y2);
+    const size = canvasMetrics.cell;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.strokeStyle = effect.color;
+    ctx.shadowColor = effect.color;
+    ctx.shadowBlur = size * 0.15;
+    ctx.lineWidth = Math.max(2, size * 0.04 * (1 - progress * 0.6));
+    for (let index = -1; index <= 1; index += 1) {
+      const offset = index * size * 0.08;
+      ctx.beginPath();
+      ctx.moveTo(first.x, first.y + offset);
+      ctx.lineTo(second.x, second.y + offset * 0.45);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = Math.max(0, 1 - progress);
+    ctx.beginPath();
+    ctx.arc(second.x, second.y, size * (0.12 + progress * 0.3), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function drawEffect(effect) {
     const progress = 1 - effect.ttl / effect.maxTtl;
     const alpha = Math.max(0, effect.ttl / effect.maxTtl);
@@ -2843,6 +3067,8 @@
       drawProjectile(effect, progress);
     } else if (effect.kind === "lightning") {
       drawLightning(effect, progress);
+    } else if (effect.kind === "knockback") {
+      drawKnockbackEffect(effect, progress);
     } else if (effect.kind === "burst" || effect.kind === "bossPulse" || effect.kind === "magePulse" || effect.kind === "towerDisable" || effect.kind === "inspire" || effect.kind === "pulse" || effect.kind === "critReady" || effect.kind === "buildComplete") {
       const center = gridCenter(effect.x, effect.y);
       const expansion = effect.kind === "bossPulse" ? 1.5 : effect.kind === "magePulse" ? 1.3 : effect.kind === "critReady" || effect.kind === "towerDisable" ? 0.45 : 0.75;
@@ -2869,6 +3095,7 @@
   }
 
   function togglePause() {
+    if (startupCheckpoint) return;
     if (state.phase === "victory" || state.phase === "defeat") return;
     state.paused = !state.paused;
     elements.pauseCover.hidden = !state.paused;
@@ -2877,6 +3104,7 @@
   }
 
   function handleKeyDown(event) {
+    if (startupCheckpoint) return;
     if (event.code === "Space") {
       event.preventDefault();
       if (state.phase === "preparation") beginCombat();
@@ -2904,6 +3132,8 @@
   elements.start.addEventListener("click", beginCombat);
   elements.pause.addEventListener("click", togglePause);
   elements.resume.addEventListener("click", togglePause);
+  elements.continueGame.addEventListener("click", continueSavedGame);
+  elements.newGame.addEventListener("click", resetGame);
   elements.restart.addEventListener("click", function () {
     if (window.confirm("要重新開始這一局嗎？")) resetGame();
   });
@@ -3032,7 +3262,7 @@
   });
   window.addEventListener("resize", resizeCanvas);
 
-  resetGame();
+  initializeGame();
   resizeCanvas();
   render();
   animationFrame = window.requestAnimationFrame(loop);
