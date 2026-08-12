@@ -37,6 +37,9 @@
   const MAGE_DISABLE_RADIUS = 2.6;
   const MAGE_DISABLE_DURATION = 0.7;
   const MAGE_DISABLE_COOLDOWN = 12;
+  const HEALER_COOLDOWN = 8.5;
+  const HEALER_HEAL_RATIO = 0.05;
+  const HEALING_TARGET_COOLDOWN = 6;
   const KNOCKBACK_PROTECTION_DISTANCE = 1.35;
   const KNOCKBACK_PROTECTION_MIN = 0.75;
   const KNOCKBACK_PROTECTION_MAX = 2;
@@ -275,18 +278,18 @@
   const elements = {
     canvas: document.getElementById("game-canvas"),
     boardFrame: document.getElementById("board-frame"),
-    status: document.getElementById("status-line"),
     toast: document.getElementById("board-toast"),
     wave: document.getElementById("wave-value"),
     phase: document.getElementById("phase-value"),
+    score: document.getElementById("score-value"),
     countdown: document.getElementById("countdown-value"),
     gold: document.getElementById("gold-value"),
-    best: document.getElementById("best-value"),
     start: document.getElementById("start-button"),
     pause: document.getElementById("pause-button"),
     resume: document.getElementById("resume-button"),
     restart: document.getElementById("restart-button"),
     resultRestart: document.getElementById("result-restart"),
+    resultClose: document.getElementById("result-close"),
     buy: document.getElementById("buy-button"),
     tray: document.getElementById("dice-tray"),
     trayHint: document.getElementById("tray-hint"),
@@ -829,6 +832,11 @@
     markUiDirty();
   }
 
+  function closeResultCover() {
+    if (state.phase !== "victory" && state.phase !== "defeat") return;
+    elements.resultCover.hidden = true;
+  }
+
   function calculateScore() {
     return Math.round(state.killGold * 10 + state.clearedWaves * 100 + state.coreHp * 25 + state.bossKills * 250);
   }
@@ -864,14 +872,29 @@
   }
 
   function spawnWaveEnemies() {
-    let movementDelay = 0;
+    const spawnQueue = [];
     getWaveEntries(state.wave).forEach(function (entry) {
       const count = Math.round(entry.count * getWaveCountMultiplier(state.wave));
       for (let index = 0; index < count; index += 1) {
-        spawnEnemy(entry.type, undefined, movementDelay, true);
-        if (index < count - 1) movementDelay += entry.interval;
+        spawnQueue.push({ type: entry.type, interval: entry.interval });
       }
     });
+    shuffleInPlace(spawnQueue);
+    let movementDelay = 0;
+    spawnQueue.forEach(function (queuedEnemy, index) {
+      spawnEnemy(queuedEnemy.type, undefined, movementDelay, true);
+      if (index < spawnQueue.length - 1) movementDelay += queuedEnemy.interval;
+    });
+  }
+
+  function shuffleInPlace(items) {
+    for (let index = items.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(Math.random() * (index + 1));
+      const item = items[index];
+      items[index] = items[swapIndex];
+      items[swapIndex] = item;
+    }
+    return items;
   }
 
   function spawnEnemy(type, startingDistance, movementDelay, showSpawnEffect) {
@@ -902,9 +925,10 @@
       poisonDps: 0,
       poisonTick: 1,
       knockbackCooldown: 0,
+      healingCooldown: 0,
       invisibleRemaining: 0,
       ghostTimer: type === "ghost" ? 6 : 0,
-      healerTimer: type === "healer" ? 3 : 0,
+      healerTimer: type === "healer" ? HEALER_COOLDOWN : 0,
       mageTimer: type === "healer" ? MAGE_DISABLE_COOLDOWN : 0,
       wardTimer: type === "warder" ? 3.5 + (state.enemyOrder % 4) * 0.45 : 0,
       burrowTimer: type === "burrower" ? 4 + (state.enemyOrder % 5) * 0.35 : 0,
@@ -974,6 +998,7 @@
       if (enemy.slowRemaining === 0) enemy.slow = 0;
       enemy.frozenRemaining = Math.max(0, enemy.frozenRemaining - deltaTime);
       enemy.knockbackCooldown = Math.max(0, (enemy.knockbackCooldown || 0) - deltaTime);
+      enemy.healingCooldown = Math.max(0, (enemy.healingCooldown || 0) - deltaTime);
       enemy.burrowRemaining = Math.max(0, enemy.burrowRemaining - deltaTime);
 
       if (enemy.type === "ghost") {
@@ -988,7 +1013,7 @@
       if (enemy.type === "healer") {
         enemy.healerTimer -= deltaTime;
         if (enemy.healerTimer <= 0) {
-          enemy.healerTimer = 3;
+          enemy.healerTimer = HEALER_COOLDOWN;
           healNearbyEnemies(enemy);
         }
         enemy.mageTimer -= deltaTime;
@@ -1077,10 +1102,11 @@
   function healNearbyEnemies(source) {
     const sourcePosition = getPathPosition(source.pathDistance);
     state.enemies.forEach(function (enemy) {
-      if (!isEnemyOnField(enemy) || enemy === source) return;
+      if (!isEnemyOnField(enemy) || enemy === source || enemy.healingCooldown > 0 || enemy.hp >= enemy.maxHp) return;
       const position = getPathPosition(enemy.pathDistance);
       if (Math.hypot(position.x - sourcePosition.x, position.y - sourcePosition.y) <= 2) {
-        enemy.hp = Math.min(enemy.maxHp, enemy.hp + enemy.maxHp * 0.08);
+        enemy.hp = Math.min(enemy.maxHp, enemy.hp + enemy.maxHp * HEALER_HEAL_RATIO);
+        enemy.healingCooldown = HEALING_TARGET_COOLDOWN;
         addEffect({ kind: "heal", x: position.x, y: position.y, color: "#78d8ae", ttl: 0.55 });
       }
     });
@@ -1471,8 +1497,11 @@
     const definition = ENEMY_TYPES[enemy.type];
     const position = getPathPosition(enemy.pathDistance);
     const reward = getEnemyGoldReward(definition);
+    const scoreGain = reward * 10 + (definition.boss ? 250 : 0);
     state.waveStats.kills += 1;
     state.killGold = roundGold(state.killGold + reward);
+    state.score += scoreGain;
+    addEffect({ kind: "score", x: position.x, y: position.y, amount: scoreGain, color: "#71e3f4", ttl: 1.05 });
     if (reward > 0) {
       addGold(reward);
       addEffect({ kind: "gold", x: position.x, y: position.y, amount: reward, color: "#ffd477", ttl: 1 });
@@ -1919,9 +1948,8 @@
     const phaseName = { preparation: "準備中", combat: "戰鬥中", waveResult: "結算中", victory: "已勝利", defeat: "已失守" }[state.phase];
     elements.wave.textContent = state.wave + " / " + WAVES.length;
     elements.phase.textContent = state.paused ? "已暫停" : phaseName;
+    elements.score.textContent = String(state.score);
     elements.gold.textContent = formatGold(state.gold);
-    elements.best.textContent = String(Math.max(profile.bestScore, state.score));
-    elements.status.textContent = getStatusText();
 
     if (state.phase === "preparation") {
       elements.countdown.textContent = Math.ceil(state.prepRemaining) + "s";
@@ -1941,15 +1969,6 @@
     elements.buy.disabled = !isMarketOpen() || state.gold < BUY_COST;
     elements.pause.disabled = state.phase === "victory" || state.phase === "defeat";
     elements.pause.textContent = state.paused ? "繼續" : "暫停";
-  }
-
-  function getStatusText() {
-    if (state.paused) return "戰場暫停中。";
-    if (state.phase === "preparation") return state.selectedDieId ? "選好的骰子，現在可以部署。" : "準備你的防線。";
-    if (state.phase === "combat") return "骰塔自動索敵；戰鬥中可購買、建造、合成與出售。";
-    if (state.phase === "waveResult") return "防線掃描完成，正在平滑切換至下一波。";
-    if (state.phase === "victory") return "所有波次完成，城門安全。";
-    return "核心耐久歸零，防線需要重新部署。";
   }
 
   function resizeCanvas() {
@@ -2891,6 +2910,21 @@
     ctx.restore();
   }
 
+  function drawScoreEffect(effect, progress) {
+    const center = gridCenter(effect.x, effect.y);
+    const size = canvasMetrics.cell;
+    const y = center.y + size * (0.12 - progress * 0.48);
+    ctx.save();
+    ctx.fillStyle = effect.color;
+    ctx.shadowColor = "rgba(113, 227, 244, 0.9)";
+    ctx.shadowBlur = 8;
+    ctx.font = "950 " + Math.max(9, size * 0.14) + "px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("+" + effect.amount + " PTS", center.x, y);
+    ctx.restore();
+  }
+
   function drawShieldBreakEffect(effect, progress) {
     const center = gridCenter(effect.x, effect.y);
     const size = canvasMetrics.cell;
@@ -3220,6 +3254,8 @@
     ctx.globalAlpha = alpha;
     if (effect.kind === "gold") {
       drawGoldEffect(effect, progress);
+    } else if (effect.kind === "score") {
+      drawScoreEffect(effect, progress);
     } else if (effect.kind === "goldLoss") {
       drawGoldLossEffect(effect, progress);
     } else if (effect.kind === "critical") {
@@ -3277,6 +3313,10 @@
   }
 
   function handleKeyDown(event) {
+    if (event.key === "Escape" && (state.phase === "victory" || state.phase === "defeat")) {
+      closeResultCover();
+      return;
+    }
     if (startupCheckpoint || tutorialVisible) return;
     if (event.code === "Space") {
       event.preventDefault();
@@ -3312,6 +3352,7 @@
     if (window.confirm("要重新開始這一局嗎？")) resetGame();
   });
   elements.resultRestart.addEventListener("click", resetGame);
+  elements.resultClose.addEventListener("click", closeResultCover);
   elements.buy.addEventListener("click", purchaseDie);
   elements.tray.addEventListener("pointerdown", function (event) {
     if (!isMarketOpen()) return;

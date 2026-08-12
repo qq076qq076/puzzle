@@ -24,17 +24,15 @@
         </div>
       </header>
 
-      <section class="hud" aria-label="遊戲資訊">
-        <div class="hud-card"><span>WAVE</span><strong id="wave-value">1 / 30</strong><small id="phase-value">準備中</small></div>
-        <div class="hud-card"><span>BEST</span><strong id="best-value">0</strong><small>最高分</small></div>
-      </section>
-
       <section class="game-shell" aria-label="骰塔守境遊戲">
         <div class="board-panel">
           <div class="board-topline">
-            <div>
+            <div class="battlefield-heading">
               <span class="section-kicker">BATTLEFIELD</span>
-              <strong id="status-line" role="status" aria-live="polite">準備你的防線。</strong>
+              <div class="battlefield-stats" aria-label="目前遊戲資訊">
+                <span><small>WAVE</small><strong id="wave-value">1 / 30</strong><b id="phase-value">準備中</b></span>
+                <span><small>SCORE</small><strong id="score-value">0</strong></span>
+              </div>
             </div>
             <div class="board-actions">
               <div class="wave-countdown" id="countdown-value">25s</div>
@@ -84,6 +82,7 @@
             </div>
             <div class="result-cover" id="result-cover" hidden>
               <div class="cover-card result-card">
+                <button class="result-close" id="result-close" type="button" aria-label="關閉結果視窗">×</button>
                 <span class="cover-kicker" id="result-kicker">CORE SECURED</span>
                 <h2 id="result-title">守住了！</h2>
                 <p id="result-copy">你成功守住城門。</p>
