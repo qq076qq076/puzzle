@@ -176,6 +176,23 @@
     updateTurnDisplay();
   }
 
+  function restoreGame(saved) {
+    board = saved.board.map(function (row) { return row.slice(); });
+    currentPlayer = saved.currentPlayer;
+    moveCount = saved.moveCount;
+    gameOver = Boolean(saved.gameOver);
+    boardElement.querySelectorAll(".gomoku-cell").forEach(function (cell) {
+      const value = board[Number(cell.dataset.row)][Number(cell.dataset.column)];
+      cell.classList.remove("is-winning");
+      updateCell(cell, value);
+    });
+    updateTurnDisplay();
+    if (gameOver) {
+      statusElement.className = saved.statusClass || "gomoku-status is-draw";
+      statusElement.textContent = saved.statusText || "本局已結束。";
+    }
+  }
+
   boardElement.addEventListener("click", function (event) {
     const cell = event.target.closest(".gomoku-cell");
     if (!cell) {
@@ -186,5 +203,18 @@
 
   newGameButton.addEventListener("click", resetGame);
   createBoard();
-  resetGame();
+  window.PuzzleSave.create({
+    key: "gomoku",
+    fresh: resetGame,
+    restore: restoreGame,
+    validate: function (saved) {
+      return saved && Array.isArray(saved.board) && saved.board.length === BOARD_SIZE &&
+        saved.board.every(function (row) { return Array.isArray(row) && row.length === BOARD_SIZE; }) &&
+        [BLACK, WHITE].includes(saved.currentPlayer) && Number.isInteger(saved.moveCount);
+    },
+    getState: function () {
+      return { board: board, currentPlayer: currentPlayer, moveCount: moveCount, gameOver: gameOver,
+        statusClass: statusElement.className, statusText: statusElement.textContent };
+    }
+  });
 }());

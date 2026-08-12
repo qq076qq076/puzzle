@@ -121,6 +121,23 @@
     guessInput.focus();
   }
 
+  function restoreRound(saved) {
+    secretCode = saved.secretCode;
+    records = saved.records;
+    roundNumber = saved.roundNumber;
+    const solved = records.some(function (record) { return record.a === CODE_LENGTH; });
+    roundNumberElement.textContent = formatRoundNumber(roundNumber);
+    roundStatusElement.textContent = solved ? "答對了！可以復盤" : "題目已準備好";
+    guessInput.disabled = solved;
+    submitButton.disabled = solved;
+    numberButtons.forEach(function (button) { button.disabled = solved; });
+    clearGuessButton.disabled = solved;
+    nextRoundButton.hidden = !solved;
+    guessInput.value = "";
+    renderRecords();
+    setStatus(solved ? "已恢復答題紀錄，可以開始下一題。" : "已恢復上次的題目與回答紀錄。", solved ? "is-success" : "is-ready");
+  }
+
   function validateGuess(guess) {
     if (!/^\d{4}$/.test(guess)) {
       return "請輸入 4 位數字。";
@@ -205,5 +222,14 @@
     startRound(true);
   });
   guessForm.addEventListener("submit", handleGuess);
-  startRound(false);
+  window.PuzzleSave.create({
+    key: "1a2b",
+    fresh: function () { roundNumber = 1; startRound(false); },
+    restore: restoreRound,
+    validate: function (saved) {
+      return saved && /^\d{4}$/.test(saved.secretCode) && new Set(saved.secretCode).size === CODE_LENGTH &&
+        Array.isArray(saved.records) && Number.isInteger(saved.roundNumber) && saved.roundNumber > 0;
+    },
+    getState: function () { return { secretCode: secretCode, records: records, roundNumber: roundNumber }; }
+  });
 }());

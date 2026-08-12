@@ -391,7 +391,7 @@
       if (!stored) return null;
       const parsed = JSON.parse(stored);
       const validHeader = parsed && parsed.version === 1 &&
-        Number.isInteger(parsed.wave) && parsed.wave >= 2 && parsed.wave <= WAVES.length &&
+        Number.isInteger(parsed.wave) && parsed.wave >= 1 && parsed.wave <= WAVES.length &&
         Number.isInteger(parsed.clearedWaves) && parsed.clearedWaves === parsed.wave - 1 &&
         Number.isInteger(parsed.gold) && parsed.gold >= 0 &&
         Number.isInteger(parsed.coreHp) && parsed.coreHp > 0 && parsed.coreHp <= INITIAL_CORE_HP &&
@@ -419,6 +419,33 @@
       wave: state.wave + 1,
       clearedWaves: state.wave,
       gold: roundGold(state.gold + WAVE_REWARD),
+      coreHp: state.coreHp,
+      score: state.score,
+      killGold: state.killGold,
+      enemyGoldRemainder: state.enemyGoldRemainder,
+      bossKills: state.bossKills,
+      towers: state.towers.map(function (tower) {
+        return { id: tower.id, type: tower.type, x: tower.x, y: tower.y, tier: tower.tier, totalInvested: getInvestedValue(tower) };
+      }),
+      diceBag: state.diceBag.map(function (die) {
+        return { id: die.id, type: die.type, tier: die.tier, totalInvested: getInvestedValue(die) };
+      })
+    };
+    try {
+      window.localStorage.setItem(RUN_STORAGE_KEY, JSON.stringify(checkpoint));
+    } catch (error) {
+      // The game remains playable when browser storage is unavailable.
+    }
+  }
+
+  function savePreparationCheckpoint() {
+    if (!state || state.coreHp <= 0 || state.phase !== "preparation") return;
+    const checkpoint = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      wave: state.wave,
+      clearedWaves: state.clearedWaves,
+      gold: roundGold(state.gold),
       coreHp: state.coreHp,
       score: state.score,
       killGold: state.killGold,
@@ -670,6 +697,7 @@
     elements.pauseCover.hidden = true;
     elements.startupCover.hidden = true;
     showToast("準備你的防線。", 2.5);
+    savePreparationCheckpoint();
     markUiDirty();
   }
 
@@ -679,6 +707,7 @@
     if (!startupCheckpoint) {
       state = createInitialState();
       showToast("準備你的防線。", 2.5);
+      savePreparationCheckpoint();
       return;
     }
     state = createStateFromCheckpoint(startupCheckpoint);
@@ -3343,6 +3372,7 @@
   });
   document.addEventListener("keydown", handleKeyDown);
   document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "hidden") savePreparationCheckpoint();
     if (document.visibilityState === "hidden" && !state.paused && state.phase !== "victory" && state.phase !== "defeat") togglePause();
   });
   window.addEventListener("resize", resizeCanvas);

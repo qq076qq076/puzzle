@@ -1528,6 +1528,76 @@ function restartGame() {
   updateUi(true);
 }
 
+function getSavedGame() {
+  if (state.status === "evolving") return null;
+  return {
+    status: state.status,
+    time: state.time,
+    highMass: state.highMass,
+    highLevel: state.highLevel,
+    spawnTimer: state.spawnTimer,
+    player: {
+      mass: state.player.mass,
+      level: state.player.level,
+      shield: state.player.shield,
+      energy: state.player.energy,
+      coreUpgrade: state.player.coreUpgrade,
+      position: state.player.position.toArray(),
+      velocity: state.player.velocity.toArray(),
+      invulnerable: state.player.invulnerable,
+      combo: state.player.combo,
+      comboTimer: state.player.comboTimer,
+    },
+    bodies: state.bodies.map((body) => ({
+      level: body.level,
+      mass: body.mass,
+      sizeScale: body.sizeScale,
+      position: body.position.toArray(),
+      velocity: body.velocity.toArray(),
+      collisionCooldown: body.collisionCooldown,
+      gravityGrace: body.gravityGrace,
+    })),
+  };
+}
+
+function restoreGame(saved) {
+  restartGame();
+  [...state.bodies].forEach(removeBody);
+  state.status = saved.status === "gameover" ? "gameover" : "playing";
+  state.time = saved.time;
+  state.highMass = saved.highMass;
+  state.highLevel = saved.highLevel;
+  state.spawnTimer = saved.spawnTimer;
+  Object.assign(state.player, {
+    mass: saved.player.mass,
+    level: saved.player.level,
+    shield: saved.player.shield,
+    energy: saved.player.energy,
+    coreUpgrade: saved.player.coreUpgrade,
+    invulnerable: saved.player.invulnerable,
+    combo: saved.player.combo,
+    comboTimer: saved.player.comboTimer,
+  });
+  state.player.position.fromArray(saved.player.position);
+  state.player.velocity.fromArray(saved.player.velocity);
+  rebuildPlayerModel();
+  saved.bodies.forEach((body) => {
+    createBody(body.level, new THREE.Vector3().fromArray(body.position), {
+      mass: body.mass,
+      sizeScale: body.sizeScale,
+      velocity: new THREE.Vector3().fromArray(body.velocity),
+      collisionCooldown: body.collisionCooldown,
+      gravityGrace: body.gravityGrace,
+    });
+  });
+  updateGridDensity();
+  updateInfiniteWorld();
+  ui.pauseCover.hidden = true;
+  ui.gameoverCover.hidden = state.status !== "gameover";
+  addToast("已恢復上次的星球進度", "#a8f4ff");
+  updateUi(true);
+}
+
 function setupInput() {
   const keyDirections = { ArrowUp: "up", w: "up", W: "up", ArrowDown: "down", s: "down", S: "down", ArrowLeft: "left", a: "left", A: "left", ArrowRight: "right", d: "right", D: "right" };
   window.addEventListener("keydown", (event) => {
@@ -1609,7 +1679,16 @@ function init() {
   ui.evolutionContinue.addEventListener("click", continueAfterEvolution);
   window.addEventListener("resize", resize);
   resize();
-  restartGame();
+  window.PuzzleSave.create({
+    key: "gravity-planet",
+    interval: 3000,
+    fresh: restartGame,
+    restore: restoreGame,
+    validate: (saved) => saved && saved.player && Array.isArray(saved.bodies) &&
+      Number.isFinite(saved.player.mass) && Number.isInteger(saved.player.level) &&
+      Array.isArray(saved.player.position) && Array.isArray(saved.player.velocity),
+    getState: getSavedGame,
+  });
   animate();
 }
 

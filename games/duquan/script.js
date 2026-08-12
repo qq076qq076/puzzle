@@ -596,6 +596,41 @@
     state.animationId = window.requestAnimationFrame(animate);
   }
 
+  function restoreRound(saved) {
+    stopSimulation();
+    state.actors = saved.actors.map((actor) => ({ ...actor, visualX: actor.x, visualY: actor.y }));
+    state.userChoice = saved.userChoice;
+    state.round = saved.round;
+    state.tick = saved.tick;
+    state.finished = false;
+    state.pulse = saved.pulse || 0;
+    state.collisionFlash = [];
+    state.recentWinner = saved.recentWinner || null;
+    roundValue.textContent = String(state.round).padStart(2, "0");
+    betValue.textContent = formatType(state.userChoice);
+    choiceButtons.forEach((button) => {
+      button.disabled = true;
+      button.setAttribute("aria-pressed", String(button.dataset.choice === state.userChoice));
+    });
+    arenaSection.hidden = false;
+    populationPanel.hidden = false;
+    resultCard.hidden = true;
+    setupCopy.textContent = `${formatType(state.userChoice)} 已鎖定；已恢復上次的拳台狀態。`;
+    lastEvent.textContent = state.recentWinner || "已恢復拳台進度";
+    updateCounts();
+    render();
+    if (saved.finished) {
+      const winner = CONFIG.typeOrder.find((typeId) => state.counts[typeId] > 0);
+      if (winner) finishRound(winner);
+    } else {
+      state.running = true;
+      setStatus(`已恢復第 ${state.tick} 回合，模擬繼續進行。`);
+      state.timerId = window.setInterval(tick, CONFIG.tickMs);
+      state.lastTimestamp = performance.now();
+      state.animationId = window.requestAnimationFrame(animate);
+    }
+  }
+
   choiceButtons.forEach((button) => {
     button.addEventListener("click", () => {
       if (!state.running && !state.finished) startRound(button.dataset.choice);
@@ -615,7 +650,22 @@
     choiceButtons[0]?.focus();
   });
 
-  roundValue.textContent = String(state.round).padStart(2, "0");
-  setStatus("先押一拳，讓拳台開始運轉。 ");
-  renderEmptyState();
+  window.PuzzleSave.create({
+    key: "duquan",
+    fresh: function () {
+      state.round = 1;
+      roundValue.textContent = "01";
+      resetForNextRound();
+    },
+    restore: restoreRound,
+    validate: function (saved) {
+      return saved && Array.isArray(saved.actors) && saved.actors.length > 0 && TYPES[saved.userChoice] &&
+        Number.isInteger(saved.round) && Number.isInteger(saved.tick);
+    },
+    getState: function () {
+      if (!state.actors.length || !state.userChoice) return null;
+      return { actors: state.actors, userChoice: state.userChoice, round: state.round, tick: state.tick,
+        finished: state.finished, pulse: state.pulse, recentWinner: state.recentWinner };
+    }
+  });
 })();

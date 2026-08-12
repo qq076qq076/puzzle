@@ -464,6 +464,21 @@
     setStatus("找一片相同顏色的建築，開始你的城市。", "ready");
   }
 
+  function restoreGame(saved) {
+    board = saved.board;
+    year = saved.year;
+    population = saved.population;
+    highestLevel = saved.highestLevel;
+    mayorMarks = saved.mayorMarks;
+    mayorMode = false;
+    gameOver = Boolean(saved.gameOver);
+    isAnimating = false;
+    gameoverElement.hidden = !gameOver;
+    renderBoard();
+    updateStats();
+    setStatus(gameOver ? "已恢復上一座城市的最終紀錄。" : "已恢復上次的城市進度。", gameOver ? "fail" : "ready");
+  }
+
   boardElement.addEventListener("click", function (event) {
     const tile = event.target.closest(".city-tile");
     if (!tile || gameOver || isAnimating || tile.classList.contains("is-empty")) {
@@ -494,5 +509,18 @@
 
   restartButton.addEventListener("click", restartGame);
   gameoverRestartButton.addEventListener("click", restartGame);
-  restartGame();
+  window.PuzzleSave.create({
+    key: "subaracity",
+    fresh: restartGame,
+    restore: restoreGame,
+    validate: function (saved) {
+      return saved && Array.isArray(saved.board) && saved.board.length === BOARD_ROWS &&
+        saved.board.every(function (row) { return Array.isArray(row) && row.length === BOARD_COLUMNS; }) &&
+        Number.isInteger(saved.year) && Number.isFinite(saved.population);
+    },
+    getState: function () {
+      if (isAnimating) return null;
+      return { board: board, year: year, population: population, highestLevel: highestLevel, mayorMarks: mayorMarks, gameOver: gameOver };
+    }
+  });
 })();

@@ -296,6 +296,35 @@
     startTargetRotation();
   }
 
+  function restoreLevel(saved) {
+    stopTargetRotation();
+    level = saved.level;
+    score = saved.score;
+    levelScore = saved.levelScore;
+    knivesRemaining = saved.knivesRemaining;
+    targetRotation = saved.targetRotation;
+    targetDirection = saved.targetDirection;
+    targetSpeed = saved.targetSpeed;
+    stuckAngles = saved.stuckAngles.slice();
+    isAnimating = false;
+    gameOver = Boolean(saved.gameOver);
+    levelElement.textContent = String(level).padStart(2, "0");
+    scoreElement.textContent = String(score + levelScore);
+    stuckKnivesElement.innerHTML = "";
+    flyingLayerElement.innerHTML = "";
+    stuckAngles.forEach(function (angle) { renderStuckKnife(angle, false); });
+    setTargetRotation();
+    renderTray();
+    if (gameOver && saved.message) {
+      setStatus(saved.statusText, saved.statusTone);
+      showMessage(saved.message);
+    } else {
+      clearMessage();
+      setStatus("已恢復上次的關卡，找準空隙繼續發射。", "ready");
+      startTargetRotation();
+    }
+  }
+
   stageElement.addEventListener("click", function (event) {
     if (event.target.closest("button")) {
       return;
@@ -321,5 +350,27 @@
     }
   });
 
-  startLevel(1);
+  window.PuzzleSave.create({
+    key: "knife-throw",
+    fresh: function () { level = 1; score = 0; startLevel(1); },
+    restore: restoreLevel,
+    validate: function (saved) {
+      return saved && Number.isInteger(saved.level) && saved.level > 0 && Number.isFinite(saved.score) &&
+        Number.isInteger(saved.knivesRemaining) && Array.isArray(saved.stuckAngles);
+    },
+    getState: function () {
+      const message = messageElement.hidden ? null : {
+        kicker: messageKickerElement.textContent, title: messageTitleElement.textContent,
+        description: messageDescriptionElement.textContent, showNext: !nextLevelButton.hidden,
+        retryLabel: retryButton.textContent
+      };
+      return {
+        level: level, score: score, levelScore: levelScore, knivesRemaining: knivesRemaining,
+        targetRotation: targetRotation, targetDirection: targetDirection, targetSpeed: targetSpeed,
+        stuckAngles: stuckAngles, gameOver: gameOver, message: message,
+        statusText: statusElement.textContent,
+        statusTone: statusElement.className.includes("success") ? "success" : statusElement.className.includes("fail") ? "fail" : "ready"
+      };
+    }
+  });
 })();

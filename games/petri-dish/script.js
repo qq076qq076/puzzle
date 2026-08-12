@@ -1798,6 +1798,64 @@
     updateMetrics();
   }
 
+  function isChangedCell(cell) {
+    return cell && (cell.layers.length > 0 || cell.environmentSources.length > 0 || cell.ash || cell.neutralSpore ||
+      cell.environment.temperature !== BASE_ENVIRONMENT.temperature ||
+      cell.environment.brightness !== BASE_ENVIRONMENT.brightness || cell.environment.ph !== BASE_ENVIRONMENT.ph);
+  }
+
+  function getSavedGame() {
+    const changedCells = [];
+    validIndices.forEach(function (cellIndex) {
+      if (isChangedCell(cells[cellIndex])) changedCells.push([cellIndex, cells[cellIndex]]);
+    });
+    return {
+      changedCells: changedCells,
+      entities: entities.map(function (entity) {
+        return { ...entity, cells: Array.from(entity.cells), frontier: Array.from(entity.frontier) };
+      }),
+      nextEntityId: nextEntityId,
+      selectedSpecies: selectedSpecies,
+      paused: paused,
+      elapsed: elapsed,
+      nextPulseAt: nextPulseAt,
+      pulseCount: pulseCount,
+      score: score,
+      eventMessages: eventMessages,
+      queuedEnvironmentDeltas: Array.from(queuedEnvironmentDeltas.entries())
+    };
+  }
+
+  function restoreGame(saved) {
+    resetCells();
+    saved.changedCells.forEach(function (entry) { if (validIndexSet.has(entry[0])) cells[entry[0]] = entry[1]; });
+    entities = saved.entities.map(function (entity) {
+      return { ...entity, cells: new Set(entity.cells), frontier: new Set(entity.frontier) };
+    });
+    nextEntityId = saved.nextEntityId;
+    selectedSpecies = SPECIES[saved.selectedSpecies] ? saved.selectedSpecies : "A";
+    paused = Boolean(saved.paused);
+    elapsed = saved.elapsed;
+    nextPulseAt = saved.nextPulseAt;
+    pulseCount = saved.pulseCount;
+    score = saved.score;
+    hoverCell = null;
+    eventMessages = saved.eventMessages || [];
+    effects = [];
+    pendingPlacements = [];
+    queuedEnvironmentDeltas = new Map(saved.queuedEnvironmentDeltas || []);
+    pauseButton.textContent = paused ? "繼續" : "暫停";
+    dishElement.classList.toggle("is-paused", paused);
+    speciesButtons.forEach(function (button) { button.classList.toggle("is-selected", button.dataset.species === selectedSpecies); });
+    selectionHintElement.textContent = getSpeciesSelectionHint(selectedSpecies);
+    setStatus("已恢復上次的培養皿進度。", "ready");
+    renderColorLayer();
+    renderPreview();
+    updateInspector();
+    updateMetrics();
+    lastFrameTime = performance.now();
+  }
+
   function gameLoop(timestamp) {
     if (!lastFrameTime) lastFrameTime = timestamp;
     const delta = Math.min(100, timestamp - lastFrameTime);
@@ -1852,6 +1910,16 @@
   pauseButton.addEventListener("click", togglePause);
   restartButton.addEventListener("click", resetGame);
   selectionHintElement.textContent = getSpeciesSelectionHint(selectedSpecies);
-  resetGame();
+  window.PuzzleSave.create({
+    key: "petri-dish",
+    interval: 5000,
+    fresh: resetGame,
+    restore: restoreGame,
+    validate: function (saved) {
+      return saved && Array.isArray(saved.changedCells) && Array.isArray(saved.entities) &&
+        Number.isFinite(saved.elapsed) && Number.isFinite(saved.score);
+    },
+    getState: getSavedGame
+  });
   window.requestAnimationFrame(gameLoop);
 })();

@@ -69,6 +69,18 @@
     render();
   }
 
+  function restoreGame(saved) {
+    cancelMoveAnimation();
+    board = saved.board.map(function (row) { return row.slice(); });
+    score = saved.score;
+    hasWon = Boolean(saved.hasWon);
+    keepPlaying = Boolean(saved.keepPlaying);
+    hideMessage();
+    render();
+    if (hasWon && !keepPlaying) showWinMessage();
+    else if (!movesAvailable()) showGameOverMessage();
+  }
+
   function spawnTile() {
     const availableCells = [];
 
@@ -438,5 +450,14 @@
     boardElement.appendChild(cell);
   }
 
-  newGame();
+  window.PuzzleSave.create({
+    key: "2048",
+    fresh: newGame,
+    restore: restoreGame,
+    validate: function (saved) {
+      return saved && Array.isArray(saved.board) && saved.board.length === SIZE &&
+        saved.board.every(function (row) { return Array.isArray(row) && row.length === SIZE; }) && Number.isFinite(saved.score);
+    },
+    getState: function () { return { board: board, score: score, hasWon: hasWon, keepPlaying: keepPlaying }; }
+  });
 }());

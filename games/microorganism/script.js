@@ -2579,6 +2579,64 @@
     setDirty();
   }
 
+  function getSavedGame() {
+    return {
+      microbes: state.microbes.map((microbe) => ({
+        ...microbe,
+        type: undefined,
+        cells: Array.from(microbe.cells),
+        electricTentacleCells: Array.from(microbe.electricTentacleCells || [])
+      })),
+      nextMicrobeId: state.nextMicrobeId,
+      selectedTypeId: state.selectedTypeId,
+      paused: state.paused,
+      tickCount: state.tickCount,
+      totalMoves: state.totalMoves,
+      allConnected: state.allConnected
+    };
+  }
+
+  function restoreGame(saved) {
+    const now = performance.now();
+    state.microbes = saved.microbes.map((microbe) => ({
+      ...microbe,
+      type: MICROBE_TYPES[microbe.typeId],
+      cells: new Set(microbe.cells),
+      electricTentacleCells: new Set(),
+      visualMove: null,
+      actionPauseUntil: 0,
+      purplePhase: MICROBE_TYPES[microbe.typeId].purple ? "ready" : microbe.purplePhase,
+      purplePhaseStartedAt: now,
+      electricPhase: MICROBE_TYPES[microbe.typeId].electric ? "ready" : microbe.electricPhase,
+      electricPhaseStartedAt: now,
+      electricDirection: null,
+      electricOrigin: null,
+      electricTarget: null,
+      fireworkPhase: MICROBE_TYPES[microbe.typeId].firework ? "ready" : microbe.fireworkPhase,
+      fireworkPhaseStartedAt: now,
+      predatoryPhase: "ready",
+      pendingPredatoryMove: null
+    }));
+    state.occupancy.clear();
+    state.microbes.forEach((microbe) => claimCells(microbe, microbe.cells));
+    state.nextMicrobeId = saved.nextMicrobeId;
+    state.selectedTypeId = MICROBE_TYPES[saved.selectedTypeId] ? saved.selectedTypeId : "black";
+    state.paused = Boolean(saved.paused);
+    state.tickCount = saved.tickCount;
+    state.totalMoves = saved.totalMoves;
+    state.accumulator = 0;
+    state.lastFrameAt = now;
+    state.hoverCell = null;
+    state.trail = [];
+    state.allConnected = Boolean(saved.allConnected);
+    state.blackContacts = new Set();
+    state.blackProductionCooldownUntil = 0;
+    state.effects = { electricArcs: [], spores: [], mirrorImages: [], pulses: [], auroras: [] };
+    selectMicrobeType(state.selectedTypeId);
+    setBoardStatus(state.paused ? "已恢復上次的培養區；目前暫停。" : "已恢復上次的培養區，微生物繼續移動。");
+    setDirty();
+  }
+
   canvas.addEventListener("pointermove", (event) => {
     state.hoverCell = getCellFromPointer(event);
     setDirty();
@@ -2614,5 +2672,16 @@
   });
 
   buildGridCache();
+  window.PuzzleSave.create({
+    key: "microorganism",
+    interval: 4000,
+    fresh: resetGame,
+    restore: restoreGame,
+    validate: function (saved) {
+      return saved && Array.isArray(saved.microbes) && saved.microbes.every((microbe) =>
+        MICROBE_TYPES[microbe.typeId] && Array.isArray(microbe.cells)) && Number.isInteger(saved.nextMicrobeId);
+    },
+    getState: function () { return state.microbes.length ? getSavedGame() : null; }
+  });
   state.frameId = window.requestAnimationFrame(animationFrame);
 })();
