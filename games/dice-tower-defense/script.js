@@ -38,6 +38,10 @@
   const MAGE_DISABLE_RADIUS = 2.6;
   const MAGE_DISABLE_DURATION = 0.7;
   const MAGE_DISABLE_COOLDOWN = 12;
+  const KNOCKBACK_PROTECTION_DISTANCE = 1.35;
+  const KNOCKBACK_PROTECTION_MIN = 0.75;
+  const KNOCKBACK_PROTECTION_MAX = 2;
+  const BOSS_KNOCKBACK_PROTECTION = 2.5;
   const ROAD_TEXTURE_PATH = "assets/road/pebble-road.png";
   const PATH = [
     [0, 1], [1, 1], [2, 1], [3, 1], [4, 1], [5, 1], [6, 1], [7, 1], [8, 1],
@@ -163,7 +167,7 @@
     armor: { name: "裝甲蟲", symbol: "A", color: "#b3bdca", hp: 95, speed: 0.8, leakDamage: 1, reward: 3, baseResistances: { physical: 0.35 }, waveResistanceTypes: ["physical"] },
     split: { name: "分裂蟲", symbol: "D", color: "#dc9b76", hp: 70, speed: 1.0, leakDamage: 1, reward: 3, splits: true, waveResistanceTypes: ["lightning"] },
     child: { name: "分裂幼體", symbol: "d", color: "#e4bf7b", hp: 20, speed: 1.35, leakDamage: 1, reward: 1, waveResistanceTypes: ["poison"] },
-    ghost: { name: "幽影蟲", symbol: "G", color: "#b898ec", hp: 110, speed: 1.1, leakDamage: 1, reward: 4, waveResistanceTypes: ["physical"] },
+    ghost: { name: "幽影蟲", symbol: "G", color: "#b898ec", hp: 110, speed: 1.1, leakDamage: 1, reward: 4, canBecomeInvisible: true, waveResistanceTypes: ["physical"] },
     healer: { name: "治療法師", symbol: "H", color: "#78d8ae", hp: 80, speed: 0.7, leakDamage: 2, reward: 5, waveResistanceTypes: ["poison"] },
     boss: { name: "巨甲王", symbol: "B", color: "#ffbf62", hp: 900, speed: 0.45, leakDamage: 5, reward: 30, boss: true, waveResistanceTypes: ["physical"] },
     warder: { name: "結界蟲", symbol: "W", color: "#69e7ef", hp: 145, speed: 0.74, leakDamage: 2, reward: 6, waveResistanceTypes: ["lightning"] },
@@ -421,10 +425,10 @@
       enemyGoldRemainder: state.enemyGoldRemainder,
       bossKills: state.bossKills,
       towers: state.towers.map(function (tower) {
-        return { id: tower.id, type: tower.type, x: tower.x, y: tower.y, tier: tower.tier, totalInvested: tower.totalInvested };
+        return { id: tower.id, type: tower.type, x: tower.x, y: tower.y, tier: tower.tier, totalInvested: getInvestedValue(tower) };
       }),
       diceBag: state.diceBag.map(function (die) {
-        return { id: die.id, type: die.type, tier: die.tier, totalInvested: die.totalInvested };
+        return { id: die.id, type: die.type, tier: die.tier, totalInvested: getInvestedValue(die) };
       })
     };
     try {
@@ -533,7 +537,7 @@
       y,
       tier: tier || 1,
       cooldown: 0.2,
-      totalInvested: totalInvested || 0,
+      totalInvested: isFiniteNumber(totalInvested) ? totalInvested : 0,
       forcedCrit: false,
       buildDuration: constructionTime,
       buildRemaining: constructionTime,
@@ -590,9 +594,9 @@
       enemyGoldRemainder: 0,
       bossKills: 0,
       towers: [
-        createTower("cannon", 1, 0, 1, 0),
-        createTower("cannon", 3, 0, 1, 0),
-        createTower("frost", 5, 0, 1, 0)
+        createTower("cannon", 1, 0, 1, BUY_COST),
+        createTower("cannon", 3, 0, 1, BUY_COST),
+        createTower("frost", 5, 0, 1, BUY_COST)
       ],
       diceBag: [],
       enemies: [],
@@ -625,7 +629,7 @@
         y: tower.y,
         tier: tower.tier,
         cooldown: 0.2,
-        totalInvested: tower.totalInvested,
+        totalInvested: getInvestedValue(tower),
         forcedCrit: false,
         buildDuration: 0,
         buildRemaining: 0,
@@ -634,7 +638,7 @@
       };
     });
     restored.diceBag = checkpoint.diceBag.map(function (die) {
-      return { id: die.id, type: die.type, tier: die.tier, totalInvested: die.totalInvested };
+      return { id: die.id, type: die.type, tier: die.tier, totalInvested: getInvestedValue(die) };
     });
     restored.paused = true;
     syncNextId(restored);
@@ -1072,13 +1076,18 @@
         return;
       }
       if (enemy.frozenRemaining > 0) return;
-      const slowMultiplier = 1 - (enemy.slowRemaining > 0 ? enemy.slow : 0);
-      const boostMultiplier = enemy.speedBoostRemaining > 0 ? 1.2 : 1;
-      const burrowMultiplier = enemy.burrowRemaining > 0 ? 1.65 : 1;
-      const berserkMultiplier = enemy.type === "berserker" && enemy.berserkTriggered ? 1.7 : 1;
-      enemy.pathDistance += enemy.speed * slowMultiplier * boostMultiplier * burrowMultiplier * berserkMultiplier * movementDelta;
+      enemy.pathDistance += getEnemyMovementSpeed(enemy) * movementDelta;
       if (enemy.pathDistance >= GATE_DISTANCE) leakEnemy(enemy);
     });
+  }
+
+  function getEnemyMovementSpeed(enemy) {
+    if (!enemy || enemy.frozenRemaining > 0) return 0;
+    const slowMultiplier = 1 - (enemy.slowRemaining > 0 ? enemy.slow : 0);
+    const boostMultiplier = enemy.speedBoostRemaining > 0 ? 1.2 : 1;
+    const burrowMultiplier = enemy.burrowRemaining > 0 ? 1.65 : 1;
+    const berserkMultiplier = enemy.type === "berserker" && enemy.berserkTriggered ? 1.7 : 1;
+    return enemy.speed * slowMultiplier * boostMultiplier * burrowMultiplier * berserkMultiplier;
   }
 
   function leakEnemy(enemy) {
@@ -1364,10 +1373,22 @@
     const previousDistance = enemy.pathDistance;
     enemy.pathDistance = Math.max(0, enemy.pathDistance - distance);
     if (enemy.pathDistance === previousDistance) return false;
-    enemy.knockbackCooldown = 0.75;
+    enemy.knockbackCooldown = getKnockbackProtectionDuration(enemy);
     const to = getPathPosition(enemy.pathDistance);
     addEffect({ kind: "knockback", x1: from.x, y1: from.y, x2: to.x, y2: to.y, color: TOWER_TYPES.blade.color, ttl: 0.42 });
     return true;
+  }
+
+  function getKnockbackProtectionDuration(enemy) {
+    const definition = ENEMY_TYPES[enemy.type];
+    if (definition.canBecomeInvisible) return 0;
+    if (definition.boss) return BOSS_KNOCKBACK_PROTECTION;
+    const movementSpeed = getEnemyMovementSpeed(enemy);
+    if (movementSpeed <= 0) return KNOCKBACK_PROTECTION_MAX;
+    return Math.max(
+      KNOCKBACK_PROTECTION_MIN,
+      Math.min(KNOCKBACK_PROTECTION_MAX, KNOCKBACK_PROTECTION_DISTANCE / movementSpeed)
+    );
   }
 
   function applyPoison(enemy, damage, tier) {
@@ -1578,9 +1599,10 @@
       color: TOWER_TYPES[material.type].color,
       ttl: MERGE_EFFECT_DURATION
     });
+    const mergedInvestment = getInvestedValue(target) + getInvestedValue(material);
     target.tier += 1;
     target.forcedCrit = false;
-    target.totalInvested += material.totalInvested;
+    target.totalInvested = mergedInvestment;
     state.towers = state.towers.filter(function (tower) { return tower.id !== material.id; });
     state.selectedTowerId = target.id;
     state.selectedDieId = null;
@@ -1614,9 +1636,10 @@
       color: TOWER_TYPES[die.type].color,
       ttl: MERGE_EFFECT_DURATION
     });
+    const mergedInvestment = getInvestedValue(target) + getInvestedValue(die);
     target.tier += 1;
     target.forcedCrit = false;
-    target.totalInvested += die.totalInvested;
+    target.totalInvested = mergedInvestment;
     state.diceBag = state.diceBag.filter(function (item) { return item.id !== die.id; });
     state.selectedDieId = null;
     state.selectedTowerId = target.id;
@@ -1631,12 +1654,26 @@
   function sellSelected() {
     const tower = findTowerById(state.selectedTowerId);
     if (!isMarketOpen() || !tower) return;
-    const refund = Math.floor(tower.totalInvested * 0.6);
+    const refund = getSellValue(tower);
     addGold(refund);
     state.towers = state.towers.filter(function (item) { return item.id !== tower.id; });
     state.selectedTowerId = null;
     showToast("出售骰塔，返還 " + refund + " 金幣。", 1.5);
     markUiDirty();
+  }
+
+  function getMinimumInvestedValue(tier) {
+    const safeTier = Math.max(1, Math.min(MAX_TIER, Number.isInteger(tier) ? tier : 1));
+    return BUY_COST * Math.pow(2, safeTier - 1);
+  }
+
+  function getInvestedValue(item) {
+    const stored = item && isFiniteNumber(item.totalInvested) ? item.totalInvested : 0;
+    return Math.max(stored, getMinimumInvestedValue(item ? item.tier : 1));
+  }
+
+  function getSellValue(item) {
+    return Math.max(1, Math.floor(getInvestedValue(item) * 0.6));
   }
 
   function handleBoardAction(start, end, dragged) {
@@ -1804,7 +1841,7 @@
       ? '<div class="construction-row"><span>法術封印</span><strong>' + tower.attackDisabledRemaining.toFixed(1) + 's</strong><b>暫停攻擊</b></div>'
       : "";
     const actionHtml = canSell
-      ? (canEdit ? "" : '<div class="inspector-mode-note">戰鬥中可建造、拖曳合成與出售；移動及交換位置需等到準備階段。</div>') + '<div class="inspector-actions is-single"><button class="button button-danger" data-inspector-action="sell" type="button">出售（' + Math.floor(tower.totalInvested * 0.6) + ' G）</button></div>'
+      ? (canEdit ? "" : '<div class="inspector-mode-note">戰鬥中可建造、拖曳合成與出售；移動及交換位置需等到準備階段。</div>') + '<div class="inspector-actions is-single"><button class="button button-danger" data-inspector-action="sell" type="button">出售（' + getSellValue(tower) + ' G）</button></div>'
       : '<div class="inspector-mode-note">目前只能查看骰塔資訊。</div>';
     const critStatus = constructing ? '<b>施工中停用</b>' : attackDisabled ? '<b>封印中停火</b>' : tower.forcedCrit ? '<b class="is-ready">下一擊必定爆擊</b>' : '<b>自然爆擊</b>';
     elements.inspector.innerHTML = '<div class="tower-inspector">' +
