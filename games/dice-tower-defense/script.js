@@ -133,12 +133,12 @@
       color: "#ff718f",
       description: "近距離物理攻擊；命中讓目標沿道路後退 0.5 格。",
       tiers: [
-        { damage: 7.2, range: 1, interval: 1.20 },
-        { damage: 15.2, range: 1, interval: 1.12 },
-        { damage: 35, range: 1, interval: 1.04 },
-        { damage: 63, range: 2, interval: 0.98 },
-        { damage: 118, range: 2, interval: 0.92 },
-        { damage: 200, range: 2, interval: 0.86 }
+        { damage: 7.2, range: 2, interval: 0.60 },
+        { damage: 15.2, range: 2, interval: 0.56 },
+        { damage: 35, range: 2, interval: 0.52 },
+        { damage: 63, range: 3, interval: 0.49 },
+        { damage: 118, range: 3, interval: 0.46 },
+        { damage: 200, range: 3, interval: 0.43 }
       ]
     },
     inspire: {
@@ -1293,9 +1293,16 @@
       });
       if (targets.length > 0) addProjectileEffect(tower, targets[targets.length - 1], "pierce", TOWER_TYPES.pierce.color, 0.3);
     } else if (tower.type === "blade") {
-      addProjectileEffect(tower, target, "blade", TOWER_TYPES.blade.color, 0.24);
+      const targetPosition = getPathPosition(target.pathDistance);
+      addEffect({ kind: "bladeSwing", x: tower.x, y: tower.y, targetX: targetPosition.x, targetY: targetPosition.y, range: tierData.range, color: TOWER_TYPES.blade.color, ttl: 0.3 });
       hit = damageEnemy(target, baseDamage, "direct", "physical");
-      if (hit && !target.dead) applyKnockback(target, 0.5);
+      if (hit) {
+        state.enemies.forEach(function (enemy) {
+          if (!isEnemyTargetable(enemy)) return;
+          const position = getPathPosition(enemy.pathDistance);
+          if (isTowerInRange(tower, position.x, position.y, tierData.range)) applyKnockback(enemy, 0.5);
+        });
+      }
     }
 
     if (critical && hit) {
@@ -2507,24 +2514,6 @@
       ctx.strokeStyle = effect.color;
       ctx.lineWidth = 1.4;
       ctx.stroke();
-    } else if (effect.style === "blade") {
-      ctx.rotate(progress * Math.PI * 5);
-      ctx.fillStyle = "#fff0f4";
-      ctx.strokeStyle = effect.color;
-      ctx.lineWidth = Math.max(1.4, size * 0.025);
-      for (let index = 0; index < 4; index += 1) {
-        ctx.rotate(Math.PI / 2);
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.quadraticCurveTo(size * 0.11, -size * 0.055, size * 0.2, 0);
-        ctx.quadraticCurveTo(size * 0.1, size * 0.075, 0, 0);
-        ctx.fill();
-        ctx.stroke();
-      }
-      ctx.beginPath();
-      ctx.arc(0, 0, size * 0.045, 0, Math.PI * 2);
-      ctx.fillStyle = effect.color;
-      ctx.fill();
     } else if (effect.style === "inspire") {
       ctx.rotate(-angle + progress * Math.PI * 2);
       ctx.fillStyle = "#fff2b5";
@@ -3036,6 +3025,63 @@
     ctx.restore();
   }
 
+  function drawBladeSwing(effect, progress) {
+    const center = gridCenter(effect.x, effect.y);
+    const target = gridCenter(effect.targetX, effect.targetY);
+    const size = canvasMetrics.cell;
+    const targetAngle = Math.atan2(target.y - center.y, target.x - center.x);
+    const sweepStart = targetAngle - Math.PI * 0.72;
+    const sweepEnd = targetAngle + Math.PI * 0.72;
+    const eased = 1 - Math.pow(1 - Math.min(1, progress), 3);
+    const bladeAngle = sweepStart + (sweepEnd - sweepStart) * eased;
+    const radius = size * 0.5;
+    const bladeX = center.x + Math.cos(bladeAngle) * radius;
+    const bladeY = center.y + Math.sin(bladeAngle) * radius;
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.strokeStyle = effect.color;
+    ctx.shadowColor = effect.color;
+    ctx.shadowBlur = size * 0.2;
+    ctx.lineCap = "round";
+
+    const rangeRadius = Math.max(radius, (effect.range || 1) * size);
+    const waveProgress = Math.min(1, progress * 1.35);
+    ctx.globalAlpha = Math.max(0, 0.42 * (1 - waveProgress));
+    ctx.beginPath();
+    ctx.arc(center.x, center.y, radius + (rangeRadius - radius) * waveProgress, 0, Math.PI * 2);
+    ctx.lineWidth = Math.max(2, size * 0.055 * (1 - waveProgress * 0.5));
+    ctx.stroke();
+
+    for (let trail = 0; trail < 3; trail += 1) {
+      const trailEnd = bladeAngle - trail * 0.16;
+      ctx.globalAlpha = Math.max(0, (0.75 - trail * 0.2) * (1 - progress * 0.45));
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, radius - trail * size * 0.035, sweepStart, trailEnd);
+      ctx.lineWidth = Math.max(2, size * (0.09 - trail * 0.02));
+      ctx.stroke();
+    }
+
+    ctx.globalAlpha = Math.max(0.25, 1 - progress * 0.38);
+    ctx.translate(bladeX, bladeY);
+    ctx.rotate(bladeAngle + Math.PI / 2);
+    ctx.fillStyle = "#fff3f6";
+    ctx.strokeStyle = effect.color;
+    ctx.lineWidth = Math.max(1.5, size * 0.025);
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.24, size * 0.055);
+    ctx.quadraticCurveTo(0, -size * 0.14, size * 0.3, -size * 0.035);
+    ctx.quadraticCurveTo(size * 0.06, size * 0.12, -size * 0.24, size * 0.055);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(-size * 0.18, size * 0.045, size * 0.045, 0, Math.PI * 2);
+    ctx.fillStyle = effect.color;
+    ctx.fill();
+    ctx.restore();
+  }
+
   function drawEffect(effect) {
     const progress = 1 - effect.ttl / effect.maxTtl;
     const alpha = Math.max(0, effect.ttl / effect.maxTtl);
@@ -3069,6 +3115,8 @@
       drawLightning(effect, progress);
     } else if (effect.kind === "knockback") {
       drawKnockbackEffect(effect, progress);
+    } else if (effect.kind === "bladeSwing") {
+      drawBladeSwing(effect, progress);
     } else if (effect.kind === "burst" || effect.kind === "bossPulse" || effect.kind === "magePulse" || effect.kind === "towerDisable" || effect.kind === "inspire" || effect.kind === "pulse" || effect.kind === "critReady" || effect.kind === "buildComplete") {
       const center = gridCenter(effect.x, effect.y);
       const expansion = effect.kind === "bossPulse" ? 1.5 : effect.kind === "magePulse" ? 1.3 : effect.kind === "critReady" || effect.kind === "towerDisable" ? 0.45 : 0.75;
