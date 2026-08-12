@@ -224,7 +224,7 @@
       { type: "healer", count: 6, interval: 0.80 }, { type: "boss", count: 1, interval: 1.00 }
     ],
     [{ type: "runner", count: 20, interval: 0.58 }, { type: "split", count: 12, interval: 0.66 }, { type: "ghost", count: 8, interval: 0.72 }, { type: "berserker", count: 6, interval: 0.68 }],
-    [{ type: "armor", count: 16, interval: 0.68 }, { type: "healer", count: 8, interval: 0.75 }, { type: "ghost", count: 12, interval: 0.65 }],
+    [{ type: "armor", count: 6, interval: 0.68 }, { type: "healer", count: 10, interval: 0.75 }, { type: "ghost", count: 20, interval: 0.65 }],
     [{ type: "split", count: 16, interval: 0.62 }, { type: "runner", count: 20, interval: 0.55 }, { type: "healer", count: 7, interval: 0.72 }, { type: "thief", count: 6, interval: 0.64 }],
     [{ type: "ghost", count: 18, interval: 0.58 }, { type: "armor", count: 14, interval: 0.62 }, { type: "healer", count: 9, interval: 0.70 }],
     [
