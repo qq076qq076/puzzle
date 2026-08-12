@@ -44,6 +44,8 @@
   const KNOCKBACK_PROTECTION_MIN = 0.75;
   const KNOCKBACK_PROTECTION_MAX = 2;
   const BOSS_KNOCKBACK_PROTECTION = 2.5;
+  const MAX_ACTIVE_EFFECTS = 420;
+  const IMPORTANT_EFFECT_KINDS = new Set(["bossExplosion", "bossLanding", "shieldBreak", "waveTransition", "merge", "goldLoss"]);
   const ROAD_TEXTURE_PATH = "assets/road/pebble-road.png";
   const PATH = [
     [0, 1], [1, 1], [2, 1], [3, 1], [4, 1], [5, 1], [6, 1], [7, 1], [8, 1],
@@ -1030,7 +1032,7 @@
           enemy.hp = Math.min(enemy.maxHp, enemy.hp + enemy.maxHp * 0.02 * deltaTime);
           if (enemy.regenEffectRemaining === 0) {
             enemy.regenEffectRemaining = 0.6;
-            const position = getPathPosition(enemy.pathDistance);
+            const position = getEnemyPathPosition(enemy);
             addEffect({ kind: "heal", x: position.x, y: position.y, color: ENEMY_TYPES.regenerator.color, ttl: 0.45 });
           }
         }
@@ -1038,7 +1040,7 @@
 
       if (enemy.type === "berserker" && enemy.hp <= enemy.maxHp * 0.5 && !enemy.berserkTriggered) {
         enemy.berserkTriggered = true;
-        const position = getPathPosition(enemy.pathDistance);
+        const position = getEnemyPathPosition(enemy);
         addEffect({ kind: "bossPulse", x: position.x, y: position.y, color: ENEMY_TYPES.berserker.color, ttl: 0.65 });
       }
 
@@ -1055,7 +1057,7 @@
         if (enemy.burrowTimer <= 0) {
           enemy.burrowTimer = 5.5;
           enemy.burrowRemaining = 1.25;
-          const position = getPathPosition(enemy.pathDistance);
+          const position = getEnemyPathPosition(enemy);
           addEffect({ kind: "burrow", x: position.x, y: position.y, color: ENEMY_TYPES.burrower.color, ttl: 0.65 });
         }
       }
@@ -1085,7 +1087,8 @@
             state.enemies.forEach(function (otherEnemy) {
               if (isEnemyOnField(otherEnemy) && !ENEMY_TYPES[otherEnemy.type].boss) otherEnemy.speedBoostRemaining = 3;
             });
-            addEffect({ kind: "bossPulse", x: getPathPosition(enemy.pathDistance).x, y: getPathPosition(enemy.pathDistance).y, color: "#ffbf62", ttl: 0.8 });
+            const position = getEnemyPathPosition(enemy);
+            addEffect({ kind: "bossPulse", x: position.x, y: position.y, color: "#ffbf62", ttl: 0.8 });
           }
           if (state.wave >= 10 && state.wave !== 25 && state.wave < WAVES.length && enemy.hp <= enemy.maxHp * 0.5 && !enemy.hasSummoned) {
             enemy.hasSummoned = true;
@@ -1100,11 +1103,14 @@
   }
 
   function healNearbyEnemies(source) {
-    const sourcePosition = getPathPosition(source.pathDistance);
+    const sourcePosition = getEnemyPathPosition(source);
+    const radiusSquared = 4;
     state.enemies.forEach(function (enemy) {
       if (!isEnemyOnField(enemy) || enemy === source || enemy.healingCooldown > 0 || enemy.hp >= enemy.maxHp) return;
-      const position = getPathPosition(enemy.pathDistance);
-      if (Math.hypot(position.x - sourcePosition.x, position.y - sourcePosition.y) <= 2) {
+      const position = getEnemyPathPosition(enemy);
+      const deltaX = position.x - sourcePosition.x;
+      const deltaY = position.y - sourcePosition.y;
+      if (deltaX * deltaX + deltaY * deltaY <= radiusSquared) {
         enemy.hp = Math.min(enemy.maxHp, enemy.hp + enemy.maxHp * HEALER_HEAL_RATIO);
         enemy.healingCooldown = HEALING_TARGET_COOLDOWN;
         addEffect({ kind: "heal", x: position.x, y: position.y, color: "#78d8ae", ttl: 0.55 });
@@ -1113,11 +1119,14 @@
   }
 
   function grantNearbyShields(source, radius, shieldRatio, includeSource) {
-    const sourcePosition = getPathPosition(source.pathDistance);
+    const sourcePosition = getEnemyPathPosition(source);
+    const radiusSquared = radius * radius;
     state.enemies.forEach(function (enemy) {
       if (!isEnemyOnField(enemy) || (!includeSource && enemy === source)) return;
-      const position = getPathPosition(enemy.pathDistance);
-      if (Math.hypot(position.x - sourcePosition.x, position.y - sourcePosition.y) > radius) return;
+      const position = getEnemyPathPosition(enemy);
+      const deltaX = position.x - sourcePosition.x;
+      const deltaY = position.y - sourcePosition.y;
+      if (deltaX * deltaX + deltaY * deltaY > radiusSquared) return;
       const wardShield = Math.round(enemy.maxHp * shieldRatio);
       if (wardShield <= enemy.shield) return;
       enemy.shield = wardShield;
@@ -1127,10 +1136,13 @@
   }
 
   function disruptNearbyTowers(source, radius, delay) {
-    const sourcePosition = getPathPosition(source.pathDistance);
+    const sourcePosition = getEnemyPathPosition(source);
+    const radiusSquared = radius * radius;
     state.towers.forEach(function (tower) {
       if (isTowerConstructing(tower)) return;
-      if (Math.hypot(tower.x - sourcePosition.x, tower.y - sourcePosition.y) > radius) return;
+      const deltaX = tower.x - sourcePosition.x;
+      const deltaY = tower.y - sourcePosition.y;
+      if (deltaX * deltaX + deltaY * deltaY > radiusSquared) return;
       const cooldownCap = getTowerInterval(tower) * 1.5;
       tower.cooldown = Math.min(cooldownCap, Math.max(0, tower.cooldown) + delay);
     });
@@ -1138,9 +1150,12 @@
   }
 
   function disableNearbyTowers(source, radius, duration) {
-    const sourcePosition = getPathPosition(source.pathDistance);
+    const sourcePosition = getEnemyPathPosition(source);
+    const radiusSquared = radius * radius;
     const candidates = state.towers.filter(function (tower) {
-      return !isTowerConstructing(tower) && Math.hypot(tower.x - sourcePosition.x, tower.y - sourcePosition.y) <= radius;
+      const deltaX = tower.x - sourcePosition.x;
+      const deltaY = tower.y - sourcePosition.y;
+      return !isTowerConstructing(tower) && deltaX * deltaX + deltaY * deltaY <= radiusSquared;
     });
     if (candidates.length === 0) return;
     const tower = candidates[Math.floor(Math.random() * candidates.length)];
@@ -1296,25 +1311,28 @@
   }
 
   function findTowerTarget(tower, range) {
-    return state.enemies
-      .filter(function (enemy) {
-        if (!isEnemyTargetable(enemy)) return false;
-        return isTowerInRange(tower, getPathPosition(enemy.pathDistance).x, getPathPosition(enemy.pathDistance).y, range);
-      })
-      .sort(function (first, second) {
-        const remainingDifference = (GATE_DISTANCE - first.pathDistance) - (GATE_DISTANCE - second.pathDistance);
-        return remainingDifference || first.order - second.order;
-      })[0] || null;
+    let target = null;
+    for (let index = 0; index < state.enemies.length; index += 1) {
+      const enemy = state.enemies[index];
+      if (!isEnemyTargetable(enemy)) continue;
+      const position = getEnemyPathPosition(enemy);
+      if (!isTowerInRange(tower, position.x, position.y, range)) continue;
+      if (!target || enemy.pathDistance > target.pathDistance ||
+        (enemy.pathDistance === target.pathDistance && enemy.order < target.order)) target = enemy;
+    }
+    return target;
   }
 
   function isTowerInRange(tower, x, y, range) {
     const tierData = TOWER_TYPES[tower.type].tiers[tower.tier - 1];
     const actualRange = range === undefined ? tierData.range : range;
-    return Math.hypot(tower.x - x, tower.y - y) <= actualRange;
+    const deltaX = tower.x - x;
+    const deltaY = tower.y - y;
+    return deltaX * deltaX + deltaY * deltaY <= actualRange * actualRange;
   }
 
   function addProjectileEffect(tower, target, style, color, duration) {
-    const targetPosition = getPathPosition(target.pathDistance);
+    const targetPosition = getEnemyPathPosition(target);
     addEffect({
       kind: "projectile",
       style,
@@ -1337,9 +1355,13 @@
       addProjectileEffect(tower, target, "cannon", TOWER_TYPES.cannon.color, 0.34);
       hit = damageEnemy(target, baseDamage, "direct", "physical");
       if (critical && hit) {
-        const targetPosition = getPathPosition(target.pathDistance);
+        const targetPosition = getEnemyPathPosition(target);
         state.enemies.forEach(function (enemy) {
-          if (isEnemyTargetable(enemy) && Math.hypot(getPathPosition(enemy.pathDistance).x - targetPosition.x, getPathPosition(enemy.pathDistance).y - targetPosition.y) <= 1) {
+          if (!isEnemyTargetable(enemy)) return;
+          const position = getEnemyPathPosition(enemy);
+          const deltaX = position.x - targetPosition.x;
+          const deltaY = position.y - targetPosition.y;
+          if (deltaX * deltaX + deltaY * deltaY <= 1) {
             damageEnemy(enemy, baseDamage * 0.8, "direct", "physical");
           }
         });
@@ -1352,14 +1374,15 @@
       if (critical && hit) {
         const freezeDuration = 1.2 * (1 - getEnemyResistance(target, "freeze"));
         target.frozenRemaining = Math.max(target.frozenRemaining, freezeDuration);
-        addEffect({ kind: "freeze", x: getPathPosition(target.pathDistance).x, y: getPathPosition(target.pathDistance).y, color: TOWER_TYPES.frost.color, ttl: 0.7 });
+        const targetPosition = getEnemyPathPosition(target);
+        addEffect({ kind: "freeze", x: targetPosition.x, y: targetPosition.y, color: TOWER_TYPES.frost.color, ttl: 0.7 });
       }
     } else if (tower.type === "poison") {
       addProjectileEffect(tower, target, "poison", TOWER_TYPES.poison.color, 0.36);
       hit = damageEnemy(target, baseDamage, "direct", "poison");
       if (hit) applyPoison(target, baseDamage, tower.tier);
       if (critical && hit) {
-        const targetPosition = getPathPosition(target.pathDistance);
+        const targetPosition = getEnemyPathPosition(target);
         const nearby = getNearbyEnemies(targetPosition.x, targetPosition.y, 1, [target]);
         nearby.forEach(function (enemy) {
           damageEnemy(enemy, baseDamage, "direct", "poison");
@@ -1369,21 +1392,24 @@
       }
     } else if (tower.type === "chain") {
       const maximum = critical ? state.enemies.length : TOWER_TYPES.chain.chainCount[tower.tier - 1];
-      const targets = getNearbyEnemies(getPathPosition(target.pathDistance).x, getPathPosition(target.pathDistance).y, tierData.range, [target]).slice(0, Math.max(0, maximum - 1));
+      const targetPosition = getEnemyPathPosition(target);
+      const targets = getNearbyEnemies(targetPosition.x, targetPosition.y, tierData.range, [target]).slice(0, Math.max(0, maximum - 1));
       const chainTargets = [target].concat(targets);
       chainTargets.forEach(function (enemy, index) {
         const attenuation = critical ? 1 : [1, 0.65, 0.45, 0.32, 0.24][index] || 0.2;
         hit = damageEnemy(enemy, baseDamage * attenuation, "direct", "lightning") || hit;
         if (index > 0) {
-          addEffect({ kind: "lightning", x1: getPathPosition(chainTargets[index - 1].pathDistance).x, y1: getPathPosition(chainTargets[index - 1].pathDistance).y, x2: getPathPosition(enemy.pathDistance).x, y2: getPathPosition(enemy.pathDistance).y, color: TOWER_TYPES.chain.color, ttl: 0.3 });
+          const previousPosition = getEnemyPathPosition(chainTargets[index - 1]);
+          const position = getEnemyPathPosition(enemy);
+          addEffect({ kind: "lightning", x1: previousPosition.x, y1: previousPosition.y, x2: position.x, y2: position.y, color: TOWER_TYPES.chain.color, ttl: 0.3 });
         }
       });
-      addEffect({ kind: "lightning", x1: tower.x, y1: tower.y, x2: getPathPosition(target.pathDistance).x, y2: getPathPosition(target.pathDistance).y, color: TOWER_TYPES.chain.color, ttl: 0.3 });
+      addEffect({ kind: "lightning", x1: tower.x, y1: tower.y, x2: targetPosition.x, y2: targetPosition.y, color: TOWER_TYPES.chain.color, ttl: 0.3 });
     } else if (tower.type === "pierce") {
       const maximum = critical ? state.enemies.length : TOWER_TYPES.pierce.pierceCount[tower.tier - 1];
       const targets = state.enemies.filter(function (enemy) {
         if (!isEnemyTargetable(enemy)) return false;
-        const position = getPathPosition(enemy.pathDistance);
+        const position = getEnemyPathPosition(enemy);
         return isTowerInRange(tower, position.x, position.y, tierData.range);
       }).sort(function (first, second) {
         return first.pathDistance - second.pathDistance;
@@ -1393,30 +1419,33 @@
       });
       if (targets.length > 0) addProjectileEffect(tower, targets[targets.length - 1], "pierce", TOWER_TYPES.pierce.color, 0.3);
     } else if (tower.type === "blade") {
-      const targetPosition = getPathPosition(target.pathDistance);
+      const targetPosition = getEnemyPathPosition(target);
       addEffect({ kind: "bladeSwing", x: tower.x, y: tower.y, targetX: targetPosition.x, targetY: targetPosition.y, range: tierData.range, color: TOWER_TYPES.blade.color, ttl: 0.3 });
       hit = damageEnemy(target, baseDamage, "direct", "physical");
       if (hit) {
         state.enemies.forEach(function (enemy) {
           if (!isEnemyTargetable(enemy)) return;
-          const position = getPathPosition(enemy.pathDistance);
+          const position = getEnemyPathPosition(enemy);
           if (isTowerInRange(tower, position.x, position.y, tierData.range)) applyKnockback(enemy, 0.5);
         });
       }
     }
 
     if (critical && hit) {
-      const targetPosition = getPathPosition(target.pathDistance);
+      const targetPosition = getEnemyPathPosition(target);
       addEffect({ kind: "critical", x: targetPosition.x, y: targetPosition.y, color: "#ffd477", ttl: 0.72 });
     }
     if (state.selectedTowerId === tower.id) markUiDirty();
   }
 
   function getNearbyEnemies(x, y, range, excluded) {
+    const rangeSquared = range * range;
     return state.enemies.filter(function (enemy) {
       if (!isEnemyTargetable(enemy) || excluded.indexOf(enemy) !== -1) return false;
-      const position = getPathPosition(enemy.pathDistance);
-      return Math.hypot(position.x - x, position.y - y) <= range;
+      const position = getEnemyPathPosition(enemy);
+      const deltaX = position.x - x;
+      const deltaY = position.y - y;
+      return deltaX * deltaX + deltaY * deltaY <= rangeSquared;
     }).sort(function (first, second) {
       return (GATE_DISTANCE - first.pathDistance) - (GATE_DISTANCE - second.pathDistance) || first.order - second.order;
     });
@@ -1435,7 +1464,7 @@
       enemy.shield -= absorbed;
       finalDamage -= absorbed;
       if (absorbed > 0) {
-        const position = getPathPosition(enemy.pathDistance);
+        const position = getEnemyPathPosition(enemy);
         if (shieldBeforeHit > 0 && enemy.shield <= 0) {
           enemy.shield = 0;
           addEffect({ kind: "shieldBreak", x: position.x, y: position.y, color: "#ffe0a6", ttl: 0.72 });
@@ -1445,7 +1474,8 @@
       }
     }
     if (finalDamage > 0) enemy.hp -= finalDamage;
-    addEffect({ kind: source === "poison" ? "poisonHit" : "hit", x: getPathPosition(enemy.pathDistance).x, y: getPathPosition(enemy.pathDistance).y, color: source === "poison" ? "#9ad86f" : definition.color, ttl: 0.32 });
+    const hitPosition = getEnemyPathPosition(enemy);
+    addEffect({ kind: source === "poison" ? "poisonHit" : "hit", x: hitPosition.x, y: hitPosition.y, color: source === "poison" ? "#9ad86f" : definition.color, ttl: 0.32 });
     if (enemy.hp <= 0) killEnemy(enemy);
     return true;
   }
@@ -1460,12 +1490,12 @@
 
   function applyKnockback(enemy, distance) {
     if (!enemy || enemy.dead || enemy.knockbackCooldown > 0) return false;
-    const from = getPathPosition(enemy.pathDistance);
+    const from = getEnemyPathPosition(enemy);
     const previousDistance = enemy.pathDistance;
     enemy.pathDistance = Math.max(0, enemy.pathDistance - distance);
     if (enemy.pathDistance === previousDistance) return false;
     enemy.knockbackCooldown = getKnockbackProtectionDuration(enemy);
-    const to = getPathPosition(enemy.pathDistance);
+    const to = getEnemyPathPosition(enemy);
     addEffect({ kind: "knockback", x1: from.x, y1: from.y, x2: to.x, y2: to.y, color: TOWER_TYPES.blade.color, ttl: 0.42 });
     return true;
   }
@@ -1495,7 +1525,7 @@
     if (!enemy || enemy.dead) return;
     enemy.dead = true;
     const definition = ENEMY_TYPES[enemy.type];
-    const position = getPathPosition(enemy.pathDistance);
+    const position = getEnemyPathPosition(enemy);
     const reward = getEnemyGoldReward(definition);
     const scoreGain = reward * 10 + (definition.boss ? 250 : 0);
     state.waveStats.kills += 1;
@@ -1520,17 +1550,39 @@
   }
 
   function cleanupEntities() {
-    state.enemies = state.enemies.filter(function (enemy) { return !enemy.dead; });
+    let writeIndex = 0;
+    for (let readIndex = 0; readIndex < state.enemies.length; readIndex += 1) {
+      const enemy = state.enemies[readIndex];
+      if (enemy.dead) continue;
+      state.enemies[writeIndex] = enemy;
+      writeIndex += 1;
+    }
+    state.enemies.length = writeIndex;
   }
 
   function addEffect(effect) {
     if (profile.settings.reducedEffects && (effect.kind === "beam" || effect.kind === "hit" || effect.kind === "poisonHit")) return;
+    if (state.effects.length >= MAX_ACTIVE_EFFECTS) {
+      if (!IMPORTANT_EFFECT_KINDS.has(effect.kind)) return;
+      const removableIndex = state.effects.findIndex(function (activeEffect) {
+        return !IMPORTANT_EFFECT_KINDS.has(activeEffect.kind);
+      });
+      if (removableIndex >= 0) state.effects.splice(removableIndex, 1);
+      else state.effects.shift();
+    }
     state.effects.push({ ...effect, maxTtl: effect.ttl });
   }
 
   function updateEffects(deltaTime) {
-    state.effects.forEach(function (effect) { effect.ttl -= deltaTime; });
-    state.effects = state.effects.filter(function (effect) { return effect.ttl > 0; });
+    let writeIndex = 0;
+    for (let readIndex = 0; readIndex < state.effects.length; readIndex += 1) {
+      const effect = state.effects[readIndex];
+      effect.ttl -= deltaTime;
+      if (effect.ttl <= 0) continue;
+      state.effects[writeIndex] = effect;
+      writeIndex += 1;
+    }
+    state.effects.length = writeIndex;
     state.toastRemaining = Math.max(0, state.toastRemaining - deltaTime);
     elements.toast.textContent = state.toastRemaining > 0 ? state.toastText : "";
   }
@@ -1551,9 +1603,17 @@
     return { x: first[0] + (second[0] - first[0]) * progress, y: first[1] + (second[1] - first[1]) * progress };
   }
 
+  function getEnemyPathPosition(enemy) {
+    if (enemy.cachedPathDistance !== enemy.pathDistance || !enemy.cachedPathPosition) {
+      enemy.cachedPathDistance = enemy.pathDistance;
+      enemy.cachedPathPosition = getPathPosition(enemy.pathDistance);
+    }
+    return enemy.cachedPathPosition;
+  }
+
   function getEnemyRenderPosition(enemy) {
     if (enemy.movementDelayRemaining > 0) return { x: -1.5, y: PATH[0][1] };
-    return getPathPosition(enemy.pathDistance);
+    return getEnemyPathPosition(enemy);
   }
 
   function getSlotIndex(x, y) {
@@ -2143,7 +2203,9 @@
     drawGate();
     drawSelectedRange();
     state.towers.forEach(drawTower);
-    state.enemies.forEach(drawEnemy);
+    state.enemies.forEach(function (enemy) {
+      if (!enemy.dead && enemy.movementDelayRemaining <= 0) drawEnemy(enemy);
+    });
     state.effects.forEach(drawEffect);
     drawCoreHealthBar();
     ctx.restore();
