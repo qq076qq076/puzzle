@@ -45,15 +45,14 @@
           <section class="mode-panel" id="host-panel" role="tabpanel" aria-labelledby="host-tab">
             <div class="instruction">
               <span class="instruction-number">1</span>
-              <div><strong>建立邀請</strong><span>產生邀請後，讓對手掃描或複製內容。</span></div>
+              <div><strong>建立邀請</strong><span>產生邀請網址，讓對手掃描或直接開啟。</span></div>
             </div>
             <button class="primary-button" id="create-offer" type="button">建立連線邀請 <span aria-hidden="true">↗</span></button>
 
             <div class="exchange-block" id="host-offer-block" hidden>
               <div class="qr-frame" id="host-offer-qr" aria-label="連線邀請 QR Code"></div>
-              <label class="field-label" for="host-offer-output">邀請內容</label>
-              <textarea class="payload-field" id="host-offer-output" rows="4" readonly></textarea>
-              <button class="secondary-button" type="button" data-copy-target="host-offer-output">複製邀請</button>
+              <textarea id="host-invite-url" hidden aria-hidden="true"></textarea>
+              <button class="secondary-button" id="copy-host-invite" type="button" data-copy-target="host-invite-url">複製邀請網址</button>
 
               <div class="instruction instruction-spaced">
                 <span class="instruction-number">2</span>
@@ -71,13 +70,13 @@
           <section class="mode-panel" id="guest-panel" role="tabpanel" aria-labelledby="guest-tab" hidden>
             <div class="instruction">
               <span class="instruction-number">1</span>
-              <div><strong>匯入邀請</strong><span>掃描建立者的 QR Code，或貼上邀請內容。</span></div>
+              <div><strong>匯入邀請</strong><span>開啟建立者分享的邀請網址後，會自動匯入。</span></div>
             </div>
-            <label class="field-label" for="guest-offer-input">邀請內容</label>
-            <textarea class="payload-field" id="guest-offer-input" rows="4" placeholder="在這裡貼上 Offer…"></textarea>
+            <label class="field-label" for="guest-offer-input">手動匯入（備用）</label>
+            <textarea class="payload-field" id="guest-offer-input" rows="4" placeholder="在這裡貼上邀請網址或邀請碼…"></textarea>
             <div class="button-row">
               <button class="secondary-button" id="scan-offer" type="button">掃描 QR</button>
-              <button class="primary-button" id="import-offer" type="button">加入遊戲</button>
+              <button class="primary-button" id="import-offer" type="button">匯入邀請</button>
             </div>
 
             <div class="exchange-block" id="guest-answer-block" hidden>

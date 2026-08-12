@@ -19,7 +19,7 @@
 - `games/duquan/`：剪刀、石頭、布各 30 個圖示的 100ms 距離加權模擬遊戲。
 - `games/gravity-planet/`：Three.js 重力星球生存遊戲，吸收碎石、進化成 10 階星體並躲避大型星體。
 - `games/dice-tower-defense/`：骰塔守境骰子塔防遊戲，包含 15 波敵人、6 種骰塔、骰面充能、合成與首領波；規格與實作補充文件位於遊戲資料夾內。
-- `games/rock-paper-scissors/`：使用 WebRTC DataChannel 的雙人 P2P 剪刀石頭布，以 QR Code 或複製貼上交換連線資料，並使用 commit-reveal 驗證出拳。
+- `games/rock-paper-scissors/`：使用 WebRTC DataChannel 的雙人 P2P 剪刀石頭布，以邀請網址 QR Code／複製網址配對，並使用 commit-reveal 驗證出拳。
 
 ## 執行
 
@@ -31,7 +31,17 @@ python3 -m http.server 8000
 
 接著開啟 `http://localhost:8000`。
 
-P2P 剪刀石頭布在正式部署時需使用 HTTPS；本機開發可使用 `localhost`。本版使用 STUN 協助穿越 NAT，未配置 TURN，因此部分受限網路可能無法建立 P2P 連線。
+P2P 剪刀石頭布在正式部署時需使用 HTTPS；本機開發可使用 `localhost`。遊戲先嘗試直連與 STUN，失敗時使用第三方 TURN 中繼，以改善受限網路的連線成功率。正式上線建議替換為自己管理的 TURN 與限時憑證；可在載入 `script.js` 前設定 `window.RPS_ICE_SERVERS` 覆寫預設清單。
+
+```html
+<script>
+  window.RPS_ICE_SERVERS = [{
+    urls: "turn:turn.example.com:443?transport=tcp",
+    username: "temporary-user",
+    credential: "temporary-credential"
+  }];
+</script>
+```
 
 ## 操作
 

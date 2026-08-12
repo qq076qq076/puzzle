@@ -10,6 +10,23 @@ const MAX_PAIRING_PAYLOAD = 120000;
 const MAX_MESSAGE_SIZE = 16384;
 const PAIRING_MAX_AGE_MS = 20 * 60 * 1000;
 const FUTURE_CLOCK_SKEW_MS = 2 * 60 * 1000;
+const DEFAULT_ICE_SERVERS = [
+  { urls: "stun:stun.cloudflare.com:3478" },
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun1.l.google.com:19302" },
+  { urls: "stun:stun2.l.google.com:19302" },
+  { urls: "stun:stun.nextcloud.com:3478" },
+  { urls: "stun:openrelay.metered.ca:80" },
+  // Open Relay is used only as a TURN fallback when direct P2P cannot pass NAT.
+  { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+  { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+  { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" },
+  // Public demo relay used by WebRTC examples; keep it as a last-resort path.
+  { urls: "turn:turn.anyfirewall.com:443?transport=tcp", username: "webrtc", credential: "webrtc" }
+];
+const ICE_SERVERS = Array.isArray(window.RPS_ICE_SERVERS) && window.RPS_ICE_SERVERS.length > 0
+  ? window.RPS_ICE_SERVERS
+  : DEFAULT_ICE_SERVERS;
 const ALLOWED_MESSAGES = new Set(["hello", "commit", "reveal", "round-result", "next-round", "leave", "ping", "pong", "error"]);
 
 const elements = {
@@ -25,7 +42,7 @@ const elements = {
   createOffer: document.getElementById("create-offer"),
   hostOfferBlock: document.getElementById("host-offer-block"),
   hostOfferQr: document.getElementById("host-offer-qr"),
-  hostOfferOutput: document.getElementById("host-offer-output"),
+  hostInviteUrl: document.getElementById("host-invite-url"),
   hostAnswerInput: document.getElementById("host-answer-input"),
   importAnswer: document.getElementById("import-answer"),
   scanAnswer: document.getElementById("scan-answer"),
@@ -114,7 +131,7 @@ async function encodePacket(packet) {
 }
 
 async function decodePacket(encoded) {
-  const value = String(encoded || "").trim();
+  const value = extractInviteCode(encoded);
   if (!value || value.length > MAX_PAIRING_PAYLOAD) throw new Error("配對資料為空或過長。");
   let bytes;
   if (value.startsWith(PACKET_PREFIX_GZIP)) {
@@ -130,6 +147,27 @@ async function decodePacket(encoded) {
   } catch {
     throw new Error("配對資料無法解析。");
   }
+}
+
+function extractInviteCode(value) {
+  const input = String(value || "").trim();
+  if (!input) return "";
+  if (!/^https?:\/\//iu.test(input)) return input;
+  try {
+    const url = new URL(input);
+    const invite = url.searchParams.get("invite") || new URLSearchParams(url.hash.slice(1)).get("invite");
+    if (!invite) throw new Error("邀請網址缺少邀請碼。");
+    return invite;
+  } catch (error) {
+    throw error instanceof Error ? error : new Error("邀請網址無效。");
+  }
+}
+
+function createInviteUrl(encodedOffer) {
+  const url = new URL(window.location.href);
+  url.search = "";
+  url.hash = `invite=${encodedOffer}`;
+  return url.toString();
 }
 
 function validatePairingPacket(packet, expectedKind) {
@@ -194,7 +232,7 @@ function renderQr(target, value) {
   }
 }
 
-function waitForIceGathering(connection, timeoutMs = 5000) {
+function waitForIceGathering(connection, timeoutMs = 12000) {
   if (connection.iceGatheringState === "complete") return Promise.resolve();
   return new Promise((resolve) => {
     let settled = false;
@@ -214,13 +252,14 @@ function waitForIceGathering(connection, timeoutMs = 5000) {
 function makePeerConnection() {
   intentionalClose = false;
   const connection = new RTCPeerConnection({
-    iceServers: [
-      { urls: "stun:stun.l.google.com:19302" },
-      { urls: "stun:stun1.l.google.com:19302" }
-    ],
+    iceServers: ICE_SERVERS,
     iceCandidatePoolSize: 4
   });
   connection.addEventListener("connectionstatechange", handleConnectionState);
+  connection.addEventListener("iceconnectionstatechange", handleIceConnectionState);
+  connection.addEventListener("icecandidateerror", () => {
+    if (!helloReceived) setPairingStatus("正在嘗試其他連線路徑…");
+  });
   connection.addEventListener("datachannel", (event) => attachDataChannel(event.channel));
   peerConnection = connection;
   return connection;
@@ -253,13 +292,22 @@ function handleConnectionState() {
     disconnectTimer = setTimeout(() => endSession("對手已斷線。"), 6000);
   }
   if (state === "failed" && !intentionalClose) {
-    if (helloReceived) endSession("無法維持與對手的連線。");
-    else {
-      setConnectionState("connecting", "等待對手完成");
-      setPairingStatus("對方尚未完成配對，請繼續交換連線資料。");
-    }
+    setConnectionState("connecting", "正在重試連線");
+    setPairingStatus(helloReceived ? "連線路徑失敗，正在嘗試恢復…" : "對方尚未完成配對，請繼續交換資料。");
+    clearTimeout(disconnectTimer);
+    disconnectTimer = setTimeout(() => endSession("無法建立 P2P 連線。若兩端不在同一網路，請確認有效的 TURN 設定後再試。"), helloReceived ? 12000 : 30000);
   }
   if (state === "closed" && !intentionalClose && helloReceived) endSession("與對手的連線已關閉。");
+}
+
+function handleIceConnectionState() {
+  if (!peerConnection || intentionalClose) return;
+  const state = peerConnection.iceConnectionState;
+  if (state === "checking") setConnectionState("connecting", "正在尋找路徑");
+  if (state === "connected" || state === "completed") {
+    clearTimeout(disconnectTimer);
+    setConnectionState("online", "P2P 已連線");
+  }
 }
 
 function handleChannelOpen() {
@@ -506,7 +554,7 @@ function closeConnection() {
 function resetPairingFields() {
   elements.hostOfferBlock.hidden = true;
   elements.guestAnswerBlock.hidden = true;
-  elements.hostOfferOutput.value = "";
+  elements.hostInviteUrl.value = "";
   elements.hostAnswerInput.value = "";
   elements.guestOfferInput.value = "";
   elements.guestAnswerOutput.value = "";
@@ -561,8 +609,9 @@ async function createOffer() {
       description: connection.localDescription.toJSON(),
       createdAt: Date.now()
     });
-    elements.hostOfferOutput.value = encoded;
-    renderQr(elements.hostOfferQr, encoded);
+    const inviteUrl = createInviteUrl(encoded);
+    elements.hostInviteUrl.value = inviteUrl;
+    renderQr(elements.hostOfferQr, inviteUrl);
     elements.hostOfferBlock.hidden = false;
     elements.cancelPairing.hidden = false;
     setPairingStatus("邀請已建立。將它交給對手，再匯入對手回覆。", "success");
@@ -598,7 +647,6 @@ async function importOffer(encodedValue = elements.guestOfferInput.value) {
       description: connection.localDescription.toJSON(),
       createdAt: Date.now()
     });
-    elements.guestOfferInput.value = encodedValue.trim();
     elements.guestAnswerOutput.value = encoded;
     renderQr(elements.guestAnswerQr, encoded);
     elements.guestAnswerBlock.hidden = false;
@@ -644,20 +692,31 @@ function setPairingMode(mode) {
   elements.hostPanel.hidden = !isHost;
   elements.guestPanel.hidden = isHost;
   setConnectionState("offline", "尚未連線");
-  setPairingStatus(isHost ? "建立邀請，再等對手回覆。" : "掃描或貼上對手的邀請。");
+  setPairingStatus(isHost ? "建立邀請，再等對手回覆。" : "開啟邀請網址，或貼上網址以備用。");
 }
 
 async function copyPayload(targetId) {
   const field = document.getElementById(targetId);
   if (!field?.value) return showToast("目前沒有可複製的內容。");
+  const copiedLabel = targetId === "host-invite-url" ? "邀請網址" : "回覆內容";
+  let copied = false;
   try {
     await navigator.clipboard.writeText(field.value);
+    copied = true;
   } catch {
-    field.focus();
-    field.select();
-    document.execCommand("copy");
+    const fallback = document.createElement("textarea");
+    fallback.value = field.value;
+    fallback.setAttribute("readonly", "");
+    fallback.style.position = "fixed";
+    fallback.style.opacity = "0";
+    fallback.style.pointerEvents = "none";
+    document.body.appendChild(fallback);
+    fallback.focus();
+    fallback.select();
+    copied = document.execCommand("copy");
+    fallback.remove();
   }
-  showToast("已複製配對資料。");
+  showToast(copied ? `已複製${copiedLabel}。` : `無法複製${copiedLabel}，請再試一次。`);
 }
 
 async function openScanner(target) {
@@ -747,3 +806,11 @@ try {
 
 window.RPSGameTest = Object.freeze({ determineOutcome, encodePacket, decodePacket, validatePairingPacket });
 setPairingMode("host");
+
+const currentUrl = new URL(window.location.href);
+const inviteFromUrl = currentUrl.searchParams.get("invite") || new URLSearchParams(currentUrl.hash.slice(1)).get("invite");
+if (inviteFromUrl) {
+  setPairingMode("guest");
+  setPairingStatus("已讀取邀請網址，正在自動匯入…");
+  void importOffer(inviteFromUrl);
+}

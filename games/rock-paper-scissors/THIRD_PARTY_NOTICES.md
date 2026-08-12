@@ -9,3 +9,11 @@ module retains its original license header.
 
 Copyright (c) 2017 Nimiq, Daniel Molitor. Licensed under the MIT License. A copy
 of its license is available at [`vendor/qr-scanner-LICENSE`](./vendor/qr-scanner-LICENSE).
+
+## Third-party TURN fallbacks
+
+WebRTC ICE includes third-party TURN endpoints as fallback relays for restrictive
+networks. Relay usage is limited to connectivity fallback; the DataChannel
+remains DTLS-encrypted by WebRTC. Public demo credentials may expire or be
+rate-limited. For production deployment, replace them with time-limited
+credentials from a TURN provider you control.
