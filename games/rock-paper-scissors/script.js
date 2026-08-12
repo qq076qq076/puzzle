@@ -92,6 +92,7 @@ let processedMessageIds = new Set();
 let disconnectTimer = null;
 let toastTimer = null;
 let intentionalClose = false;
+let answerImportPromise = null;
 
 function randomHex(byteLength = 16) {
   const bytes = new Uint8Array(byteLength);
@@ -661,12 +662,35 @@ async function importOffer(encodedValue = elements.guestOfferInput.value) {
 }
 
 async function importAnswer(encodedValue = elements.hostAnswerInput.value) {
+  if (answerImportPromise) return answerImportPromise;
+  answerImportPromise = importAnswerOnce(encodedValue).finally(() => {
+    answerImportPromise = null;
+  });
+  return answerImportPromise;
+}
+
+async function importAnswerOnce(encodedValue) {
   setBusy(elements.importAnswer, true, "正在連線…");
   try {
-    if (!peerConnection || role !== "host" || !sessionId) throw new Error("請先建立一份連線邀請。");
+    const connection = peerConnection;
+    const expectedSessionId = sessionId;
+    if (!connection || role !== "host" || !expectedSessionId) throw new Error("請先建立一份連線邀請。");
     const packet = validatePairingPacket(await decodePacket(encodedValue), "answer");
-    if (packet.sessionId !== sessionId) throw new Error("這份回覆不屬於目前的連線邀請。");
-    await peerConnection.setRemoteDescription(packet.description);
+    if (peerConnection !== connection || sessionId !== expectedSessionId) throw new Error("連線邀請已變更，請使用最新的回覆。");
+    if (packet.sessionId !== expectedSessionId) throw new Error("這份回覆不屬於目前的連線邀請。");
+    if (connection.signalingState === "stable") {
+      const remoteDescription = connection.remoteDescription;
+      if (remoteDescription?.type === "answer" && remoteDescription.sdp === packet.description.sdp) {
+        setConnectionState("connecting", "正在連線");
+        setPairingStatus("回覆已匯入，正在建立 P2P 連線…");
+        return;
+      }
+      throw new Error("這份邀請已匯入回覆；若要重新連線，請重新建立邀請。");
+    }
+    if (connection.signalingState !== "have-local-offer") {
+      throw new Error("目前連線不在等待回覆的狀態，請重新建立邀請。");
+    }
+    await connection.setRemoteDescription(packet.description);
     elements.hostAnswerInput.value = encodedValue.trim();
     setConnectionState("connecting", "正在連線");
     setPairingStatus("已匯入回覆，正在建立 P2P 連線…");
