@@ -3,7 +3,7 @@
 
   const SIZE = 4;
   const WINNING_TILE = 2048;
-  const MOVE_DURATION = 150;
+  const MOVE_DURATION = 210;
   const BEST_SCORE_KEY = "2048-best-score";
   const DIRECTIONS = {
     up: "up",
@@ -16,6 +16,7 @@
   const tileLayerElement = document.getElementById("tile-layer");
   const boardShellElement = document.getElementById("board-shell");
   const scoreElement = document.getElementById("score");
+  const scoreAdditionElement = document.getElementById("score-addition");
   const bestScoreElement = document.getElementById("best-score");
   const newGameButton = document.getElementById("new-game");
   const messageElement = document.getElementById("message");
@@ -179,13 +180,14 @@
 
   function move(direction) {
     if (isAnimating || (hasWon && !keepPlaying)) {
-      return;
+      return false;
     }
 
     const moveResult = buildMove(direction);
 
     if (boardsAreEqual(board, moveResult.nextBoard)) {
-      return;
+      playBlockedFeedback(direction);
+      return false;
     }
 
     board = moveResult.nextBoard;
@@ -195,7 +197,8 @@
       saveBestScore();
     }
     const spawnedPosition = spawnTile();
-    animateMove(moveResult.transitions, spawnedPosition, moveResult.mergedDestinations);
+    animateMove(moveResult.transitions, spawnedPosition, moveResult.mergedDestinations, moveResult.gained);
+    return true;
   }
 
   function cancelMoveAnimation() {
@@ -225,10 +228,10 @@
     return { cellSize: cellSize, step: cellSize + columnGap };
   }
 
-  function animateMove(transitions, spawnedPosition, mergedDestinations) {
+  function animateMove(transitions, spawnedPosition, mergedDestinations, gained) {
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reducedMotion) {
-      finishMove(spawnedPosition, mergedDestinations);
+      finishMove(spawnedPosition, mergedDestinations, gained);
       return;
     }
 
@@ -269,16 +272,21 @@
         tileElement.style.transform = "";
       });
       animationTimer = null;
-      finishMove(spawnedPosition, mergedDestinations);
+      finishMove(spawnedPosition, mergedDestinations, gained);
     }, MOVE_DURATION + 35);
   }
 
-  function finishMove(spawnedPosition, mergedDestinations) {
+  function finishMove(spawnedPosition, mergedDestinations, gained) {
     render({
       spawnedPosition: spawnedPosition,
       mergedDestinations: mergedDestinations
     });
     isAnimating = false;
+    showScoreAddition(gained);
+
+    if (mergedDestinations.length > 0 && navigator.maxTouchPoints > 0 && "vibrate" in navigator) {
+      navigator.vibrate(12);
+    }
 
     if (!hasWon && board.some(function (row) {
       return row.some(function (value) { return value >= WINNING_TILE; });
@@ -291,6 +299,26 @@
     if (!movesAvailable()) {
       showGameOverMessage();
     }
+  }
+
+  function showScoreAddition(gained) {
+    if (!gained) {
+      return;
+    }
+    scoreAdditionElement.textContent = "+" + String(gained);
+    scoreAdditionElement.classList.remove("is-visible");
+    scoreAdditionElement.offsetWidth;
+    scoreAdditionElement.classList.add("is-visible");
+  }
+
+  function playBlockedFeedback(direction) {
+    const className = "blocked-" + direction;
+    boardShellElement.classList.remove("blocked-up", "blocked-right", "blocked-down", "blocked-left");
+    boardShellElement.offsetWidth;
+    boardShellElement.classList.add(className);
+    window.setTimeout(function () {
+      boardShellElement.classList.remove(className);
+    }, 180);
   }
 
   function movesAvailable() {
@@ -403,16 +431,38 @@
     if (event.pointerType === "mouse" && event.button !== 0) {
       return;
     }
-    touchStart = { x: event.clientX, y: event.clientY };
+    touchStart = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
+    boardShellElement.classList.add("is-dragging");
+    if (boardShellElement.setPointerCapture) {
+      boardShellElement.setPointerCapture(event.pointerId);
+    }
+  }
+
+  function handlePointerMove(event) {
+    if (!touchStart || event.pointerId !== touchStart.pointerId) {
+      return;
+    }
+    event.preventDefault();
+    const deltaX = Math.max(-10, Math.min(10, (event.clientX - touchStart.x) * 0.08));
+    const deltaY = Math.max(-10, Math.min(10, (event.clientY - touchStart.y) * 0.08));
+    boardShellElement.style.setProperty("--drag-x", String(deltaX) + "px");
+    boardShellElement.style.setProperty("--drag-y", String(deltaY) + "px");
+  }
+
+  function releasePointer() {
+    touchStart = null;
+    boardShellElement.classList.remove("is-dragging");
+    boardShellElement.style.removeProperty("--drag-x");
+    boardShellElement.style.removeProperty("--drag-y");
   }
 
   function handlePointerUp(event) {
     if (!touchStart || event.target.closest("button")) {
-      touchStart = null;
+      releasePointer();
       return;
     }
     const direction = directionFromSwipe(event.clientX - touchStart.x, event.clientY - touchStart.y);
-    touchStart = null;
+    releasePointer();
     if (direction) {
       move(direction);
     }
@@ -428,8 +478,9 @@
   });
 
   boardShellElement.addEventListener("pointerdown", handlePointerDown);
+  boardShellElement.addEventListener("pointermove", handlePointerMove);
   boardShellElement.addEventListener("pointerup", handlePointerUp);
-  boardShellElement.addEventListener("pointercancel", function () { touchStart = null; });
+  boardShellElement.addEventListener("pointercancel", releasePointer);
   window.addEventListener("resize", function () {
     if (!isAnimating) {
       render();
