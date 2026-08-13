@@ -21,6 +21,8 @@
   const TOWER_DAMAGE_MULTIPLIER = 0.5;
   const ATTACK_PULSE_DURATION = 0.18;
   const MERGE_EFFECT_DURATION = 0.95;
+  const TIER_FIVE_MERGE_EFFECT_DURATION = 1.15;
+  const TIER_SIX_MERGE_EFFECT_DURATION = 1.65;
   const BOSS_LANDING_DURATION = 0.9;
   const ENEMY_VISUAL_SCALE = (3 / 4) * 1.5;
   const LEGAL_DROP_BRIGHTNESS = 0.65;
@@ -177,7 +179,7 @@
     warder: { name: "結界蟲", symbol: "W", color: "#69e7ef", hp: 145, speed: 0.74, leakDamage: 2, reward: 6, waveResistanceTypes: ["lightning"] },
     burrower: { name: "潛地蟲", symbol: "U", color: "#dfad73", hp: 105, speed: 1.18, leakDamage: 2, reward: 5, waveResistanceTypes: ["freeze"] },
     disruptor: { name: "干擾蟲", symbol: "J", color: "#ed82ff", hp: 175, speed: 0.68, leakDamage: 3, reward: 8, waveResistanceTypes: ["lightning"] },
-    overlord: { name: "裂界巨甲王", symbol: "O", color: "#e36eff", hp: 1800, speed: 0.38, leakDamage: 8, reward: 60, boss: true, waveResistanceTypes: ["lightning", "physical"] },
+    overlord: { name: "裂界巨甲王", symbol: "O", color: "#e36eff", hp: 1800, speed: 0.38, leakDamage: 8, reward: 60, boss: true, finalBoss: true, waveResistanceTypes: ["lightning", "physical"] },
     regenerator: { name: "再生蟲", symbol: "R", color: "#70e58c", hp: 150, speed: 0.78, leakDamage: 2, reward: 6, waveResistanceTypes: ["poison"] },
     berserker: { name: "狂暴蟲", symbol: "K", color: "#ff665f", hp: 120, speed: 1.0, leakDamage: 2, reward: 6, waveResistanceTypes: ["freeze"] },
     thief: { name: "掠金蟲", symbol: "T", color: "#ffd45d", hp: 85, speed: 1.45, leakDamage: 1, reward: 9, goldSteal: 12, waveResistanceTypes: ["freeze"] }
@@ -274,7 +276,7 @@
       { type: "disruptor", count: 10, interval: 0.48 }, { type: "regenerator", count: 4, interval: 0.46 },
       { type: "berserker", count: 4, interval: 0.44 }, { type: "thief", count: 4, interval: 0.42 }, { type: "boss", count: 3, interval: 0.76 }
     ],
-    [{ type: "overlord", count: 3, interval: 1.35 }]
+    [{ type: "overlord", count: 1, interval: 4.00 }]
   ];
 
   const elements = {
@@ -903,7 +905,9 @@
     const definition = ENEMY_TYPES[type];
     const waveMultiplier = getEnemyHpMultiplier(state.wave);
     const bossMultiplier = definition.boss ? 1.25 : 1;
-    const maximumHp = Math.round(definition.hp * waveMultiplier * bossMultiplier);
+    const originalMaximumHp = Math.round(definition.hp * waveMultiplier * bossMultiplier);
+    const maximumHp = definition.finalBoss ? originalMaximumHp * 3 : originalMaximumHp;
+    const initialShield = getEnemyShield(definition, maximumHp);
     const delay = Math.max(0, movementDelay || 0);
     const enemy = {
       id: createId("enemy"),
@@ -919,7 +923,8 @@
       ),
       movementDelayRemaining: delay,
       spawnEffectPending: showSpawnEffect !== false && delay > 0,
-      shield: getEnemyShield(definition, maximumHp),
+      shield: initialShield,
+      maxShield: initialShield,
       slow: 0,
       slowRemaining: 0,
       frozenRemaining: 0,
@@ -936,7 +941,6 @@
       burrowTimer: type === "burrower" ? 4 + (state.enemyOrder % 5) * 0.35 : 0,
       burrowRemaining: 0,
       disruptTimer: type === "disruptor" ? 4.5 + (state.enemyOrder % 6) * 0.4 : 0,
-      overlordTimer: type === "overlord" ? 5.5 + (state.enemyOrder % 3) * 0.55 : 0,
       regenDelayRemaining: type === "regenerator" ? 2.5 : 0,
       regenEffectRemaining: 0,
       berserkTriggered: false,
@@ -979,7 +983,10 @@
     const bossShield = definition.boss ? getBossShield() : 0;
     if (state.wave < SHIELDED_WAVE_START) return bossShield;
     const shieldRatio = Math.min(0.20, 0.12 + (state.wave - SHIELDED_WAVE_START) * 0.04);
-    return Math.max(bossShield, Math.round(maximumHp * shieldRatio));
+    const ratioShield = definition.finalBoss
+      ? Math.round(maximumHp / 3 * shieldRatio) * 3
+      : Math.round(maximumHp * shieldRatio);
+    return Math.max(bossShield, ratioShield);
   }
 
   function updateEnemyStatuses(deltaTime) {
@@ -1070,15 +1077,6 @@
         }
       }
 
-      if (enemy.type === "overlord") {
-        enemy.overlordTimer -= deltaTime;
-        if (enemy.overlordTimer <= 0) {
-          enemy.overlordTimer = 7;
-          grantNearbyShields(enemy, 3.2, 0.08, true);
-          disruptNearbyTowers(enemy, 3.6, 0.35);
-        }
-      }
-
       if (enemy.type === "boss") {
         enemy.bossTimer -= deltaTime;
         if (enemy.bossTimer <= 0) {
@@ -1130,9 +1128,10 @@
       const wardShield = Math.round(enemy.maxHp * shieldRatio);
       if (wardShield <= enemy.shield) return;
       enemy.shield = wardShield;
-      addEffect({ kind: "shield", x: position.x, y: position.y, color: source.type === "overlord" ? "#e36eff" : "#69e7ef", ttl: 0.38 });
+      enemy.maxShield = Math.max(enemy.maxShield || 0, wardShield);
+      addEffect({ kind: "shield", x: position.x, y: position.y, color: "#69e7ef", ttl: 0.38 });
     });
-    addEffect({ kind: "wardPulse", x: sourcePosition.x, y: sourcePosition.y, color: source.type === "overlord" ? "#e36eff" : "#69e7ef", ttl: 0.8 });
+    addEffect({ kind: "wardPulse", x: sourcePosition.x, y: sourcePosition.y, color: "#69e7ef", ttl: 0.8 });
   }
 
   function disruptNearbyTowers(source, radius, delay) {
@@ -1146,7 +1145,7 @@
       const cooldownCap = getTowerInterval(tower) * 1.5;
       tower.cooldown = Math.min(cooldownCap, Math.max(0, tower.cooldown) + delay);
     });
-    addEffect({ kind: "disruptPulse", x: sourcePosition.x, y: sourcePosition.y, color: source.type === "overlord" ? "#e36eff" : "#ed82ff", ttl: 0.75 });
+    addEffect({ kind: "disruptPulse", x: sourcePosition.x, y: sourcePosition.y, color: "#ed82ff", ttl: 0.75 });
   }
 
   function disableNearbyTowers(source, radius, duration) {
@@ -1727,6 +1726,12 @@
     markUiDirty();
   }
 
+  function getMergeEffectDuration(resultTier) {
+    if (resultTier >= 6) return TIER_SIX_MERGE_EFFECT_DURATION;
+    if (resultTier === 5) return TIER_FIVE_MERGE_EFFECT_DURATION;
+    return MERGE_EFFECT_DURATION;
+  }
+
   function mergeTowers(target, material) {
     if (!isMarketOpen()) return;
     if (!target || !material || target.id === material.id) return;
@@ -1738,6 +1743,7 @@
       showToast("需要同種類、同等級且未達 " + MAX_TIER + " 級。", 1.8);
       return;
     }
+    const resultTier = target.tier + 1;
     addEffect({
       kind: "merge",
       x1: material.x,
@@ -1746,8 +1752,9 @@
       y2: target.y,
       type: material.type,
       tier: material.tier,
+      resultTier,
       color: TOWER_TYPES[material.type].color,
-      ttl: MERGE_EFFECT_DURATION
+      ttl: getMergeEffectDuration(resultTier)
     });
     const mergedInvestment = getInvestedValue(target) + getInvestedValue(material);
     target.tier += 1;
@@ -1775,6 +1782,7 @@
       markUiDirty();
       return false;
     }
+    const resultTier = target.tier + 1;
     addEffect({
       kind: "merge",
       x1: COLS + 0.75,
@@ -1783,8 +1791,9 @@
       y2: target.y,
       type: die.type,
       tier: die.tier,
+      resultTier,
       color: TOWER_TYPES[die.type].color,
-      ttl: MERGE_EFFECT_DURATION
+      ttl: getMergeEffectDuration(resultTier)
     });
     const mergedInvestment = getInvestedValue(target) + getInvestedValue(die);
     target.tier += 1;
@@ -2543,11 +2552,12 @@
     const definition = ENEMY_TYPES[enemy.type];
     const position = getEnemyRenderPosition(enemy);
     const center = gridCenter(position.x, position.y);
-    const radius = canvasMetrics.cell * (definition.boss ? 0.34 : 0.25) * ENEMY_VISUAL_SCALE;
+    const visualScale = ENEMY_VISUAL_SCALE * (definition.finalBoss ? 1.5 : 1);
+    const radius = canvasMetrics.cell * (definition.boss ? 0.34 : 0.25) * visualScale;
     const sprite = enemySprites[enemy.type];
     const spriteScale = enemy.type === "overlord" ? 0.94 : definition.boss ? 0.82 : enemy.type === "child" ? 0.46 : 0.6;
-    const spriteSize = canvasMetrics.cell * spriteScale * ENEMY_VISUAL_SCALE;
-    const bob = Math.sin(performance.now() / 155 + enemy.order * 1.7) * canvasMetrics.cell * 0.025 * ENEMY_VISUAL_SCALE;
+    const spriteSize = canvasMetrics.cell * spriteScale * visualScale;
+    const bob = Math.sin(performance.now() / 155 + enemy.order * 1.7) * canvasMetrics.cell * 0.025 * visualScale;
     const burrowOffset = enemy.burrowRemaining > 0 ? canvasMetrics.cell * 0.08 : 0;
     const landingProgress = enemy.bossLandingRemaining > 0
       ? 1 - enemy.bossLandingRemaining / BOSS_LANDING_DURATION
@@ -2562,11 +2572,11 @@
     ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
     ctx.fillStyle = "rgba(4, 12, 25, 0.72)";
     ctx.shadowColor = definition.color;
-    ctx.shadowBlur = (enemy.frozenRemaining > 0 ? canvasMetrics.cell * 0.24 : canvasMetrics.cell * 0.1) * ENEMY_VISUAL_SCALE;
+    ctx.shadowBlur = (enemy.frozenRemaining > 0 ? canvasMetrics.cell * 0.24 : canvasMetrics.cell * 0.1) * visualScale;
     ctx.fill();
     ctx.shadowBlur = 0;
     ctx.strokeStyle = enemy.shield > 0 ? "#ffe0a6" : "rgba(255,255,255,0.44)";
-    ctx.lineWidth = (enemy.shield > 0 ? 2 : 1) * ENEMY_VISUAL_SCALE;
+    ctx.lineWidth = (enemy.shield > 0 ? 2 : 1) * visualScale;
     ctx.stroke();
 
     if (sprite && sprite.complete && sprite.naturalWidth > 0) {
@@ -2576,10 +2586,10 @@
       ctx.restore();
     } else {
       ctx.fillStyle = definition.color;
-      ctx.font = "950 " + Math.max(8, canvasMetrics.cell * (definition.boss ? 0.16 : 0.13)) * ENEMY_VISUAL_SCALE + "px sans-serif";
+      ctx.font = "950 " + Math.max(8, canvasMetrics.cell * (definition.boss ? 0.16 : 0.13)) * visualScale + "px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(definition.symbol, center.x, center.y + ENEMY_VISUAL_SCALE);
+      ctx.fillText(definition.symbol, center.x, center.y + visualScale);
     }
 
     if (enemy.frozenRemaining > 0) drawFrozenEnemyOverlay(enemy, center, radius, spriteSize);
@@ -2588,22 +2598,34 @@
 
     drawEnemyResistanceIndicators(enemy, center, radius);
 
-    const barWidth = canvasMetrics.cell * (definition.boss ? 0.75 : 0.48) * ENEMY_VISUAL_SCALE;
-    const barHeight = Math.max(3, canvasMetrics.cell * 0.055) * ENEMY_VISUAL_SCALE;
-    const barY = center.y - Math.max(radius, spriteSize / 2) - barHeight - 4 * ENEMY_VISUAL_SCALE;
+    const barWidth = canvasMetrics.cell * (definition.boss ? 0.75 : 0.48) * visualScale;
+    const barHeight = Math.max(3, canvasMetrics.cell * 0.055) * visualScale;
+    const barGap = Math.max(2, canvasMetrics.cell * 0.025) * visualScale;
+    const barY = center.y - Math.max(radius, spriteSize / 2) - barHeight - 4 * visualScale;
     ctx.fillStyle = "rgba(2, 8, 18, 0.78)";
     ctx.fillRect(center.x - barWidth / 2, barY, barWidth, barHeight);
-    ctx.fillStyle = enemy.shield > 0 ? "#ffe0a6" : "#7ce0ae";
+    ctx.fillStyle = "#7ce0ae";
     ctx.fillRect(center.x - barWidth / 2, barY, barWidth * Math.max(0, enemy.hp / enemy.maxHp), barHeight);
+    if (enemy.shield > 0) {
+      const shieldCapacity = Math.max(enemy.shield, enemy.maxShield || 0);
+      const shieldY = barY - barHeight - barGap;
+      ctx.fillStyle = "rgba(2, 8, 18, 0.82)";
+      ctx.fillRect(center.x - barWidth / 2, shieldY, barWidth, barHeight);
+      ctx.fillStyle = "#70d7f2";
+      ctx.fillRect(center.x - barWidth / 2, shieldY, barWidth * Math.max(0, enemy.shield / shieldCapacity), barHeight);
+      ctx.strokeStyle = "rgba(255, 224, 166, 0.88)";
+      ctx.lineWidth = Math.max(1, visualScale * 0.75);
+      ctx.strokeRect(center.x - barWidth / 2, shieldY, barWidth, barHeight);
+    }
     if (enemy.slowRemaining > 0 || enemy.frozenRemaining > 0) {
-      ctx.beginPath(); ctx.arc(center.x, center.y, radius + 4 * ENEMY_VISUAL_SCALE, 0, Math.PI * 2);
+      ctx.beginPath(); ctx.arc(center.x, center.y, radius + 4 * visualScale, 0, Math.PI * 2);
       ctx.strokeStyle = enemy.frozenRemaining > 0 ? "#d6f8ff" : "#71d8f4";
-      ctx.lineWidth = 2 * ENEMY_VISUAL_SCALE; ctx.stroke();
+      ctx.lineWidth = 2 * visualScale; ctx.stroke();
     }
     if (enemy.poisonRemaining > 0) {
-      ctx.beginPath(); ctx.arc(center.x, center.y, radius + 6 * ENEMY_VISUAL_SCALE, 0, Math.PI * 2);
+      ctx.beginPath(); ctx.arc(center.x, center.y, radius + 6 * visualScale, 0, Math.PI * 2);
       ctx.strokeStyle = "rgba(154, 216, 111, 0.75)";
-      ctx.lineWidth = ENEMY_VISUAL_SCALE; ctx.stroke();
+      ctx.lineWidth = visualScale; ctx.stroke();
     }
     ctx.restore();
   }
@@ -2899,6 +2921,77 @@
       ctx.stroke();
       ctx.restore();
     }
+
+    if (effect.resultTier >= 5 && progress >= 0.46) {
+      drawHighTierMergeEffect(effect, second, Math.min(1, (progress - 0.46) / 0.54));
+    }
+  }
+
+  function drawHighTierMergeEffect(effect, center, progress) {
+    const size = canvasMetrics.cell;
+    const isMaximumTier = effect.resultTier >= 6;
+    const particleCount = isMaximumTier ? 18 : 8;
+    const ringCount = isMaximumTier ? 3 : 1;
+    const fade = Math.sin(progress * Math.PI);
+    const baseAlpha = ctx.globalAlpha;
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (let ring = 0; ring < ringCount; ring += 1) {
+      const delayedProgress = Math.max(0, Math.min(1, progress * 1.25 - ring * 0.16));
+      if (delayedProgress <= 0) continue;
+      ctx.globalAlpha = baseAlpha * (1 - delayedProgress) * (isMaximumTier ? 0.9 : 0.65);
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, size * (0.3 + delayedProgress * (isMaximumTier ? 1.05 : 0.62)), 0, Math.PI * 2);
+      ctx.strokeStyle = ring % 2 === 0 ? "#fff4ba" : effect.color;
+      ctx.lineWidth = Math.max(1.5, size * (0.055 - ring * 0.01));
+      ctx.stroke();
+    }
+
+    if (isMaximumTier) {
+      ctx.globalAlpha = baseAlpha * fade * 0.7;
+      ctx.translate(center.x, center.y);
+      ctx.rotate(progress * Math.PI * 0.35);
+      for (let ray = 0; ray < 12; ray += 1) {
+        const angle = ray * Math.PI / 6;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(angle) * size * 0.38, Math.sin(angle) * size * 0.38);
+        ctx.lineTo(Math.cos(angle) * size * (0.72 + progress * 0.55), Math.sin(angle) * size * (0.72 + progress * 0.55));
+        ctx.strokeStyle = ray % 2 === 0 ? "#ffffff" : effect.color;
+        ctx.lineWidth = Math.max(1, size * 0.025 * (1 - progress * 0.45));
+        ctx.stroke();
+      }
+      ctx.rotate(-progress * Math.PI * 0.35);
+      ctx.translate(-center.x, -center.y);
+    }
+
+    for (let index = 0; index < particleCount; index += 1) {
+      const angle = index * Math.PI * 2 / particleCount - Math.PI / 2 + (isMaximumTier ? progress * 0.55 : 0);
+      const variance = 0.12 * (index % 3);
+      const distance = size * (0.24 + progress * (isMaximumTier ? 1.05 + variance : 0.64 + variance));
+      const particleSize = size * (isMaximumTier ? 0.055 : 0.042) * (1 - progress * 0.5);
+      const x = center.x + Math.cos(angle) * distance;
+      const y = center.y + Math.sin(angle) * distance;
+      ctx.globalAlpha = baseAlpha * fade * (isMaximumTier ? 0.95 : 0.72);
+      ctx.fillStyle = index % 2 === 0 ? "#fff4ba" : effect.color;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle + Math.PI / 4);
+      ctx.fillRect(-particleSize / 2, -particleSize / 2, particleSize, particleSize);
+      ctx.restore();
+    }
+
+    if (isMaximumTier) {
+      ctx.globalAlpha = baseAlpha * fade;
+      ctx.fillStyle = "#fff8d6";
+      ctx.shadowColor = effect.color;
+      ctx.shadowBlur = size * 0.3;
+      ctx.font = "950 " + Math.max(10, size * 0.18) + "px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("MAX", center.x, center.y - size * (0.52 + progress * 0.24));
+    }
+    ctx.restore();
   }
 
   function drawCriticalEffect(effect, progress) {
