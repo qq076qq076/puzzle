@@ -20,6 +20,7 @@
 - `games/gravity-planet/`：Three.js 重力星球生存遊戲，吸收碎石、進化成 10 階星體並躲避大型星體。
 - `games/dice-tower-defense/`：骰塔守境骰子塔防遊戲，包含 15 波敵人、6 種骰塔、骰面充能、合成與首領波；規格與實作補充文件位於遊戲資料夾內。
 - `games/rock-paper-scissors/`：使用 WebRTC DataChannel 的雙人 P2P 剪刀石頭布，以邀請網址 QR Code／複製網址配對，並使用 commit-reveal 驗證出拳。
+- `games/harvest-clicker/`：15×15 Canvas 點擊農場，包含 25 塊土地、農具游標、3×3 種植、自動收割、灑水、肥料及離線結算。
 
 ## 執行
 

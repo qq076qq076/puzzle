@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#183f2c" />
+    <meta name="description" content="格田收割記：點擊收割棋盤上的作物，購買農具、種子與自動化設備，讓農場在離線時繼續生長。" />
+    <title>格田收割記 · Harvest Clicker</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="harvest-page">
+      <a class="back-link" href="../../index.html"><span aria-hidden="true">←</span> 所有遊戲</a>
+
+      <header class="game-header">
+        <div>
+          <div class="eyebrow"><span class="eyebrow-dot"></span> HARVEST CLICKER · 15 × 15 FARM</div>
+          <h1>格田收割記<span>.</span></h1>
+          <p class="game-tagline">從五塊農田開始，讓整座農場慢慢運轉。</p>
+        </div>
+        <p class="game-intro">收割、播種、擴張土地，<br />再把日復一日的工作交給機器。</p>
+      </header>
+
+      <section class="game-shell" aria-label="格田收割記遊戲">
+        <aside class="shop-panel" id="shop-panel">
+          <header class="shop-header">
+            <div>
+              <span class="section-kicker">FARM STORE</span>
+              <h2>農場商店</h2>
+            </div>
+          <div class="wallet" aria-live="polite">
+            <span class="coin-mark" aria-hidden="true">●</span>
+            <div><small>持有金幣</small><strong id="gold-value">0$</strong></div>
+            <span class="save-state" id="save-state">已儲存</span>
+          </div>
+          </header>
+
+          <nav class="shop-tabs" id="shop-tabs" aria-label="商店分類">
+            <button class="is-active" type="button" data-tab="tools" aria-label="農具" title="農具"><span aria-hidden="true">🛠</span></button>
+            <button type="button" data-tab="seeds" aria-label="種子" title="種子"><span aria-hidden="true">🌱</span></button>
+            <button type="button" data-tab="automation" aria-label="自動化" title="自動化"><span aria-hidden="true">⚙</span></button>
+            <button type="button" data-tab="fertilizer" aria-label="肥料" title="肥料"><span aria-hidden="true">🧪</span></button>
+          </nav>
+          <div class="shop-list" id="shop-list" aria-live="polite"></div>
+          <footer class="shop-footer">
+            <button class="text-button" id="settings-button" type="button">設定與存檔</button>
+            <a class="text-button" href="遊戲規格書.md">查看規格</a>
+          </footer>
+        </aside>
+
+        <section class="farm-panel">
+          <div class="farm-canvas-shell" id="farm-canvas-shell">
+            <canvas id="farm-canvas" tabindex="0" aria-label="15乘15等角農田；點擊收割，拖曳移動畫面，兩指縮放"></canvas>
+            <section class="land-popover" id="land-popover" aria-live="polite" hidden>
+              <button class="land-popover-close" id="land-close" type="button" aria-label="關閉土地資訊">×</button>
+              <span class="land-state-icon" id="land-state-icon" aria-hidden="true">🔒</span>
+              <div>
+                <h3 id="land-title">土地</h3>
+                <p id="land-condition">請先購買前一塊土地</p>
+              </div>
+              <strong id="land-price">0$</strong>
+              <button class="land-buy-button" id="land-buy-button" type="button">購買</button>
+            </section>
+          </div>
+          <section class="quickbar-wrap" aria-label="農具與物品">
+            <button class="mobile-shop-button" id="mobile-shop-button" type="button" aria-controls="shop-panel" aria-expanded="false">商店</button>
+            <div class="quickbar" id="quickbar"></div>
+          </section>
+        </section>
+      </section>
+
+      <footer class="page-footer">
+        <span>HARVEST · GROW · AUTOMATE</span>
+        <span class="footer-rule" aria-hidden="true"></span>
+        <span>每一格土地，都會記得時間</span>
+      </footer>
+    </main>
+
+    <div class="shop-backdrop" id="shop-backdrop" hidden></div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <dialog class="game-dialog shop-product-dialog" id="shop-dialog">
+      <form method="dialog">
+        <button class="dialog-close" value="close" aria-label="關閉">×</button>
+        <div class="shop-dialog-art" id="shop-dialog-art" aria-hidden="true"></div>
+        <h2 id="shop-dialog-title">商品</h2>
+        <p id="shop-dialog-copy"></p>
+        <strong class="shop-dialog-price" id="shop-dialog-price"></strong>
+        <button class="dialog-primary" id="shop-dialog-buy" type="button">購買</button>
+      </form>
+    </dialog>
+
+    <dialog class="game-dialog" id="offline-dialog">
+      <form method="dialog">
+        <span class="dialog-icon" aria-hidden="true">☀️</span>
+        <p class="dialog-kicker">WELCOME BACK</p>
+        <h2>農場沒有偷懶</h2>
+        <p id="offline-time">你離開了一段時間。</p>
+        <div class="offline-result">
+          <div><small>自動收成</small><strong id="offline-harvests">0 格</strong></div>
+          <div><small>獲得金幣</small><strong id="offline-gold">0$</strong></div>
+        </div>
+        <button class="dialog-primary" value="close">回到農場</button>
+      </form>
+    </dialog>
+
+    <dialog class="game-dialog settings-dialog" id="settings-dialog">
+      <form method="dialog">
+        <button class="dialog-close" value="close" aria-label="關閉">×</button>
+        <p class="dialog-kicker">FARM SETTINGS</p>
+        <h2>設定與存檔</h2>
+        <label class="setting-row"><span>遊戲音效</span><input id="setting-sound" type="checkbox" /></label>
+        <label class="setting-row"><span>減少動態效果</span><input id="setting-motion" type="checkbox" /></label>
+        <div class="save-actions">
+          <button id="export-button" type="button">匯出存檔</button>
+          <button id="import-button" type="button">匯入存檔</button>
+          <button id="reset-button" class="danger-button" type="button">重設農場</button>
+        </div>
+        <p class="asset-note">植物與農具素材來自 FreeGameSprites Farm &amp; Ranch Pack，採 CC0 授權。</p>
+      </form>
+    </dialog>
+    <input id="import-input" type="file" accept="application/json,.json" hidden />
+
+    <script src="game-core.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
