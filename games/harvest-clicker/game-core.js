@@ -1,73 +1,86 @@
 (function (globalThis) {
 "use strict";
 
-const BOARD_SIZE = 15;
+const BOARD_SIZE = 27;
 const PLOT_GRID_SIZE = BOARD_SIZE / 3;
-const INITIAL_PLOT_ID = 12;
-const INITIAL_PLOT_IDS = [12, 7, 13, 17, 11];
-const SAVE_VERSION = 3;
+const INITIAL_PLOT_ID = 40;
+const INITIAL_PLOT_IDS = [40, 31, 41, 49, 39, 30, 32, 50, 48];
+const SAVE_VERSION = 4;
 
 const PLANTS = [
-  { id: "weed", name: "雜草", emoji: "🌿", image: null, seedCost: 0, hp: 1, coins: 1, growSeconds: 30, color: "#81985b" },
-  { id: "clover", name: "白花苜蓿", emoji: "☘️", image: "lettuce-head.png", seedCost: 18, hp: 2, coins: 4, growSeconds: 60, color: "#77a65c" },
-  { id: "tomato", name: "樁架番茄", emoji: "🍅", image: "tomato-plant-staked.png", seedCost: 90, hp: 4, coins: 15, growSeconds: 180, color: "#d65243" },
-  { id: "wheat", name: "金穗小麥", emoji: "🌾", image: "wheat-stalk.png", seedCost: 420, hp: 8, coins: 65, growSeconds: 480, color: "#e0b94f" },
-  { id: "berry", name: "紅莓叢", emoji: "🍓", image: "strawberry-plant.png", seedCost: 1900, hp: 15, coins: 290, growSeconds: 1200, color: "#cf4c56" },
-  { id: "pumpkin", name: "月光南瓜", emoji: "🎃", image: "pumpkin-patch.png", seedCost: 8500, hp: 30, coins: 1250, growSeconds: 2700, color: "#d6a34c" },
-  { id: "lavender", name: "紫晶薰衣草", emoji: "🪻", image: "lavender-bush.png", seedCost: 40000, hp: 60, coins: 6000, growSeconds: 7200, color: "#9475bd" },
-  { id: "pepper", name: "赤焰火椒", emoji: "🌶️", image: "pepper-plant.png", seedCost: 190000, hp: 110, coins: 29000, growSeconds: 21600, color: "#d85043" },
-  { id: "starfruit", name: "星輝果", emoji: "🌻", image: "sunflower-row.png", seedCost: 950000, hp: 220, coins: 145000, growSeconds: 64800, color: "#e7c74b" }
+  { id: "weed", name: "雜草", emoji: "🌿", image: null, seedCost: 0, hp: 1, coins: 1, growSeconds: 30, color: "#81985b", unlock: { type: "initial", value: 0 } },
+  { id: "clover", name: "白花苜蓿", emoji: "☘️", image: "lettuce-head.png", seedCost: 18, hp: 2, coins: 4, growSeconds: 60, color: "#77a65c", unlock: { type: "lifetimeGold", value: 15 } },
+  { id: "tomato", name: "樁架番茄", emoji: "🍅", image: "tomato-plant-staked.png", seedCost: 90, hp: 4, coins: 15, growSeconds: 180, color: "#d65243", unlock: { type: "harvested", value: 40 } },
+  { id: "cabbage", name: "翠玉甘藍", emoji: "🥬", image: "cabbage-head-row.png", seedCost: 220, hp: 6, coins: 34, growSeconds: 300, color: "#70a95e", unlock: { type: "lifetimeGold", value: 180 } },
+  { id: "wheat", name: "金穗小麥", emoji: "🌾", image: "wheat-stalk.png", seedCost: 420, hp: 8, coins: 65, growSeconds: 480, color: "#e0b94f", unlock: { type: "tool", value: "garden_shears" } },
+  { id: "corn", name: "蜜香玉米", emoji: "🌽", image: "corn-stalk-row.png", seedCost: 900, hp: 11, coins: 135, growSeconds: 720, color: "#d8bd45", unlock: { type: "harvested", value: 200 } },
+  { id: "berry", name: "紅莓叢", emoji: "🍓", image: "strawberry-plant.png", seedCost: 1900, hp: 15, coins: 290, growSeconds: 1200, color: "#cf4c56", unlock: { type: "plots", value: 10 } },
+  { id: "zucchini", name: "碧綠櫛瓜", emoji: "🥒", image: "zucchini-plant.png", seedCost: 4200, hp: 22, coins: 620, growSeconds: 1800, color: "#5e9b57", unlock: { type: "lifetimeGold", value: 5000 } },
+  { id: "pumpkin", name: "月光南瓜", emoji: "🎃", image: "pumpkin-patch.png", seedCost: 8500, hp: 30, coins: 1250, growSeconds: 2700, color: "#d6a34c", unlock: { type: "tool", value: "short_sickle" } },
+  { id: "eggplant", name: "夜紫茄", emoji: "🍆", image: "eggplant-plant.png", seedCost: 18000, hp: 42, coins: 2700, growSeconds: 4500, color: "#795da5", unlock: { type: "harvested", value: 800 } },
+  { id: "lavender", name: "紫晶薰衣草", emoji: "🪻", image: "lavender-bush.png", seedCost: 40000, hp: 60, coins: 6000, growSeconds: 7200, color: "#9475bd", unlock: { type: "plots", value: 16 } },
+  { id: "blueberry", name: "藍莓灌木", emoji: "🫐", image: "blueberry-bush.png", seedCost: 85000, hp: 80, coins: 12750, growSeconds: 10800, color: "#536a9e", unlock: { type: "lifetimeGold", value: 100000 } },
+  { id: "pepper", name: "赤焰火椒", emoji: "🌶️", image: "pepper-plant.png", seedCost: 190000, hp: 110, coins: 29000, growSeconds: 21600, color: "#d85043", unlock: { type: "tool", value: "rotary_cutter" } },
+  { id: "rose", name: "晨露玫瑰", emoji: "🌹", image: "rose-bush.png", seedCost: 420000, hp: 155, coins: 63000, growSeconds: 36000, color: "#c65367", unlock: { type: "harvested", value: 5000 } },
+  { id: "starfruit", name: "星輝果", emoji: "🌻", image: "sunflower-row.png", seedCost: 950000, hp: 220, coins: 145000, growSeconds: 64800, color: "#e7c74b", unlock: { type: "plots", value: 25 } },
+  { id: "cotton", name: "雲絮棉花", emoji: "☁️", image: "cotton-plant.png", seedCost: 2200000, hp: 320, coins: 335000, growSeconds: 108000, color: "#e8e4d6", unlock: { type: "lifetimeGold", value: 2000000 } },
+  { id: "sugarcane", name: "翡翠甘蔗", emoji: "🎋", image: "sugar-cane.png", seedCost: 5000000, hp: 460, coins: 760000, growSeconds: 172800, color: "#6ba663", unlock: { type: "tool", value: "steel_harvester" } },
+  { id: "rice", name: "月白稻束", emoji: "🍚", image: "rice-paddy-bundle.png", seedCost: 11000000, hp: 650, coins: 1700000, growSeconds: 259200, color: "#d6c983", unlock: { type: "harvested", value: 25000 } },
+  { id: "grape", name: "暮色葡萄", emoji: "🍇", image: "grape-vine.png", seedCost: 25000000, hp: 900, coins: 3800000, growSeconds: 432000, color: "#735893", unlock: { type: "plots", value: 36 } },
+  { id: "vanilla", name: "銀香香草", emoji: "🌼", image: "vanilla-vine.png", seedCost: 60000000, hp: 1300, coins: 9000000, growSeconds: 691200, color: "#e7dfb0", unlock: { type: "lifetimeGold", value: 75000000 } },
+  { id: "coffee", name: "曜石咖啡", emoji: "☕", image: "coffee-bean-plant.png", seedCost: 150000000, hp: 1800, coins: 23000000, growSeconds: 1036800, color: "#7f4b34", unlock: { type: "plots", value: 49 } }
 ];
 
 const TOOLS = [
   { id: "small_knife", name: "小刀", emoji: "🔪", image: "vegetable-peeler.png", cost: 0, damage: 1, shape: "single", cells: 1, regrowth: 1, unlock: { type: "initial", value: 0 } },
   { id: "garden_shears", name: "園藝剪", emoji: "✂️", image: "pruning-shears.png", cost: 45, damage: 2, shape: "single", cells: 1, regrowth: 1, unlock: { type: "harvested", value: 20 } },
-  { id: "machete", name: "尖頭鏟", emoji: "♠️", image: "garden-spade.png", cost: 280, damage: 5, shape: "single", cells: 1, regrowth: 1, unlock: { type: "harvested", value: 80 } },
-  { id: "short_sickle", name: "短柄鐮刀", emoji: "⚒️", image: "farm-scythe.png", cost: 1800, damage: 4, shape: "row3", cells: 3, regrowth: 1, unlock: { type: "harvested", value: 200 } },
-  { id: "long_sickle", name: "長柄鋤", emoji: "🛠️", image: "garden-hoe.png", cost: 12000, damage: 7, shape: "cross", cells: 5, regrowth: 0.95, unlock: { type: "harvested", value: 600 } },
-  { id: "rotary_cutter", name: "銅製十字鎬", emoji: "⛏️", image: "copper-pickaxe.png", cost: 85000, damage: 12, shape: "square3", cells: 9, regrowth: 0.9, unlock: { type: "plots", value: 9 } },
-  { id: "steel_harvester", name: "精鋼鋤", emoji: "🛠️", image: "iron-hoe.png", cost: 650000, damage: 25, shape: "square3", cells: 9, regrowth: 0.75, unlock: { type: "harvested", value: 5000 } },
-  { id: "prosperity_blade", name: "聯合收割機", emoji: "🚜", image: "combine-harvester.png", cost: 6000000, damage: 60, shape: "square5", cells: 25, regrowth: 0.6, unlock: { type: "plots", value: 19 } }
+  { id: "hand_trowel", name: "手持鏟", emoji: "🪏", image: "hand-trowel.png", cost: 160, damage: 3, shape: "col3", cells: 3, regrowth: 1, unlock: { type: "harvested", value: 60 } },
+  { id: "machete", name: "尖頭鏟", emoji: "♠️", image: "garden-spade.png", cost: 420, damage: 5, shape: "row3", cells: 3, regrowth: 1, unlock: { type: "harvested", value: 120 } },
+  { id: "short_sickle", name: "短柄鐮刀", emoji: "⚒️", image: "farm-scythe.png", cost: 1800, damage: 4, shape: "row5", cells: 5, regrowth: 1, unlock: { type: "harvested", value: 250 } },
+  { id: "long_sickle", name: "長柄鋤", emoji: "🛠️", image: "garden-hoe.png", cost: 6000, damage: 7, shape: "cross", cells: 5, regrowth: 0.95, unlock: { type: "harvested", value: 600 } },
+  { id: "pitchfork", name: "五齒耙", emoji: "🔱", image: "compost-pile-pitchfork.png", cost: 22000, damage: 8, shape: "col5", cells: 5, regrowth: 0.92, unlock: { type: "plots", value: 16 } },
+  { id: "rotary_cutter", name: "銅製十字鎬", emoji: "⛏️", image: "copper-pickaxe.png", cost: 85000, damage: 12, shape: "diamond2", cells: 13, regrowth: 0.9, unlock: { type: "harvested", value: 2500 } },
+  { id: "steel_harvester", name: "精鋼鋤", emoji: "🛠️", image: "iron-hoe.png", cost: 300000, damage: 25, shape: "square3", cells: 9, regrowth: 0.8, unlock: { type: "plots", value: 25 } },
+  { id: "wide_scythe", name: "廣域鐮刀", emoji: "⚒️", image: "farm-scythe.png", cost: 1200000, damage: 32, shape: "cross9", cells: 9, regrowth: 0.72, unlock: { type: "harvested", value: 12000 } },
+  { id: "prosperity_blade", name: "聯合收割機", emoji: "🚜", image: "combine-harvester.png", cost: 6000000, damage: 60, shape: "square5", cells: 25, regrowth: 0.6, unlock: { type: "plots", value: 36 } },
+  { id: "grand_harvester", name: "巨型聯合收割機", emoji: "🚜", image: "combine-harvester.png", cost: 30000000, damage: 110, shape: "square7", cells: 49, regrowth: 0.5, unlock: { type: "harvested", value: 50000 } }
 ];
 
-const PLOTS = [
-  { id: 12, name: "中央田", cost: 0 },
-  { id: 7, name: "北方田", cost: 0 },
-  { id: 13, name: "東方田", cost: 0 },
-  { id: 17, name: "南方田", cost: 0 },
-  { id: 11, name: "西方田", cost: 0 },
-  { id: 8, name: "東北內田", cost: 1200 },
-  { id: 18, name: "東南內田", cost: 5000 },
-  { id: 16, name: "西南內田", cost: 20000 },
-  { id: 6, name: "西北內田", cost: 80000 },
-  { id: 2, name: "最北田", cost: 300000 },
-  { id: 14, name: "最東田", cost: 1200000 },
-  { id: 22, name: "最南田", cost: 5000000 },
-  { id: 10, name: "最西田", cost: 20000000 },
-  { id: 1, name: "北偏西田", cost: 80000000 },
-  { id: 3, name: "北偏東田", cost: 320000000 },
-  { id: 4, name: "東北角田", cost: 1200000000 },
-  { id: 9, name: "東側上田", cost: 4800000000 },
-  { id: 19, name: "東側下田", cost: 19000000000 },
-  { id: 24, name: "東南角田", cost: 75000000000 },
-  { id: 23, name: "南偏東田", cost: 300000000000 },
-  { id: 21, name: "南偏西田", cost: 1200000000000 },
-  { id: 20, name: "西南角田", cost: 4800000000000 },
-  { id: 15, name: "西側下田", cost: 19000000000000 },
-  { id: 5, name: "西側上田", cost: 75000000000000 },
-  { id: 0, name: "西北角田", cost: 300000000000000 }
-];
+function roundLandPrice(value) {
+  const unit = 10 ** Math.max(0, Math.floor(Math.log10(value)) - 1);
+  return Math.round(value / unit) * unit;
+}
+
+const remainingPlotIds = Array.from({ length: PLOT_GRID_SIZE * PLOT_GRID_SIZE }, (_, id) => id)
+  .filter((id) => !INITIAL_PLOT_IDS.includes(id))
+  .sort((a, b) => {
+    const aRow = Math.floor(a / PLOT_GRID_SIZE); const aCol = a % PLOT_GRID_SIZE;
+    const bRow = Math.floor(b / PLOT_GRID_SIZE); const bCol = b % PLOT_GRID_SIZE;
+    const aRing = Math.max(Math.abs(aRow - 4), Math.abs(aCol - 4));
+    const bRing = Math.max(Math.abs(bRow - 4), Math.abs(bCol - 4));
+    return aRing - bRing || Math.atan2(aRow - 4, aCol - 4) - Math.atan2(bRow - 4, bCol - 4);
+  });
+
+const PLOTS = [...INITIAL_PLOT_IDS, ...remainingPlotIds].map((id, order) => ({
+  id,
+  name: order === 0 ? "中央田" : `第 ${order + 1} 區農田`,
+  cost: order < INITIAL_PLOT_IDS.length ? 0 : roundLandPrice(1200 * (1.45 ** (order - INITIAL_PLOT_IDS.length)))
+}));
 
 const HARVESTERS = [
-  { id: "clockwork", name: "發條割草機", emoji: "🦾", cost: 120000, damage: 6, intervalSeconds: 30, regrowth: 1 },
-  { id: "steam", name: "蒸汽收割機", emoji: "🚜", cost: 900000, damage: 20, intervalSeconds: 15, regrowth: 0.9 },
-  { id: "starcore", name: "星核聯合收割機", emoji: "🤖", cost: 8000000, damage: 75, intervalSeconds: 5, regrowth: 0.75 }
+  { id: "micro", name: "單點採收器", emoji: "🦾", image: "combine-harvester.png", cost: 25000, damage: 3, intervalSeconds: 45, regrowth: 1, range: 1, tier: 1 },
+  { id: "clockwork", name: "發條割草機", emoji: "🦾", image: "combine-harvester.png", cost: 120000, damage: 6, intervalSeconds: 30, regrowth: 1, range: 3, tier: 2 },
+  { id: "copper", name: "銅輪收割機", emoji: "⚙️", image: "combine-harvester.png", cost: 450000, damage: 12, intervalSeconds: 20, regrowth: 0.95, range: 5, tier: 3 },
+  { id: "steam", name: "蒸汽收割機", emoji: "🚜", image: "combine-harvester.png", cost: 1800000, damage: 30, intervalSeconds: 12, regrowth: 0.85, range: 7, tier: 4 },
+  { id: "starcore", name: "星核聯合收割機", emoji: "🤖", image: "combine-harvester.png", cost: 8000000, damage: 90, intervalSeconds: 5, regrowth: 0.7, range: 9, tier: 5 }
 ];
 
 const SPRINKLERS = [
-  { id: "drip", name: "滴灌水壺", emoji: "💧", cost: 75000, growthMultiplier: 0.8 },
-  { id: "rotary", name: "旋轉灑水器", emoji: "🚿", cost: 600000, growthMultiplier: 0.6 },
-  { id: "stardew", name: "星露灌溉器", emoji: "⛲", cost: 5500000, growthMultiplier: 0.4 }
+  { id: "drop", name: "單點滴灌器", emoji: "💧", image: "watering-can-metal.png", cost: 18000, growthMultiplier: 0.9, range: 1, tier: 1 },
+  { id: "drip", name: "三列滴灌器", emoji: "💧", image: "sprinkler-head.png", cost: 75000, growthMultiplier: 0.8, range: 3, tier: 2 },
+  { id: "fan", name: "廣角噴灌器", emoji: "🚿", image: "sprinkler-head.png", cost: 260000, growthMultiplier: 0.7, range: 5, tier: 3 },
+  { id: "rotary", name: "旋轉灑水器", emoji: "🚿", image: "sprinkler-head.png", cost: 900000, growthMultiplier: 0.55, range: 7, tier: 4 },
+  { id: "stardew", name: "星露灌溉器", emoji: "⛲", image: "sprinkler-head.png", cost: 5500000, growthMultiplier: 0.38, range: 9, tier: 5 }
 ];
 
 const FERTILIZERS = [
@@ -150,18 +163,12 @@ function isToolUnlocked(tool, state) {
 }
 
 function isPlantUnlocked(plant, state) {
-  switch (plant.id) {
-    case "weed": return true;
-    case "clover": return state.lifetimeGold >= 15;
-    case "tomato": return state.harvestedCells >= 40;
-    case "wheat": return state.ownedToolIds.includes("garden_shears");
-    case "berry": return state.ownedPlots.length >= 6;
-    case "pumpkin": return state.ownedToolIds.includes("short_sickle");
-    case "lavender": return state.ownedPlots.length >= 9;
-    case "pepper": return state.ownedToolIds.includes("rotary_cutter");
-    case "starfruit": return state.ownedPlots.length >= 16;
-    default: return false;
-  }
+  if (!plant?.unlock || plant.unlock.type === "initial") return true;
+  if (plant.unlock.type === "lifetimeGold") return state.lifetimeGold >= plant.unlock.value;
+  if (plant.unlock.type === "harvested") return state.harvestedCells >= plant.unlock.value;
+  if (plant.unlock.type === "plots") return state.ownedPlots.length >= plant.unlock.value;
+  if (plant.unlock.type === "tool") return state.ownedToolIds.includes(plant.unlock.value);
+  return false;
 }
 
 function isFertilizerUnlocked(item, state) {
@@ -171,10 +178,25 @@ function isFertilizerUnlocked(item, state) {
 }
 
 function offsetsForShape(shape) {
-  if (shape === "row3") return [[0, -1], [0, 0], [0, 1]];
+  if (shape === "row3" || shape === "row5") {
+    const radius = shape === "row3" ? 1 : 2;
+    return Array.from({ length: radius * 2 + 1 }, (_, index) => [0, index - radius]);
+  }
+  if (shape === "col3" || shape === "col5") {
+    const radius = shape === "col3" ? 1 : 2;
+    return Array.from({ length: radius * 2 + 1 }, (_, index) => [index - radius, 0]);
+  }
   if (shape === "cross") return [[-1, 0], [0, -1], [0, 0], [0, 1], [1, 0]];
-  if (shape === "square3" || shape === "square5") {
-    const radius = shape === "square3" ? 1 : 2;
+  if (shape === "cross9") return [[-2, 0], [-1, 0], [0, -2], [0, -1], [0, 0], [0, 1], [0, 2], [1, 0], [2, 0]];
+  if (shape === "diamond2") {
+    const offsets = [];
+    for (let y = -2; y <= 2; y += 1) {
+      for (let x = -2; x <= 2; x += 1) if (Math.abs(x) + Math.abs(y) <= 2) offsets.push([y, x]);
+    }
+    return offsets;
+  }
+  if (shape === "square3" || shape === "square5" || shape === "square7") {
+    const radius = shape === "square3" ? 1 : shape === "square5" ? 2 : 3;
     const offsets = [];
     for (let y = -radius; y <= radius; y += 1) {
       for (let x = -radius; x <= radius; x += 1) offsets.push([y, x]);
@@ -194,6 +216,32 @@ function getToolTargetIndexes(toolId, centerIndex, ownedPlots) {
     const col = centerCol + dx;
     return row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE ? row * BOARD_SIZE + col : -1;
   }).filter((index) => index >= 0 && owned.has(plotIdForIndex(index)));
+}
+
+function automationTargetIndexes(range, plotId, ownedPlots) {
+  const centerIndex = indexesForPlot(plotId)[4];
+  const centerRow = Math.floor(centerIndex / BOARD_SIZE);
+  const centerCol = centerIndex % BOARD_SIZE;
+  const radius = Math.floor(Math.max(1, range) / 2);
+  const owned = new Set(ownedPlots);
+  const indexes = [];
+  for (let row = centerRow - radius; row <= centerRow + radius; row += 1) {
+    for (let col = centerCol - radius; col <= centerCol + radius; col += 1) {
+      if (row < 0 || row >= BOARD_SIZE || col < 0 || col >= BOARD_SIZE) continue;
+      const index = row * BOARD_SIZE + col;
+      if (owned.has(plotIdForIndex(index))) indexes.push(index);
+    }
+  }
+  return indexes;
+}
+
+function getDeviceStateForIndex(state, list, getter, index) {
+  return list
+    .filter((placed) => {
+      const item = getter(placed.id);
+      return item && automationTargetIndexes(item.range, placed.plotId, state.ownedPlots).includes(index);
+    })
+    .sort((a, b) => (getter(b.id)?.tier || 0) - (getter(a.id)?.tier || 0))[0] || null;
 }
 
 function awardHarvest(state, cell, regrowthMultiplier) {
@@ -236,22 +284,22 @@ function manualHarvest(state, centerIndex) {
   return { targets, results, totalCoins };
 }
 
-function getSprinklerForPlot(state, plotId) {
-  const placed = state.sprinklers.find((item) => item.plotId === plotId);
+function getSprinklerForIndex(state, index) {
+  const placed = getDeviceStateForIndex(state, state.sprinklers, getSprinkler, index);
   return placed ? getSprinkler(placed.id) : null;
 }
 
-function growthDurationSeconds(state, cell, plotId) {
+function growthDurationSeconds(state, cell, plotId, index = indexesForPlot(plotId)[4]) {
   const plant = getPlant(cell.plantId) || PLANTS[0];
-  const sprinkler = getSprinklerForPlot(state, plotId);
+  const sprinkler = getSprinklerForIndex(state, index);
   const fertilizer = cell.fertilizerId && cell.plantId !== "weed" ? getFertilizer(cell.fertilizerId) : null;
   const multiplier = (cell.nextGrowthMultiplier || 1) * (sprinkler?.growthMultiplier || 1) * (fertilizer?.growthMultiplier || 1);
   return plant.growSeconds * Math.max(0.2, multiplier);
 }
 
-function advanceCellGrowth(state, cell, plotId, seconds) {
+function advanceCellGrowth(state, cell, plotId, seconds, index = indexesForPlot(plotId)[4]) {
   if (cell.phase !== "growing" || seconds <= 0) return;
-  const duration = growthDurationSeconds(state, cell, plotId);
+  const duration = growthDurationSeconds(state, cell, plotId, index);
   cell.growthProgress = Math.min(1, cell.growthProgress + seconds / duration);
   if (cell.growthProgress >= 1) {
     cell.phase = "mature";
@@ -265,11 +313,11 @@ function nextPulseAtOrAfter(firstPulse, intervalMs, target) {
   return firstPulse + Math.ceil((target - firstPulse) / intervalMs) * intervalMs;
 }
 
-function simulateAutoCell(state, cell, plotId, machineState, from, to, summary) {
+function simulateAutoCell(state, cell, plotId, index, machineState, from, to, summary) {
   const machine = getHarvester(machineState.id);
   const plant = getPlant(cell.plantId) || PLANTS[0];
   const interval = machine.intervalSeconds * 1000;
-  const duration = growthDurationSeconds(state, cell, plotId) * 1000;
+  const duration = growthDurationSeconds(state, cell, plotId, index) * 1000;
   const firstScheduled = nextPulseAtOrAfter(machineState.nextRunAt, interval, from);
   const matureAt = cell.phase === "mature" ? from : from + (1 - cell.growthProgress) * duration;
   const firstHit = nextPulseAtOrAfter(firstScheduled, interval, matureAt);
@@ -280,7 +328,7 @@ function simulateAutoCell(state, cell, plotId, machineState, from, to, summary) 
   if (firstHarvestAt > to) {
     if (cell.phase === "growing") {
       if (to < matureAt) {
-        advanceCellGrowth(state, cell, plotId, (to - from) / 1000);
+        advanceCellGrowth(state, cell, plotId, (to - from) / 1000, index);
         return;
       }
       cell.phase = "mature";
@@ -300,7 +348,7 @@ function simulateAutoCell(state, cell, plotId, machineState, from, to, summary) 
 
   let lastHarvestAt = firstHarvestAt;
   while (cell.fertilizerId) {
-    const fertilizedDuration = growthDurationSeconds(state, cell, plotId) * 1000;
+    const fertilizedDuration = growthDurationSeconds(state, cell, plotId, index) * 1000;
     const fertilizedHits = Math.max(1, Math.ceil(plant.hp / machine.damage));
     const fertilizedFirstHitOffset = Math.ceil(fertilizedDuration / interval) * interval;
     const fertilizedCycleDuration = fertilizedFirstHitOffset + (fertilizedHits - 1) * interval;
@@ -313,7 +361,7 @@ function simulateAutoCell(state, cell, plotId, machineState, from, to, summary) 
   }
 
   if (!cell.fertilizerId) {
-    const stableDuration = growthDurationSeconds(state, cell, plotId) * 1000;
+    const stableDuration = growthDurationSeconds(state, cell, plotId, index) * 1000;
     const stableHits = Math.max(1, Math.ceil(plant.hp / machine.damage));
     const stableFirstHitOffset = Math.ceil(stableDuration / interval) * interval;
     const stableCycleDuration = stableFirstHitOffset + (stableHits - 1) * interval;
@@ -329,7 +377,7 @@ function simulateAutoCell(state, cell, plotId, machineState, from, to, summary) 
     }
   }
 
-  const activeDuration = growthDurationSeconds(state, cell, plotId) * 1000;
+  const activeDuration = growthDurationSeconds(state, cell, plotId, index) * 1000;
   const activeHits = Math.max(1, Math.ceil(plant.hp / machine.damage));
   const activeFirstHitOffset = Math.ceil(activeDuration / interval) * interval;
   const remainder = to - lastHarvestAt;
@@ -357,23 +405,23 @@ function simulateTo(state, targetTime) {
   const summary = { elapsedMs: to - from, gold: 0, harvested: 0 };
   if (to <= from) return summary;
 
-  const harvesterByPlot = new Map(state.harvesters.map((item) => [item.plotId, item]));
   for (const plotId of state.ownedPlots) {
-    const machineState = harvesterByPlot.get(plotId);
     for (const index of indexesForPlot(plotId)) {
       const cell = state.cells[index];
+      const machineState = getDeviceStateForIndex(state, state.harvesters, getHarvester, index);
       if (machineState && getHarvester(machineState.id)) {
-        simulateAutoCell(state, cell, plotId, machineState, from, to, summary);
+        simulateAutoCell(state, cell, plotId, index, machineState, from, to, summary);
       } else {
-        advanceCellGrowth(state, cell, plotId, (to - from) / 1000);
+        advanceCellGrowth(state, cell, plotId, (to - from) / 1000, index);
       }
     }
-    if (machineState) {
-      const machine = getHarvester(machineState.id);
-      const interval = machine.intervalSeconds * 1000;
-      const first = nextPulseAtOrAfter(machineState.nextRunAt, interval, from);
-      machineState.nextRunAt = first > to ? first : first + (Math.floor((to - first) / interval) + 1) * interval;
-    }
+  }
+  for (const machineState of state.harvesters) {
+    const machine = getHarvester(machineState.id);
+    if (!machine) continue;
+    const interval = machine.intervalSeconds * 1000;
+    const first = nextPulseAtOrAfter(machineState.nextRunAt, interval, from);
+    machineState.nextRunAt = first > to ? first : first + (Math.floor((to - first) / interval) + 1) * interval;
   }
   state.lastSimulatedAt = to;
   return summary;
@@ -435,7 +483,57 @@ function migrateLegacyCropIds(state) {
   return state;
 }
 
+const LEGACY_PLOT_ORDER = [12, 7, 13, 17, 11, 8, 18, 16, 6, 2, 14, 22, 10, 1, 3, 4, 9, 19, 24, 23, 21, 20, 15, 5, 0];
+
+function migrateLegacyBoard(state) {
+  if (!state || state.schemaVersion !== 3 || !Array.isArray(state.cells) || state.cells.length !== 225) return state;
+  const legacy = { ...state };
+  const legacyOwned = Array.isArray(state.ownedPlots) ? state.ownedPlots : LEGACY_PLOT_ORDER.slice(0, 5);
+  const ownedCount = Math.min(PLOTS.length, Math.max(INITIAL_PLOT_IDS.length, legacyOwned.length + 4));
+  const migrated = createInitialState(Number(state.lastSimulatedAt) || Date.now());
+  const ownedPlots = PLOTS.slice(0, ownedCount).map((plot) => plot.id);
+  const legacyOrderById = new Map(LEGACY_PLOT_ORDER.map((id, order) => [id, order]));
+  const mappedPlotByLegacyId = new Map();
+
+  for (const legacyPlotId of legacyOwned) {
+    const order = legacyOrderById.get(legacyPlotId);
+    if (!Number.isInteger(order)) continue;
+    const mappedId = order < 5
+      ? (Math.floor(legacyPlotId / 5) + 2) * PLOT_GRID_SIZE + (legacyPlotId % 5) + 2
+      : PLOTS[Math.min(PLOTS.length - 1, order + 4)].id;
+    mappedPlotByLegacyId.set(legacyPlotId, mappedId);
+  }
+
+  for (let legacyIndex = 0; legacyIndex < state.cells.length; legacyIndex += 1) {
+    const legacyRow = Math.floor(legacyIndex / 15);
+    const legacyCol = legacyIndex % 15;
+    const legacyPlotId = Math.floor(legacyRow / 3) * 5 + Math.floor(legacyCol / 3);
+    const mappedPlotId = mappedPlotByLegacyId.get(legacyPlotId);
+    if (!Number.isInteger(mappedPlotId) || !ownedPlots.includes(mappedPlotId)) continue;
+    const mappedPlotRow = Math.floor(mappedPlotId / PLOT_GRID_SIZE);
+    const mappedPlotCol = mappedPlotId % PLOT_GRID_SIZE;
+    const mappedIndex = (mappedPlotRow * 3 + legacyRow % 3) * BOARD_SIZE + mappedPlotCol * 3 + legacyCol % 3;
+    migrated.cells[mappedIndex] = { ...state.cells[legacyIndex] };
+  }
+
+  Object.assign(state, migrated, legacy, {
+    schemaVersion: SAVE_VERSION,
+    ownedPlots,
+    cells: migrated.cells,
+    harvesters: (Array.isArray(state.harvesters) ? state.harvesters : []).map((placed) => ({
+      ...placed,
+      plotId: mappedPlotByLegacyId.get(placed.plotId) ?? INITIAL_PLOT_ID
+    })).filter((placed) => ownedPlots.includes(placed.plotId) && getHarvester(placed.id)),
+    sprinklers: (Array.isArray(state.sprinklers) ? state.sprinklers : []).map((placed) => ({
+      ...placed,
+      plotId: mappedPlotByLegacyId.get(placed.plotId) ?? INITIAL_PLOT_ID
+    })).filter((placed) => ownedPlots.includes(placed.plotId) && getSprinkler(placed.id))
+  });
+  return state;
+}
+
 function normalizeStateData(state) {
+  migrateLegacyBoard(state);
   migrateLegacyCropIds(state);
   if (!state || !Array.isArray(state.cells)) return state;
   for (const cell of state.cells) {
@@ -484,7 +582,7 @@ globalThis.HarvestCore = Object.freeze({
   getHarvester, getSprinkler, getFertilizer, getProductPrice, plotIdForIndex,
   indexesForPlot, createInitialState, isAutomationUnlocked,
   isToolUnlocked, isPlantUnlocked, isFertilizerUnlocked,
-  getToolTargetIndexes, manualHarvest, growthDurationSeconds,
+  getToolTargetIndexes, automationTargetIndexes, manualHarvest, growthDurationSeconds,
   simulateTo, sowPlot, fertilizePlot, buyPlot, formatNumber,
   formatTime, migrateLegacyCropIds, normalizeStateData, validateState
 });

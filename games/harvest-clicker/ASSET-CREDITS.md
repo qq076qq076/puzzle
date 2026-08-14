@@ -8,8 +8,8 @@
 
 ### 使用檔案
 
-- 植物：`lettuce-head.png`、`tomato-plant-staked.png`、`wheat-stalk.png`、`strawberry-plant.png`、`pumpkin-patch.png`、`lavender-bush.png`、`pepper-plant.png`、`sunflower-row.png`
-- 農具：`vegetable-peeler.png`、`pruning-shears.png`、`garden-spade.png`、`farm-scythe.png`、`garden-hoe.png`、`copper-pickaxe.png`、`iron-hoe.png`
-- 設備：`combine-harvester.png`
+- 植物：`lettuce-head.png`、`tomato-plant-staked.png`、`cabbage-head-row.png`、`wheat-stalk.png`、`corn-stalk-row.png`、`strawberry-plant.png`、`zucchini-plant.png`、`pumpkin-patch.png`、`eggplant-plant.png`、`lavender-bush.png`、`blueberry-bush.png`、`pepper-plant.png`、`rose-bush.png`、`sunflower-row.png`、`cotton-plant.png`、`sugar-cane.png`、`rice-paddy-bundle.png`、`grape-vine.png`、`vanilla-vine.png`、`coffee-bean-plant.png`
+- 農具：`vegetable-peeler.png`、`pruning-shears.png`、`hand-trowel.png`、`garden-spade.png`、`farm-scythe.png`、`garden-hoe.png`、`compost-pile-pitchfork.png`、`copper-pickaxe.png`、`iron-hoe.png`
+- 設備：`combine-harvester.png`、`watering-can-metal.png`、`sprinkler-head.png`
 
-遊戲未覆寫原始素材；Canvas 只在執行時縮放、加上落地陰影，並依等角座標排序，以形成 2.5D 呈現。土壤則由 Canvas 程式繪製為整片 3×3 地塊。
+植物 PNG 只裁除透明留白，讓根部能貼齊土面；Canvas 在執行時縮放、加上接觸陰影，並依等角座標排序，以形成 2.5D 呈現。土壤與山、水、樹、野花、農舍景觀皆由 Canvas 程式繪製。

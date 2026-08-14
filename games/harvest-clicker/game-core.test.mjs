@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 await import("./game-core.js");
 const {
   createInitialState, manualHarvest, simulateTo, sowPlot, fertilizePlot,
-  getToolTargetIndexes, indexesForPlot, buyPlot, validateState,
+  getToolTargetIndexes, automationTargetIndexes, indexesForPlot, buyPlot, validateState,
   INITIAL_PLOT_ID, INITIAL_PLOT_IDS, BOARD_SIZE, PLOTS,
   PLANTS, TOOLS, HARVESTERS, SPRINKLERS, FERTILIZERS, getProductPrice,
   normalizeStateData
@@ -32,19 +32,20 @@ test("舊存檔中未記錄輪數的肥料保留一次效果", () => {
 });
 
 test("所有商品售價與規格書一致且為有效金額", () => {
-  assert.deepEqual(TOOLS.map((item) => item.cost), [0, 45, 280, 1800, 12000, 85000, 650000, 6000000]);
-  assert.deepEqual(PLANTS.map((item) => item.seedCost), [0, 18, 90, 420, 1900, 8500, 40000, 190000, 950000]);
-  assert.deepEqual(HARVESTERS.map((item) => item.cost), [120000, 900000, 8000000]);
-  assert.deepEqual(SPRINKLERS.map((item) => item.cost), [75000, 600000, 5500000]);
+  assert.deepEqual(TOOLS.map((item) => item.cost), [0, 45, 160, 420, 1800, 6000, 22000, 85000, 300000, 1200000, 6000000, 30000000]);
+  assert.deepEqual(PLANTS.map((item) => item.seedCost), [
+    0, 18, 90, 220, 420, 900, 1900, 4200, 8500, 18000, 40000,
+    85000, 190000, 420000, 950000, 2200000, 5000000, 11000000,
+    25000000, 60000000, 150000000
+  ]);
+  assert.deepEqual(HARVESTERS.map((item) => item.cost), [25000, 120000, 450000, 1800000, 8000000]);
+  assert.deepEqual(SPRINKLERS.map((item) => item.cost), [18000, 75000, 260000, 900000, 5500000]);
   assert.deepEqual(FERTILIZERS.map((item) => item.cost), [300, 6000, 120000]);
   assert.deepEqual(FERTILIZERS.map((item) => item.rounds), [3, 5, 8]);
-  assert.deepEqual(PLOTS.map((item) => item.cost), [
-    0, 0, 0, 0, 0, 1200, 5000, 20000, 80000, 300000,
-    1200000, 5000000, 20000000, 80000000, 320000000, 1200000000,
-    4800000000, 19000000000, 75000000000, 300000000000,
-    1200000000000, 4800000000000, 19000000000000, 75000000000000,
-    300000000000000
-  ]);
+  assert.equal(PLOTS.length, 81);
+  assert.ok(PLOTS.slice(0, 9).every((item) => item.cost === 0));
+  assert.equal(PLOTS[9].cost, 1200);
+  assert.ok(PLOTS.slice(10).every((item, index) => item.cost >= PLOTS[index + 9].cost));
 
   const pricedItems = [
     ...TOOLS.map((item) => [item.name, item.cost]),
@@ -85,15 +86,15 @@ test("所有作物收割時都發放各自設定的單格金幣", () => {
   }
 });
 
-test("新遊戲從中央十字五塊成熟雜草與小刀開始", () => {
+test("新遊戲從中央 9×9 成熟雜草與小刀開始", () => {
   const state = createInitialState(0);
   const initialIndexes = INITIAL_PLOT_IDS.flatMap(indexesForPlot);
   assert.equal(state.gold, 0);
-  assert.equal(BOARD_SIZE, 15);
-  assert.equal(PLOTS.length, 25);
-  assert.equal(state.ownedPlots.length, 5);
+  assert.equal(BOARD_SIZE, 27);
+  assert.equal(PLOTS.length, 81);
+  assert.equal(state.ownedPlots.length, 9);
   assert.equal(state.equippedToolId, "small_knife");
-  assert.equal(initialIndexes.length, 45);
+  assert.equal(initialIndexes.length, 81);
   assert.ok(initialIndexes.every((index) => state.cells[index].phase === "mature"));
   assert.ok(validateState(state));
 });
@@ -113,9 +114,28 @@ test("小刀一次只收割一格並發放一次金幣", () => {
 test("範圍工具會依棋盤邊界與已購土地裁切", () => {
   const state = createInitialState(0);
   const centerOfPlot = indexesForPlot(INITIAL_PLOT_ID)[4];
-  assert.equal(getToolTargetIndexes("short_sickle", centerOfPlot, state.ownedPlots).length, 3);
-  assert.equal(getToolTargetIndexes("rotary_cutter", centerOfPlot, state.ownedPlots).length, 9);
-  assert.equal(getToolTargetIndexes("prosperity_blade", centerOfPlot, state.ownedPlots).length, 21);
+  assert.equal(getToolTargetIndexes("short_sickle", centerOfPlot, state.ownedPlots).length, 5);
+  assert.equal(getToolTargetIndexes("rotary_cutter", centerOfPlot, state.ownedPlots).length, 13);
+  assert.equal(getToolTargetIndexes("prosperity_blade", centerOfPlot, state.ownedPlots).length, 25);
+  assert.equal(getToolTargetIndexes("grand_harvester", centerOfPlot, state.ownedPlots).length, 49);
+});
+
+test("五階自動化設備由單格擴張到 9×9", () => {
+  const state = createInitialState(0);
+  assert.deepEqual(HARVESTERS.map((item) => item.range), [1, 3, 5, 7, 9]);
+  assert.deepEqual(SPRINKLERS.map((item) => item.range), [1, 3, 5, 7, 9]);
+  assert.deepEqual(HARVESTERS.map((item) => automationTargetIndexes(item.range, INITIAL_PLOT_ID, state.ownedPlots).length), [1, 9, 25, 49, 81]);
+});
+
+test("單點滴灌器只加速中心一格", () => {
+  const state = createInitialState(0);
+  for (const plotId of INITIAL_PLOT_IDS) sowPlot(state, plotId, "clover");
+  state.sprinklers.push({ id: "drop", plotId: INITIAL_PLOT_ID });
+  simulateTo(state, 54000);
+  const indexes = indexesForPlot(INITIAL_PLOT_ID);
+  assert.equal(state.cells[indexes[4]].phase, "mature");
+  assert.equal(state.cells[indexes[0]].phase, "growing");
+  assert.equal(state.cells[indexes[0]].growthProgress, 0.9);
 });
 
 test("沒有自動收割機時離線只推進生長、不產生金幣", () => {
@@ -168,10 +188,30 @@ test("肥料立即加速當下作物並持續指定收割輪數", () => {
 
 test("土地只能依順序購買並扣除指定金額", () => {
   const state = createInitialState(0);
-  state.gold = 20000;
-  assert.equal(buyPlot(state, 18), false);
-  assert.equal(buyPlot(state, 8), true);
-  assert.equal(state.gold, 18800);
-  assert.deepEqual(state.ownedPlots, [...INITIAL_PLOT_IDS, 8]);
-  assert.ok(indexesForPlot(8).every((index) => state.cells[index].phase === "growing"));
+  const next = PLOTS[INITIAL_PLOT_IDS.length];
+  state.gold = next.cost * 2;
+  assert.equal(buyPlot(state, PLOTS[INITIAL_PLOT_IDS.length + 1].id), false);
+  assert.equal(buyPlot(state, next.id), true);
+  assert.equal(state.gold, next.cost);
+  assert.deepEqual(state.ownedPlots, [...INITIAL_PLOT_IDS, next.id]);
+  assert.ok(indexesForPlot(next.id).every((index) => state.cells[index].phase === "growing"));
+});
+
+test("v3 的 15×15 存檔會遷移為 v4 的 27×27 農場", () => {
+  const state = createInitialState(1234);
+  state.schemaVersion = 3;
+  state.ownedPlots = [12, 7, 13, 17, 11];
+  state.cells = Array.from({ length: 225 }, (_, index) => {
+    const row = Math.floor(index / 15);
+    const col = index % 15;
+    const owned = state.ownedPlots.includes(Math.floor(row / 3) * 5 + Math.floor(col / 3));
+    return { plantId: "weed", phase: owned ? "mature" : "growing", growthProgress: owned ? 1 : 0, currentHp: owned ? 1 : 0, nextGrowthMultiplier: 1, fertilizerId: null, fertilizerRounds: 0 };
+  });
+  state.cells[6 * 15 + 6].plantId = "clover";
+  normalizeStateData(state);
+  assert.equal(state.schemaVersion, 4);
+  assert.equal(state.cells.length, 729);
+  assert.equal(state.ownedPlots.length, 9);
+  assert.equal(state.cells[indexesForPlot(INITIAL_PLOT_ID)[0]].plantId, "clover");
+  assert.ok(validateState(state));
 });

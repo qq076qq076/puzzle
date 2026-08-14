@@ -9,7 +9,8 @@ const {
   normalizeStateData
 } = globalThis.HarvestCore;
 
-const STORAGE_KEY = "puzzle-club-save:harvest-clicker:v3";
+const STORAGE_KEY = "puzzle-club-save:harvest-clicker:v4";
+const LEGACY_STORAGE_KEYS = ["puzzle-club-save:harvest-clicker:v3"];
 const ASSET_ROOT = "assets/";
 const TILE_W = 96;
 const TILE_H = 48;
@@ -40,6 +41,7 @@ const ctx = elements.canvas.getContext("2d", { alpha: true });
 const images = new Map();
 const effects = [];
 const activePointers = new Map();
+const TALL_PLANT_IDS = new Set(["corn", "wheat", "lavender", "cotton", "sugarcane", "grape", "vanilla", "coffee"]);
 const camera = { scale: 1, x: 0, y: 0 };
 let state;
 let activeTab = "tools";
@@ -84,7 +86,7 @@ function preloadAssets() {
 
 function loadState() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY) || LEGACY_STORAGE_KEYS.map((key) => localStorage.getItem(key)).find(Boolean);
     if (raw) {
       const parsed = normalizeStateData(JSON.parse(raw));
       if (validateState(parsed)) {
@@ -365,13 +367,142 @@ function drawWeed(x, y, progress, mature) {
   ctx.restore();
 }
 
+function drawMountain(x, y, scale, backColor, frontColor) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+  ctx.fillStyle = backColor;
+  ctx.beginPath();
+  ctx.moveTo(-155, 55);
+  ctx.lineTo(-42, -98);
+  ctx.lineTo(42, 12);
+  ctx.lineTo(98, -58);
+  ctx.lineTo(185, 55);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "rgba(244,241,213,.72)";
+  ctx.beginPath();
+  ctx.moveTo(-42, -98);
+  ctx.lineTo(-74, -55);
+  ctx.lineTo(-35, -64);
+  ctx.lineTo(-8, -51);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = frontColor;
+  ctx.beginPath();
+  ctx.moveTo(-170, 55);
+  ctx.quadraticCurveTo(-78, 5, -8, 45);
+  ctx.quadraticCurveTo(82, -2, 190, 55);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawTree(x, y, scale = 1) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+  ctx.fillStyle = "rgba(31,44,27,.18)";
+  ctx.beginPath();
+  ctx.ellipse(7, 8, 34, 10, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#6d4930";
+  ctx.fillRect(-5, -28, 10, 35);
+  ctx.fillStyle = "#2e6841";
+  ctx.beginPath(); ctx.arc(-15, -40, 22, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#3f8250";
+  ctx.beginPath(); ctx.arc(12, -45, 26, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#5a985b";
+  ctx.beginPath(); ctx.arc(-2, -65, 25, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+function drawFarmhouse(x, y, scale = 1) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+  ctx.fillStyle = "rgba(36,42,25,.2)";
+  ctx.beginPath(); ctx.ellipse(18, 17, 70, 18, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#dca967";
+  ctx.fillRect(-48, -46, 96, 62);
+  ctx.fillStyle = "#b86a48";
+  ctx.beginPath(); ctx.moveTo(-62, -43); ctx.lineTo(0, -88); ctx.lineTo(62, -43); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#70412d";
+  ctx.fillRect(-13, -20, 26, 36);
+  ctx.fillStyle = "#9ed0cd";
+  ctx.fillRect(-38, -29, 17, 17);
+  ctx.fillRect(21, -29, 17, 17);
+  ctx.strokeStyle = "rgba(65,54,37,.45)";
+  ctx.lineWidth = 3;
+  ctx.strokeRect(-38, -29, 17, 17);
+  ctx.strokeRect(21, -29, 17, 17);
+  ctx.fillStyle = "#f2cf72";
+  ctx.beginPath(); ctx.arc(6, -1, 3, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+function drawWorldScenery() {
+  const bounds = ownedFarmSurfaceBounds();
+  const centerX = (bounds.minX + bounds.maxX) / 2;
+  const centerY = (bounds.minY + bounds.maxY) / 2;
+  drawMountain(centerX - 250, bounds.minY - 105, 1.1, "rgba(82,118,86,.65)", "rgba(74,127,75,.72)");
+  drawMountain(centerX + 260, bounds.minY - 92, .88, "rgba(91,126,91,.56)", "rgba(84,137,79,.65)");
+
+  ctx.save();
+  ctx.fillStyle = "rgba(82,151,161,.68)";
+  ctx.beginPath();
+  ctx.ellipse(bounds.minX - 120, centerY + 65, 108, 49, -.18, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(221,239,202,.6)";
+  ctx.lineWidth = 5;
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(232,250,233,.42)";
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.ellipse(bounds.minX - 128, centerY + 62, 62, 18, -.18, .2, 2.3); ctx.stroke();
+  ctx.restore();
+
+  drawFarmhouse(bounds.maxX + 132, centerY + 18, .82);
+  drawTree(bounds.minX - 58, centerY - 45, 1.05);
+  drawTree(bounds.minX - 165, centerY - 4, .78);
+  drawTree(bounds.maxX + 78, centerY - 92, .9);
+  drawTree(bounds.maxX + 175, centerY + 100, .7);
+  drawTree(centerX - 85, bounds.maxY + 96, .72);
+  drawTree(centerX + 52, bounds.maxY + 110, .62);
+
+  ctx.save();
+  ctx.fillStyle = "rgba(250,220,102,.8)";
+  for (let flower = 0; flower < 13; flower += 1) {
+    const side = flower % 2 ? -1 : 1;
+    const x = side < 0 ? bounds.minX - 42 - (flower % 4) * 18 : bounds.maxX + 42 + (flower % 3) * 16;
+    const y = centerY - 110 + flower * 19;
+    ctx.beginPath(); ctx.arc(x, y, 3.2, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawCanvasBackdrop() {
+  ctx.save();
+  ctx.globalAlpha = .38;
+  drawMountain(canvasWidth * .18, 112, .68, "#63856b", "#6f9b68");
+  drawMountain(canvasWidth * .72, 102, .54, "#728f73", "#78a06d");
+  ctx.globalAlpha = .55;
+  ctx.fillStyle = "#66a8ae";
+  ctx.beginPath();
+  ctx.ellipse(52, canvasHeight - 38, 116, 43, -.08, 0, Math.PI * 2);
+  ctx.fill();
+  drawFarmhouse(canvasWidth - 62, canvasHeight - 20, .54);
+  drawTree(34, canvasHeight - 26, .62);
+  drawTree(canvasWidth - 128, canvasHeight - 12, .46);
+  ctx.restore();
+}
+
 function plantMetrics(cell) {
   const plant = getPlant(cell.plantId);
   const mature = cell.phase === "mature";
   const progress = mature ? 1 : clamp(cell.growthProgress, 0, 1);
   const growthScale = 0.28 + progress * 0.72;
   const image = plant.image ? images.get(plant.image) : null;
-  const base = plant.id === "lavender" ? 92 : plant.id === "wheat" ? 74 : 82;
+  const base = TALL_PLANT_IDS.has(plant.id) ? 94 : plant.id === "cabbage" ? 70 : 82;
   const ratio = image ? (image.naturalWidth / image.naturalHeight || 1) : 1;
   const height = plant.image ? base * growthScale : 42 * growthScale;
   const width = plant.image ? Math.min(base * 1.18, height * ratio) : 52 * growthScale;
@@ -421,21 +552,23 @@ function drawDevices(plotId, x, y) {
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = "18px sans-serif";
-  ctx.fillStyle = "rgba(255,250,232,.92)";
-  ctx.beginPath();
-  ctx.arc(x + 26, y - 28, 16, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#203b28";
-  ctx.fillText(harvester ? getHarvester(harvester.id).emoji : getSprinkler(sprinkler.id).emoji, x + 26, y - 28);
-  if (harvester && sprinkler) {
-    ctx.fillStyle = "rgba(255,250,232,.92)";
-    ctx.beginPath();
-    ctx.arc(x - 26, y - 28, 16, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#203b28";
-    ctx.fillText(getSprinkler(sprinkler.id).emoji, x - 26, y - 28);
-  }
+  const devices = [harvester && getHarvester(harvester.id), sprinkler && getSprinkler(sprinkler.id)].filter(Boolean);
+  devices.forEach((device, deviceIndex) => {
+    const badgeX = x + (devices.length === 1 ? 0 : deviceIndex ? 25 : -25);
+    const badgeY = y - 35;
+    ctx.fillStyle = "rgba(255,250,232,.94)";
+    ctx.beginPath(); ctx.arc(badgeX, badgeY, 20, 0, Math.PI * 2); ctx.fill();
+    const image = device.image ? images.get(device.image) : null;
+    if (image) ctx.drawImage(image, badgeX - 15, badgeY - 15, 30, 30);
+    else {
+      ctx.fillStyle = "#203b28";
+      ctx.font = "18px sans-serif";
+      ctx.fillText(device.emoji, badgeX, badgeY);
+    }
+    ctx.fillStyle = "#173b2a";
+    ctx.font = "800 8px sans-serif";
+    ctx.fillText(`${device.range}×${device.range}`, badgeX, badgeY + 24);
+  });
   ctx.restore();
 }
 
@@ -502,9 +635,11 @@ function drawEffects(now) {
 function drawFarm(now = performance.now()) {
   if (!state || !canvasWidth || !canvasHeight) return;
   ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+  drawCanvasBackdrop();
   ctx.save();
   ctx.translate(camera.x, camera.y);
   ctx.scale(camera.scale, camera.scale);
+  drawWorldScenery();
   const owned = new Set(state.ownedPlots);
   const plotOrder = [...PLOTS].sort((a, b) => {
     const aCenter = plotGeometry(a.id).center;
@@ -596,12 +731,11 @@ function unlockText(item, type) {
     if (item.unlock.type === "plots") return `條件：擁有 ${item.unlock.value} 塊土地`;
   }
   if (type === "plant") {
-    const messages = {
-      clover: "條件：累積獲得 15$", tomato: "條件：累積收割 40 格", wheat: "條件：購買園藝剪",
-      berry: "條件：擁有 6 塊土地", pumpkin: "條件：購買短柄鐮刀", lavender: "條件：擁有 9 塊土地",
-      pepper: "條件：購買銅製十字鎬", starfruit: "條件：擁有 16 塊土地"
-    };
-    return messages[item.id] || "尚未達成條件";
+    if (item.unlock.type === "lifetimeGold") return `條件：累積獲得 ${formatMoney(item.unlock.value)}`;
+    if (item.unlock.type === "harvested") return `條件：累積收割 ${formatNumber(item.unlock.value)} 格`;
+    if (item.unlock.type === "plots") return `條件：擁有 ${item.unlock.value} 塊土地`;
+    if (item.unlock.type === "tool") return `條件：購買 ${getTool(item.unlock.value)?.name || "指定農具"}`;
+    return "尚未達成條件";
   }
   if (type === "fertilizer") {
     return item.id === "quick" ? "條件：開放樁架番茄" : item.id === "bounty" ? "條件：擁有 9 塊土地" : "條件：開放自動化設備";
@@ -674,8 +808,8 @@ function isShopProductOwned(kind, item) {
 function shopProductDescription(kind, item) {
   if (kind === "tool") return `${item.damage} 傷害 · ${item.cells} 格${item.regrowth < 1 ? ` · 再生時間 ×${item.regrowth}` : ""}`;
   if (kind === "seed") return `一次種滿 3×3 · HP ${item.hp} · 每格收成 ${formatMoney(item.coins)} · ${formatTime(item.growSeconds)}`;
-  if (kind === "harvester") return `每 ${item.intervalSeconds} 秒對指定 3×3 各造成 ${item.damage} 傷害`;
-  if (kind === "sprinkler") return `指定 3×3 生長時間 ×${item.growthMultiplier}`;
+  if (kind === "harvester") return `${item.range}×${item.range}（最多 ${item.range ** 2} 格）· 每 ${item.intervalSeconds} 秒造成 ${item.damage} 傷害`;
+  if (kind === "sprinkler") return `${item.range}×${item.range}（最多 ${item.range ** 2} 格）· 生長時間 ×${item.growthMultiplier}`;
   return `立即生效 · 生長 ×${item.growthMultiplier} · 金幣 ×${item.coinMultiplier} · 持續 ${item.rounds} 輪`;
 }
 
@@ -955,21 +1089,6 @@ function tileIndexAtScreen(x, y) {
 }
 
 function actionIndexAtScreen(x, y) {
-  const worldX = (x - camera.x) / camera.scale;
-  const worldY = (y - camera.y) / camera.scale;
-  const owned = new Set(state.ownedPlots);
-  const frontToBack = cellPaintOrder().reverse();
-  for (const index of frontToBack) {
-    if (!owned.has(plotIdForIndex(index))) continue;
-    const row = Math.floor(index / BOARD_SIZE);
-    const col = index % BOARD_SIZE;
-    const center = worldPoint(row, col);
-    const metrics = plantMetrics(state.cells[index]);
-    if (
-      worldX >= center.x - metrics.width / 2 && worldX <= center.x + metrics.width / 2 &&
-      worldY >= center.y + metrics.contactY - metrics.height - 5 && worldY <= center.y + metrics.contactY + 7
-    ) return index;
-  }
   return tileIndexAtScreen(x, y);
 }
 
