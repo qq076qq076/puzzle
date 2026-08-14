@@ -6,7 +6,7 @@ const {
   getToolTargetIndexes, automationTargetIndexes, indexesForPlot, buyPlot, validateState,
   INITIAL_PLOT_ID, INITIAL_PLOT_IDS, BOARD_SIZE, PLOTS,
   PLANTS, TOOLS, HARVESTERS, SPRINKLERS, FERTILIZERS, getProductPrice,
-  normalizeStateData
+  normalizeStateData, isFertilizerUnlocked
 } = globalThis.HarvestCore;
 
 test("舊存檔的胡蘿蔔植株與種子會無損轉成樁架番茄", () => {
@@ -40,8 +40,10 @@ test("所有商品售價與規格書一致且為有效金額", () => {
   ]);
   assert.deepEqual(HARVESTERS.map((item) => item.cost), [25000, 120000, 450000, 1800000, 8000000]);
   assert.deepEqual(SPRINKLERS.map((item) => item.cost), [18000, 75000, 260000, 900000, 5500000]);
-  assert.deepEqual(FERTILIZERS.map((item) => item.cost), [300, 6000, 120000]);
-  assert.deepEqual(FERTILIZERS.map((item) => item.rounds), [3, 5, 8]);
+  assert.deepEqual(FERTILIZERS.map((item) => item.cost), [300, 1200, 6000, 28000, 120000, 300000, 900000, 2800000, 9000000, 30000000]);
+  assert.deepEqual(FERTILIZERS.map((item) => item.rounds), [3, 4, 5, 5, 8, 6, 8, 9, 10, 12]);
+  assert.equal(FERTILIZERS.length, 10);
+  assert.ok(FERTILIZERS.every((item) => item.purpose && item.unlock));
   assert.equal(PLOTS.length, 81);
   assert.ok(PLOTS.slice(0, 9).every((item) => item.cost === 0));
   assert.equal(PLOTS[9].cost, 1200);
@@ -125,6 +127,18 @@ test("五階自動化設備由單格擴張到 9×9", () => {
   assert.deepEqual(HARVESTERS.map((item) => item.range), [1, 3, 5, 7, 9]);
   assert.deepEqual(SPRINKLERS.map((item) => item.range), [1, 3, 5, 7, 9]);
   assert.deepEqual(HARVESTERS.map((item) => automationTargetIndexes(item.range, INITIAL_PLOT_ID, state.ownedPlots).length), [1, 9, 25, 49, 81]);
+});
+
+test("十種肥料依各自條件解鎖", () => {
+  const state = createInitialState(0);
+  assert.equal(isFertilizerUnlocked(FERTILIZERS.find((item) => item.id === "quick"), state), false);
+  assert.equal(isFertilizerUnlocked(FERTILIZERS.find((item) => item.id === "bounty"), state), true);
+  state.inventory.seed_tomato = 1;
+  state.harvestedCells = 5000;
+  state.lifetimeGold = 10000000;
+  state.ownedPlots = PLOTS.slice(0, 49).map((plot) => plot.id);
+  state.ownedToolIds.push("prosperity_blade");
+  assert.ok(FERTILIZERS.every((item) => isFertilizerUnlocked(item, state)));
 });
 
 test("單點滴灌器只加速中心一格", () => {

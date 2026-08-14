@@ -1,7 +1,7 @@
 "use strict";
 
 const {
-  BOARD_SIZE, PLOT_GRID_SIZE, INITIAL_PLOT_ID, INITIAL_PLOT_IDS, PLANTS, TOOLS, PLOTS, HARVESTERS, SPRINKLERS, FERTILIZERS,
+  BOARD_SIZE, PLOT_GRID_SIZE, INITIAL_PLOT_ID, PLANTS, TOOLS, PLOTS, HARVESTERS, SPRINKLERS, FERTILIZERS,
   createInitialState, validateState, simulateTo, manualHarvest, sowPlot,
   fertilizePlot, buyPlot, formatNumber, formatTime, getPlant, getTool,
   getHarvester, getSprinkler, getFertilizer, getProductPrice, plotIdForIndex, indexesForPlot,
@@ -21,7 +21,7 @@ const $ = (selector) => document.querySelector(selector);
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
 const elements = {
-  gold: $("#gold-value"), saveState: $("#save-state"), shop: $("#shop-panel"),
+  gold: $("#gold-value"), shop: $("#shop-panel"),
   tabs: $("#shop-tabs"), shopList: $("#shop-list"), canvas: $("#farm-canvas"),
   canvasShell: $("#farm-canvas-shell"), quickbar: $("#quickbar"),
   toast: $("#toast"), backdrop: $("#shop-backdrop"),
@@ -45,6 +45,7 @@ const plantBursts = [];
 const deviceBursts = [];
 const activePointers = new Map();
 const TALL_PLANT_IDS = new Set(["corn", "wheat", "lavender", "cotton", "sugarcane", "grape", "vanilla", "coffee"]);
+const ALL_PLOT_IDS = PLOTS.map((plot) => plot.id);
 const CELL_PAINT_ORDER = Array.from({ length: BOARD_SIZE * BOARD_SIZE }, (_, index) => index)
   .sort((a, b) => {
     const aRow = Math.floor(a / BOARD_SIZE); const aCol = a % BOARD_SIZE;
@@ -59,7 +60,6 @@ let selectedLandPlot = null;
 let selectedShopProduct = null;
 let keyboardIndex = indexesForPlot(INITIAL_PLOT_ID)[4];
 let toastTimer = 0;
-let saveTimer = 0;
 let passiveBecauseOtherTab = false;
 let audioContext = null;
 let rustleBuffer = null;
@@ -70,7 +70,7 @@ let pinchGesture = null;
 let didInitialFocus = false;
 let hoverIndex = -1;
 let plotPaintOrder = null;
-let initialSceneryBounds = null;
+let fullFarmBounds = null;
 const toolCursor = { x: 0, y: 0, visible: false, swingStartedAt: -Infinity };
 
 function formatMoney(value) {
@@ -122,22 +122,12 @@ function loadState() {
   saveNow(true);
 }
 
-function saveNow(silent = false) {
+function saveNow() {
   if (!state) return;
-  if (!silent) {
-    elements.saveState.textContent = "儲存中";
-    elements.saveState.className = "save-state is-saving";
-  }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    window.clearTimeout(saveTimer);
-    saveTimer = window.setTimeout(() => {
-      elements.saveState.textContent = "已儲存";
-      elements.saveState.className = "save-state";
-    }, silent ? 0 : 350);
   } catch (error) {
-    elements.saveState.textContent = "儲存失敗";
-    elements.saveState.className = "save-state is-error";
+    console.warn("無法儲存農場進度", error);
   }
 }
 
@@ -205,10 +195,13 @@ function playTone(kind = "hit") {
         scheduleNote(now, 523.25, .14, .035);
         scheduleNote(now + .075, 659.25, .16, .032);
         scheduleNote(now + .15, 783.99, .22, .035);
-      } else if (kind === "weed" || kind === "harvest") {
-        scheduleRustle(now, kind === "harvest");
-        scheduleNote(now, kind === "weed" ? 245 : 330, .1, .022, "triangle", kind === "weed" ? 155 : 220);
-        if (kind === "harvest") scheduleNote(now + .07, 720, .14, .025, "sine", 920);
+      } else if (kind === "damage") {
+        scheduleRustle(now, false);
+        scheduleNote(now, 175, .085, .027, "triangle", 105);
+      } else if (kind === "cutComplete") {
+        scheduleRustle(now, true);
+        scheduleNote(now, 360, .11, .028, "triangle", 620);
+        scheduleNote(now + .075, 820, .16, .026, "sine", 1040);
       } else if (kind === "plant") {
         scheduleRustle(now, false);
         scheduleNote(now + .035, 260, .16, .025, "sine", 430);
@@ -513,12 +506,7 @@ function drawFarmhouse(x, y, scale = 1) {
   ctx.restore();
 }
 
-function drawWorldScenery() {
-  initialSceneryBounds ||= farmSurfaceBounds(INITIAL_PLOT_IDS);
-  const bounds = initialSceneryBounds;
-  const centerX = (bounds.minX + bounds.maxX) / 2;
-  const centerY = (bounds.minY + bounds.maxY) / 2;
-
+function drawWorldBackdrop() {
   const grassGradient = ctx.createLinearGradient(0, -700, 0, 2100);
   grassGradient.addColorStop(0, "#a9c983");
   grassGradient.addColorStop(.48, "#86ad69");
@@ -536,36 +524,40 @@ function drawWorldScenery() {
     ctx.fill();
   }
   ctx.restore();
+}
 
-  drawMountain(centerX - 250, bounds.minY - 105, 1.1, "rgba(82,118,86,.65)", "rgba(74,127,75,.72)");
-  drawMountain(centerX + 260, bounds.minY - 92, .88, "rgba(91,126,91,.56)", "rgba(84,137,79,.65)");
+function drawSideScenery() {
+  fullFarmBounds ||= farmSurfaceBounds(ALL_PLOT_IDS);
+  const bounds = fullFarmBounds;
+  const centerY = (bounds.minY + bounds.maxY) / 2;
+
+  drawMountain(bounds.minX - 330, centerY - 115, 1.05, "rgba(82,118,86,.72)", "rgba(74,127,75,.82)");
+  drawMountain(bounds.maxX + 325, centerY - 85, .92, "rgba(91,126,91,.68)", "rgba(84,137,79,.76)");
 
   ctx.save();
   ctx.fillStyle = "rgba(82,151,161,.68)";
   ctx.beginPath();
-  ctx.ellipse(bounds.minX - 120, centerY + 65, 108, 49, -.18, 0, Math.PI * 2);
+  ctx.ellipse(bounds.minX - 235, centerY + 205, 108, 49, -.18, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = "rgba(221,239,202,.6)";
   ctx.lineWidth = 5;
   ctx.stroke();
   ctx.strokeStyle = "rgba(232,250,233,.42)";
   ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.ellipse(bounds.minX - 128, centerY + 62, 62, 18, -.18, .2, 2.3); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(bounds.minX - 243, centerY + 202, 62, 18, -.18, .2, 2.3); ctx.stroke();
   ctx.restore();
 
-  drawFarmhouse(bounds.maxX + 132, centerY + 18, .82);
-  drawTree(bounds.minX - 58, centerY - 45, 1.05);
-  drawTree(bounds.minX - 165, centerY - 4, .78);
-  drawTree(bounds.maxX + 78, centerY - 92, .9);
-  drawTree(bounds.maxX + 175, centerY + 100, .7);
-  drawTree(centerX - 85, bounds.maxY + 96, .72);
-  drawTree(centerX + 52, bounds.maxY + 110, .62);
+  drawFarmhouse(bounds.maxX + 145, centerY + 175, .82);
+  drawTree(bounds.minX - 145, centerY - 15, 1.05);
+  drawTree(bounds.minX - 245, centerY + 55, .78);
+  drawTree(bounds.maxX + 115, centerY - 65, .9);
+  drawTree(bounds.maxX + 215, centerY + 45, .7);
 
   ctx.save();
   ctx.fillStyle = "rgba(250,220,102,.8)";
   for (let flower = 0; flower < 13; flower += 1) {
     const side = flower % 2 ? -1 : 1;
-    const x = side < 0 ? bounds.minX - 42 - (flower % 4) * 18 : bounds.maxX + 42 + (flower % 3) * 16;
+    const x = side < 0 ? bounds.minX - 112 - (flower % 4) * 18 : bounds.maxX + 112 + (flower % 3) * 16;
     const y = centerY - 110 + flower * 19;
     ctx.beginPath(); ctx.arc(x, y, 3.2, 0, Math.PI * 2); ctx.fill();
   }
@@ -869,7 +861,7 @@ function drawFarm(now = performance.now()) {
   ctx.save();
   ctx.translate(camera.x, camera.y);
   ctx.scale(camera.scale, camera.scale);
-  drawWorldScenery();
+  drawWorldBackdrop();
   const owned = new Set(state.ownedPlots);
   plotPaintOrder ||= [...PLOTS].sort((a, b) => {
     const aCenter = plotGeometry(a.id).center;
@@ -877,6 +869,7 @@ function drawFarm(now = performance.now()) {
     return aCenter.y - bCenter.y || aCenter.x - bCenter.x;
   });
   for (const plot of plotPaintOrder) drawPlotBase(plot);
+  drawSideScenery();
 
   const order = cellPaintOrder();
   for (const index of order) {
@@ -968,19 +961,15 @@ function renderHeader() {
 }
 
 function unlockText(item, type) {
-  if (type === "tool") {
-    if (item.unlock.type === "harvested") return `條件：累積收割 ${formatNumber(item.unlock.value)} 格`;
-    if (item.unlock.type === "plots") return `條件：擁有 ${item.unlock.value} 塊土地`;
-  }
-  if (type === "plant") {
-    if (item.unlock.type === "lifetimeGold") return `條件：累積獲得 ${formatMoney(item.unlock.value)}`;
-    if (item.unlock.type === "harvested") return `條件：累積收割 ${formatNumber(item.unlock.value)} 格`;
-    if (item.unlock.type === "plots") return `條件：擁有 ${item.unlock.value} 塊土地`;
-    if (item.unlock.type === "tool") return `條件：購買 ${getTool(item.unlock.value)?.name || "指定農具"}`;
+  if (type === "tool" || type === "plant" || type === "fertilizer") {
+    const unlock = item.unlock;
+    if (unlock?.type === "lifetimeGold") return `條件：累積獲得 ${formatMoney(unlock.value)}`;
+    if (unlock?.type === "harvested") return `條件：累積收割 ${formatNumber(unlock.value)} 格`;
+    if (unlock?.type === "plots") return `條件：擁有 ${unlock.value} 塊土地`;
+    if (unlock?.type === "tool") return `條件：購買 ${getTool(unlock.value)?.name || "指定農具"}`;
+    if (unlock?.type === "plantOwned") return `條件：擁有或種植 ${getPlant(unlock.value)?.name || "指定作物"}`;
+    if (unlock?.type === "automation") return "條件：開放自動化設備";
     return "尚未達成條件";
-  }
-  if (type === "fertilizer") {
-    return item.id === "quick" ? "條件：開放樁架番茄" : item.id === "bounty" ? "條件：擁有 9 塊土地" : "條件：開放自動化設備";
   }
   return "條件：收割 1,500 格並擁有 9 塊土地";
 }
@@ -1048,11 +1037,11 @@ function isShopProductOwned(kind, item) {
 }
 
 function shopProductDescription(kind, item) {
-  if (kind === "tool") return `${item.damage} 傷害 · ${item.cells} 格${item.regrowth < 1 ? ` · 再生時間 ×${item.regrowth}` : ""}`;
-  if (kind === "seed") return `一次種滿 3×3 · HP ${item.hp} · 每格收成 ${formatMoney(item.coins)} · ${formatTime(item.growSeconds)}`;
-  if (kind === "harvester") return `${item.range}×${item.range}（最多 ${item.range ** 2} 格）· 每 ${item.intervalSeconds} 秒造成 ${item.damage} 傷害`;
-  if (kind === "sprinkler") return `${item.range}×${item.range}（最多 ${item.range ** 2} 格）· 生長時間 ×${item.growthMultiplier}`;
-  return `立即生效 · 生長 ×${item.growthMultiplier} · 金幣 ×${item.coinMultiplier} · 持續 ${item.rounds} 輪`;
+  if (kind === "tool") return `用途：裝備後點擊土地進行手動收割。每格 ${item.damage} 傷害，命中 ${item.cells} 格${item.regrowth < 1 ? `，收割後下輪生長時間 ×${item.regrowth}` : ""}。`;
+  if (kind === "seed") return `用途：選取後點擊已購土地，一次種滿 3×3，之後會持續再生。單格 HP ${item.hp}，每格收成 ${formatMoney(item.coins)}，生長 ${formatTime(item.growSeconds)}。`;
+  if (kind === "harvester") return `用途：配置到土地後自動攻擊範圍內的成熟作物，離線也會工作。範圍 ${item.range}×${item.range}（最多 ${item.range ** 2} 格），每 ${item.intervalSeconds} 秒造成 ${item.damage} 傷害。`;
+  if (kind === "sprinkler") return `用途：配置到土地後持續加速範圍內作物，離線生長同樣有效。範圍 ${item.range}×${item.range}（最多 ${item.range ** 2} 格），生長時間 ×${item.growthMultiplier}。`;
+  return `用途：${item.purpose} 選取後施用於一塊 3×3 作物，當下立即生效；生長 ×${item.growthMultiplier}、金幣 ×${item.coinMultiplier}，持續 ${item.rounds} 輪。`;
 }
 
 function openShopProduct(kind, id) {
@@ -1062,9 +1051,11 @@ function openShopProduct(kind, id) {
   const unlocked = isShopProductUnlocked(kind, item);
   const owned = isShopProductOwned(kind, item);
   const price = getProductPrice(kind, item);
+  const description = shopProductDescription(kind, item);
+  const unlockType = kind === "seed" ? "plant" : kind === "harvester" || kind === "sprinkler" ? "automation" : kind;
   elements.shopDialogArt.innerHTML = assetMarkup(item.image, item.emoji);
   elements.shopDialogTitle.textContent = item.name;
-  elements.shopDialogCopy.textContent = unlocked ? shopProductDescription(kind, item) : unlockText(item, kind === "seed" ? "plant" : kind === "harvester" || kind === "sprinkler" ? "automation" : kind);
+  elements.shopDialogCopy.textContent = unlocked ? description : `${unlockText(item, unlockType)}。${description}`;
   elements.shopDialogPrice.textContent = unlocked ? (owned ? "已擁有" : formatMoney(price)) : "";
   elements.shopDialogBuy.disabled = !unlocked || owned || state.gold < price;
   elements.shopDialogBuy.textContent = !unlocked ? "🔒" : owned ? "已擁有" : state.gold < price ? "金幣不足" : `購買 ${formatMoney(price)}`;
@@ -1368,11 +1359,12 @@ function handleBoardClick(index) {
   renderQuickbar();
   const harvestedHits = result.results.filter((hit) => hit.harvested);
   if (harvestedHits.length) {
-    const onlyWeeds = harvestedHits.every((hit) => state.cells[hit.index].plantId === "weed");
-    playTone(onlyWeeds ? "weed" : "harvest");
+    playTone("cutComplete");
+  } else if (result.results.length) {
+    playTone("damage");
   } else {
     playTone("hit");
-    if (!result.results.length) showToast("這株植物還在生長");
+    showToast("這株植物還在生長");
   }
   saveNow();
 }
