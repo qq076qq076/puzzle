@@ -1,7 +1,7 @@
 "use strict";
 
 const {
-  BOARD_SIZE, PLOT_GRID_SIZE, INITIAL_PLOT_ID, PLANTS, TOOLS, PLOTS, HARVESTERS, SPRINKLERS, FERTILIZERS,
+  BOARD_SIZE, PLOT_GRID_SIZE, INITIAL_PLOT_ID, INITIAL_PLOT_IDS, PLANTS, TOOLS, PLOTS, HARVESTERS, SPRINKLERS, FERTILIZERS,
   createInitialState, validateState, simulateTo, manualHarvest, sowPlot,
   fertilizePlot, buyPlot, formatNumber, formatTime, getPlant, getTool,
   getHarvester, getSprinkler, getFertilizer, getProductPrice, plotIdForIndex, indexesForPlot,
@@ -41,8 +41,16 @@ const ctx = elements.canvas.getContext("2d", { alpha: true });
 const images = new Map();
 const effects = [];
 const swingMarks = [];
+const plantBursts = [];
+const deviceBursts = [];
 const activePointers = new Map();
 const TALL_PLANT_IDS = new Set(["corn", "wheat", "lavender", "cotton", "sugarcane", "grape", "vanilla", "coffee"]);
+const CELL_PAINT_ORDER = Array.from({ length: BOARD_SIZE * BOARD_SIZE }, (_, index) => index)
+  .sort((a, b) => {
+    const aRow = Math.floor(a / BOARD_SIZE); const aCol = a % BOARD_SIZE;
+    const bRow = Math.floor(b / BOARD_SIZE); const bCol = b % BOARD_SIZE;
+    return (aRow + aCol) - (bRow + bCol) || aRow - bRow;
+  });
 const camera = { scale: 1, x: 0, y: 0 };
 let state;
 let activeTab = "tools";
@@ -61,6 +69,8 @@ let singleGesture = null;
 let pinchGesture = null;
 let didInitialFocus = false;
 let hoverIndex = -1;
+let plotPaintOrder = null;
+let initialSceneryBounds = null;
 const toolCursor = { x: 0, y: 0, visible: false, swingStartedAt: -Infinity };
 
 function formatMoney(value) {
@@ -199,6 +209,15 @@ function playTone(kind = "hit") {
         scheduleRustle(now, kind === "harvest");
         scheduleNote(now, kind === "weed" ? 245 : 330, .1, .022, "triangle", kind === "weed" ? 155 : 220);
         if (kind === "harvest") scheduleNote(now + .07, 720, .14, .025, "sine", 920);
+      } else if (kind === "plant") {
+        scheduleRustle(now, false);
+        scheduleNote(now + .035, 260, .16, .025, "sine", 430);
+      } else if (kind === "machine") {
+        scheduleNote(now, 120, .16, .035, "square", 82);
+        scheduleNote(now + .09, 520, .12, .022, "triangle", 690);
+      } else if (kind === "water") {
+        scheduleNote(now, 680, .13, .022, "sine", 430);
+        scheduleNote(now + .09, 840, .16, .018, "sine", 560);
       } else if (kind === "place") {
         scheduleNote(now, 310, .1, .024, "triangle", 390);
       } else {
@@ -230,8 +249,8 @@ function resizeCanvas() {
   } else constrainCamera();
 }
 
-function ownedFarmSurfaceBounds() {
-  const indexes = state.ownedPlots.flatMap(indexesForPlot);
+function farmSurfaceBounds(plotIds) {
+  const indexes = plotIds.flatMap(indexesForPlot);
   const points = indexes.map((index) => worldPoint(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE));
   return {
     minX: Math.min(...points.map((point) => point.x)) - TILE_W / 2,
@@ -239,6 +258,10 @@ function ownedFarmSurfaceBounds() {
     minY: Math.min(...points.map((point) => point.y)) - TILE_H / 2,
     maxY: Math.max(...points.map((point) => point.y)) + TILE_H / 2 + TILE_DEPTH
   };
+}
+
+function ownedFarmSurfaceBounds() {
+  return farmSurfaceBounds(state.ownedPlots);
 }
 
 function constrainCamera() {
@@ -491,9 +514,29 @@ function drawFarmhouse(x, y, scale = 1) {
 }
 
 function drawWorldScenery() {
-  const bounds = ownedFarmSurfaceBounds();
+  initialSceneryBounds ||= farmSurfaceBounds(INITIAL_PLOT_IDS);
+  const bounds = initialSceneryBounds;
   const centerX = (bounds.minX + bounds.maxX) / 2;
   const centerY = (bounds.minY + bounds.maxY) / 2;
+
+  const grassGradient = ctx.createLinearGradient(0, -700, 0, 2100);
+  grassGradient.addColorStop(0, "#a9c983");
+  grassGradient.addColorStop(.48, "#86ad69");
+  grassGradient.addColorStop(1, "#6f985c");
+  ctx.fillStyle = grassGradient;
+  ctx.fillRect(-2600, -900, 5200, 3400);
+
+  ctx.save();
+  ctx.fillStyle = "rgba(242,232,164,.09)";
+  for (let patch = 0; patch < 96; patch += 1) {
+    const x = ((patch * 347) % 4400) - 2200;
+    const y = ((patch * 193) % 2600) - 500;
+    ctx.beginPath();
+    ctx.ellipse(x, y, 18 + patch % 5 * 8, 7 + patch % 3 * 4, (patch % 7) * .18, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+
   drawMountain(centerX - 250, bounds.minY - 105, 1.1, "rgba(82,118,86,.65)", "rgba(74,127,75,.72)");
   drawMountain(centerX + 260, bounds.minY - 92, .88, "rgba(91,126,91,.56)", "rgba(84,137,79,.65)");
 
@@ -526,22 +569,6 @@ function drawWorldScenery() {
     const y = centerY - 110 + flower * 19;
     ctx.beginPath(); ctx.arc(x, y, 3.2, 0, Math.PI * 2); ctx.fill();
   }
-  ctx.restore();
-}
-
-function drawCanvasBackdrop() {
-  ctx.save();
-  ctx.globalAlpha = .38;
-  drawMountain(canvasWidth * .18, 112, .68, "#63856b", "#6f9b68");
-  drawMountain(canvasWidth * .72, 102, .54, "#728f73", "#78a06d");
-  ctx.globalAlpha = .55;
-  ctx.fillStyle = "#66a8ae";
-  ctx.beginPath();
-  ctx.ellipse(52, canvasHeight - 38, 116, 43, -.08, 0, Math.PI * 2);
-  ctx.fill();
-  drawFarmhouse(canvasWidth - 62, canvasHeight - 20, .54);
-  drawTree(34, canvasHeight - 26, .62);
-  drawTree(canvasWidth - 128, canvasHeight - 12, .46);
   ctx.restore();
 }
 
@@ -594,17 +621,44 @@ function drawBar(x, y, ratio, color) {
   ctx.fillRect(x - width / 2 + 1, y + 1, (width - 2) * clamp(ratio, 0, 1), height - 2);
 }
 
-function drawDevices(plotId, x, y) {
+function drawDevices(plotId, x, y, now) {
   const harvester = state.harvesters.find((item) => item.plotId === plotId);
   const sprinkler = state.sprinklers.find((item) => item.plotId === plotId);
   if (!harvester && !sprinkler) return;
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const devices = [harvester && getHarvester(harvester.id), sprinkler && getSprinkler(sprinkler.id)].filter(Boolean);
-  devices.forEach((device, deviceIndex) => {
+  const devices = [
+    harvester && { kind: "harvester", item: getHarvester(harvester.id) },
+    sprinkler && { kind: "sprinkler", item: getSprinkler(sprinkler.id) }
+  ].filter(Boolean);
+  devices.forEach(({ kind, item: device }, deviceIndex) => {
     const badgeX = x + (devices.length === 1 ? 0 : deviceIndex ? 25 : -25);
-    const badgeY = y - 35;
+    const motion = state.settings.reducedMotion ? 0 : now / (kind === "harvester" ? 150 : 220);
+    const badgeY = y - 35 + (state.settings.reducedMotion ? 0 : Math.sin(motion * .15 + plotId) * 1.6);
+    ctx.save();
+    ctx.translate(badgeX, badgeY);
+    if (kind === "harvester") {
+      ctx.rotate(motion * .12);
+      ctx.strokeStyle = "rgba(239,189,75,.72)";
+      ctx.lineWidth = 2.2 / camera.scale;
+      ctx.beginPath(); ctx.arc(0, 0, 23, 0, Math.PI * 2); ctx.stroke();
+      for (let tooth = 0; tooth < 8; tooth += 1) {
+        ctx.rotate(Math.PI / 4);
+        ctx.beginPath(); ctx.moveTo(21, 0); ctx.lineTo(26, 0); ctx.stroke();
+      }
+    } else {
+      ctx.strokeStyle = "rgba(125,213,230,.72)";
+      ctx.lineWidth = 2 / camera.scale;
+      for (let drop = 0; drop < 3; drop += 1) {
+        const angle = motion * .1 + drop * Math.PI * 2 / 3;
+        const radius = 23 + Math.sin(motion * .12 + drop) * 3;
+        ctx.beginPath();
+        ctx.arc(Math.cos(angle) * radius, Math.sin(angle) * radius * .45, 2.5, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
     ctx.fillStyle = "rgba(255,250,232,.94)";
     ctx.beginPath(); ctx.arc(badgeX, badgeY, 20, 0, Math.PI * 2); ctx.fill();
     const image = device.image ? images.get(device.image) : null;
@@ -652,12 +706,88 @@ function drawLockedPlots() {
 }
 
 function cellPaintOrder() {
-  return Array.from({ length: BOARD_SIZE * BOARD_SIZE }, (_, index) => index)
-    .sort((a, b) => {
-      const aRow = Math.floor(a / BOARD_SIZE); const aCol = a % BOARD_SIZE;
-      const bRow = Math.floor(b / BOARD_SIZE); const bCol = b % BOARD_SIZE;
-      return (aRow + aCol) - (bRow + bCol) || aRow - bRow;
-    });
+  return CELL_PAINT_ORDER;
+}
+
+function drawActionAnimations(now) {
+  for (let i = plantBursts.length - 1; i >= 0; i -= 1) {
+    const burst = plantBursts[i];
+    const age = now - burst.startedAt;
+    const duration = state.settings.reducedMotion ? 180 : 820;
+    if (age < 0) continue;
+    if (age > duration) {
+      plantBursts.splice(i, 1);
+      continue;
+    }
+    const progress = clamp(age / duration, 0, 1);
+    const rise = 1 - (1 - progress) ** 3;
+    ctx.save();
+    ctx.translate(burst.x, burst.y + TILE_H * .39);
+    ctx.globalAlpha = Math.sin(progress * Math.PI);
+    ctx.strokeStyle = "rgba(91,57,35,.72)";
+    ctx.lineWidth = 2 / camera.scale;
+    ctx.beginPath();
+    ctx.ellipse(0, 2, 9 + progress * 22, 3 + progress * 7, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    for (let seed = 0; seed < 3; seed += 1) {
+      const seedX = (seed - 1) * 10;
+      const fall = Math.min(1, progress * 2.2);
+      ctx.fillStyle = "#765036";
+      ctx.beginPath();
+      ctx.ellipse(seedX, -32 + fall * 31 + Math.sin(seed * 2.1) * 3, 2.5, 1.7, seed * .7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.strokeStyle = burst.color;
+    ctx.lineWidth = 3 / camera.scale;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -20 * rise); ctx.stroke();
+    ctx.fillStyle = burst.color;
+    ctx.beginPath(); ctx.ellipse(-6 * rise, -13 * rise, 7 * rise, 3.5 * rise, -.45, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(6 * rise, -18 * rise, 7 * rise, 3.5 * rise, .45, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  for (let i = deviceBursts.length - 1; i >= 0; i -= 1) {
+    const burst = deviceBursts[i];
+    const duration = state.settings.reducedMotion ? 180 : burst.kind === "sprinkler" ? 920 : 760;
+    const age = now - burst.startedAt;
+    if (age > duration) {
+      deviceBursts.splice(i, 1);
+      continue;
+    }
+    const progress = clamp(age / duration, 0, 1);
+    const fade = 1 - progress;
+    ctx.save();
+    ctx.translate(burst.x, burst.y - 8);
+    if (burst.kind === "sprinkler") {
+      ctx.strokeStyle = `rgba(132,225,241,${fade * .9})`;
+      ctx.lineWidth = 3 / camera.scale;
+      for (let ring = 0; ring < 3; ring += 1) {
+        const ringProgress = clamp(progress * 1.45 - ring * .16, 0, 1);
+        ctx.beginPath();
+        ctx.ellipse(0, 14, 18 + ringProgress * 70, 7 + ringProgress * 24, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.fillStyle = `rgba(199,244,250,${fade})`;
+      for (let drop = 0; drop < 8; drop += 1) {
+        const angle = drop * Math.PI / 4;
+        const radius = 18 + progress * 72;
+        ctx.beginPath();
+        ctx.arc(Math.cos(angle) * radius, Math.sin(angle) * radius * .38 - 32 * Math.sin(progress * Math.PI), 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else {
+      ctx.rotate(progress * Math.PI * 2.5);
+      ctx.strokeStyle = `rgba(255,215,106,${fade})`;
+      ctx.lineWidth = 4 / camera.scale;
+      ctx.beginPath(); ctx.arc(0, 0, 18 + progress * 52, 0, Math.PI * 2); ctx.stroke();
+      for (let spark = 0; spark < 10; spark += 1) {
+        ctx.rotate(Math.PI / 5);
+        const inner = 20 + progress * 45;
+        ctx.beginPath(); ctx.moveTo(inner, 0); ctx.lineTo(inner + 12 * fade, 0); ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
 }
 
 function drawEffects(now) {
@@ -674,7 +804,7 @@ function drawEffects(now) {
     ctx.save();
     ctx.translate(mark.x, mark.y + 4);
     ctx.rotate(-.48 + sweep * .54);
-    ctx.globalAlpha = Math.sin(progress * Math.PI) * .9;
+    ctx.globalAlpha = Math.sin(progress * Math.PI) * (mark.harvested ? 1 : .7);
     ctx.strokeStyle = "#fff4b1";
     ctx.lineWidth = 5 / camera.scale;
     ctx.lineCap = "round";
@@ -682,14 +812,33 @@ function drawEffects(now) {
     ctx.moveTo(-34, -15);
     ctx.quadraticCurveTo(0, 9, 35, -11);
     ctx.stroke();
-    ctx.strokeStyle = "#7dae50";
+    ctx.globalAlpha *= .55;
+    ctx.beginPath();
+    ctx.moveTo(-27, -22);
+    ctx.quadraticCurveTo(2, 3, 30, -19);
+    ctx.stroke();
+    ctx.globalAlpha = Math.sin(progress * Math.PI) * (mark.harvested ? 1 : .55);
+    ctx.strokeStyle = mark.color || "#7dae50";
     ctx.lineWidth = 2.5 / camera.scale;
-    for (let leaf = 0; leaf < 3; leaf += 1) {
-      const offset = (leaf - 1) * 18;
+    const fragmentCount = mark.harvested ? 7 : 2;
+    for (let leaf = 0; leaf < fragmentCount; leaf += 1) {
+      const direction = leaf % 2 ? -1 : 1;
+      const spread = 6 + (leaf % 4) * 8;
+      const offset = direction * spread * progress;
+      const lift = Math.sin(progress * Math.PI) * (13 + leaf % 3 * 7);
       ctx.beginPath();
-      ctx.moveTo(offset, -4 - progress * 6);
-      ctx.lineTo(offset + 7, -13 - progress * 18);
+      ctx.moveTo(offset, -4 - lift);
+      ctx.lineTo(offset + direction * (5 + leaf % 3), -10 - lift - progress * 7);
       ctx.stroke();
+    }
+    if (mark.harvested) {
+      ctx.fillStyle = `rgba(210,180,126,${(1 - progress) * .34})`;
+      for (let dust = 0; dust < 4; dust += 1) {
+        const angle = dust * Math.PI / 2 + .4;
+        ctx.beginPath();
+        ctx.arc(Math.cos(angle) * progress * 24, 6 + Math.sin(angle) * progress * 8, 5 + progress * 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
     ctx.restore();
   }
@@ -717,18 +866,17 @@ function drawEffects(now) {
 function drawFarm(now = performance.now()) {
   if (!state || !canvasWidth || !canvasHeight) return;
   ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-  drawCanvasBackdrop();
   ctx.save();
   ctx.translate(camera.x, camera.y);
   ctx.scale(camera.scale, camera.scale);
   drawWorldScenery();
   const owned = new Set(state.ownedPlots);
-  const plotOrder = [...PLOTS].sort((a, b) => {
+  plotPaintOrder ||= [...PLOTS].sort((a, b) => {
     const aCenter = plotGeometry(a.id).center;
     const bCenter = plotGeometry(b.id).center;
     return aCenter.y - bCenter.y || aCenter.x - bCenter.x;
   });
-  for (const plot of plotOrder) drawPlotBase(plot);
+  for (const plot of plotPaintOrder) drawPlotBase(plot);
 
   const order = cellPaintOrder();
   for (const index of order) {
@@ -750,9 +898,10 @@ function drawFarm(now = performance.now()) {
       ctx.font = "13px sans-serif";
       ctx.fillText(`✦${cell.fertilizerRounds}`, point.x - 31, point.y - 15);
     }
-    if (index === indexesForPlot(plotId)[4]) drawDevices(plotId, point.x, point.y);
+    if (index === indexesForPlot(plotId)[4]) drawDevices(plotId, point.x, point.y, now);
   }
 
+  drawActionAnimations(now);
   drawLockedPlots();
   if (hoverIndex >= 0) {
     const row = Math.floor(hoverIndex / BOARD_SIZE);
@@ -1034,8 +1183,8 @@ function consumeInventory(kind, id) {
 function placeDevice(kind, id, plotId) {
   const list = kind === "harvester" ? state.harvesters : state.sprinklers;
   const currentAtTarget = list.find((item) => item.plotId === plotId);
-  if (selection.sourcePlot === plotId) { selection = null; showToast("設備留在原地"); return; }
-  if (currentAtTarget && !window.confirm("這塊土地已有同類設備。要替換並把原設備收回工具列嗎？")) return;
+  if (selection.sourcePlot === plotId) { selection = null; showToast("設備留在原地"); return false; }
+  if (currentAtTarget && !window.confirm("這塊土地已有同類設備。要替換並把原設備收回工具列嗎？")) return false;
   if (currentAtTarget) {
     state.inventory[`${kind}_${currentAtTarget.id}`] = inventoryCount(`${kind}_${currentAtTarget.id}`) + 1;
     list.splice(list.indexOf(currentAtTarget), 1);
@@ -1046,24 +1195,51 @@ function placeDevice(kind, id, plotId) {
   } else if (!consumeInventory(kind, id)) {
     showToast("工具列中已沒有這件設備");
     selection = null;
-    return;
+    return false;
   }
   if (kind === "harvester") list.push({ id, plotId, nextRunAt: Date.now() + getHarvester(id).intervalSeconds * 1000 });
   else list.push({ id, plotId });
   showToast(`${kind === "harvester" ? getHarvester(id).name : getSprinkler(id).name}已配置`);
   selection = null;
+  return true;
+}
+
+function triggerPlantingAnimation(plotId, plantId) {
+  const plant = getPlant(plantId);
+  const now = performance.now();
+  indexesForPlot(plotId).forEach((index, order) => {
+    const row = Math.floor(index / BOARD_SIZE);
+    const col = index % BOARD_SIZE;
+    const point = worldPoint(row, col);
+    plantBursts.push({
+      x: point.x,
+      y: point.y,
+      color: plant?.color || "#78a858",
+      startedAt: now + (state.settings.reducedMotion ? 0 : order * 32)
+    });
+  });
+}
+
+function triggerDeviceAnimation(kind, plotId) {
+  const centerIndex = indexesForPlot(plotId)[4];
+  const point = worldPoint(Math.floor(centerIndex / BOARD_SIZE), centerIndex % BOARD_SIZE);
+  deviceBursts.push({ kind, x: point.x, y: point.y, startedAt: performance.now() });
 }
 
 function useSelection(plotId) {
   if (!state.ownedPlots.includes(plotId)) { showToast("請先購買這塊土地"); return; }
+  let feedbackSound = "place";
   if (selection.kind === "seed") {
+    const plantId = selection.id;
     const indexes = indexesForPlot(plotId);
     const replacing = indexes.some((index) => state.cells[index].plantId !== "weed" || state.cells[index].fertilizerId);
     if (replacing && !window.confirm("播種會覆蓋這塊土地現有的作物、成長進度與肥料。確定繼續嗎？")) return;
-    if (!consumeInventory("seed", selection.id)) return;
-    sowPlot(state, plotId, selection.id);
-    showToast(`${getPlant(selection.id).name}已種滿 3×3 土地`);
+    if (!consumeInventory("seed", plantId)) return;
+    sowPlot(state, plotId, plantId);
+    triggerPlantingAnimation(plotId, plantId);
+    showToast(`${getPlant(plantId).name}已種滿 3×3 土地`);
     selection = null;
+    feedbackSound = "plant";
   } else if (selection.kind === "fertilizer") {
     if (!isValidSelectionPlot(plotId)) { showToast("含有雜草的地塊不能施肥"); return; }
     const hasFertilizer = indexesForPlot(plotId).some((index) => state.cells[index].fertilizerId);
@@ -1073,9 +1249,16 @@ function useSelection(plotId) {
     showToast(`${getFertilizer(selection.id).name}已施用，立即生效 ${getFertilizer(selection.id).rounds} 輪`);
     selection = null;
   } else if (selection.kind === "harvester" || selection.kind === "sprinkler") {
-    placeDevice(selection.kind, selection.id, plotId);
+    const deviceKind = selection.kind;
+    const deviceId = selection.id;
+    if (!placeDevice(deviceKind, deviceId, plotId)) {
+      renderAll();
+      return;
+    }
+    triggerDeviceAnimation(deviceKind, plotId);
+    feedbackSound = deviceKind === "sprinkler" ? "water" : "machine";
   }
-  playTone("place");
+  playTone(feedbackSound);
   saveNow();
   renderAll();
 }
@@ -1151,11 +1334,19 @@ function triggerHarvestSwing(result) {
   const targets = state.settings.reducedMotion && result.targets.length
     ? [result.targets[Math.floor(result.targets.length / 2)]]
     : result.targets;
+  const hitByIndex = new Map(result.results.map((hit) => [hit.index, hit]));
   for (const index of targets) {
     const row = Math.floor(index / BOARD_SIZE);
     const col = index % BOARD_SIZE;
     const point = worldPoint(row, col);
-    swingMarks.push({ x: point.x, y: point.y, startedAt: now });
+    const plant = getPlant(state.cells[index].plantId);
+    swingMarks.push({
+      x: point.x,
+      y: point.y,
+      color: plant?.color || "#7dae50",
+      harvested: Boolean(hitByIndex.get(index)?.harvested),
+      startedAt: now
+    });
   }
 }
 
