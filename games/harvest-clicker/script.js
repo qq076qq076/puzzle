@@ -40,6 +40,7 @@ const elements = {
 const ctx = elements.canvas.getContext("2d", { alpha: true });
 const images = new Map();
 const effects = [];
+const swingMarks = [];
 const activePointers = new Map();
 const TALL_PLANT_IDS = new Set(["corn", "wheat", "lavender", "cotton", "sugarcane", "grape", "vanilla", "coffee"]);
 const camera = { scale: 1, x: 0, y: 0 };
@@ -53,13 +54,14 @@ let toastTimer = 0;
 let saveTimer = 0;
 let passiveBecauseOtherTab = false;
 let audioContext = null;
+let rustleBuffer = null;
 let canvasWidth = 0;
 let canvasHeight = 0;
 let singleGesture = null;
 let pinchGesture = null;
 let didInitialFocus = false;
 let hoverIndex = -1;
-const toolCursor = { x: 0, y: 0, visible: false };
+const toolCursor = { x: 0, y: 0, visible: false, swingStartedAt: -Infinity };
 
 function formatMoney(value) {
   return `${formatNumber(value)}$`;
@@ -145,19 +147,66 @@ function showToast(message) {
   toastTimer = window.setTimeout(() => elements.toast.classList.remove("is-visible"), 2100);
 }
 
+function scheduleNote(startAt, frequency, duration, volume, type = "sine", endFrequency = frequency) {
+  const oscillator = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+  oscillator.type = type;
+  oscillator.frequency.setValueAtTime(frequency, startAt);
+  oscillator.frequency.exponentialRampToValueAtTime(Math.max(20, endFrequency), startAt + duration);
+  gain.gain.setValueAtTime(Math.max(.0001, volume), startAt);
+  gain.gain.exponentialRampToValueAtTime(.0001, startAt + duration);
+  oscillator.connect(gain).connect(audioContext.destination);
+  oscillator.start(startAt);
+  oscillator.stop(startAt + duration + .02);
+}
+
+function scheduleRustle(startAt, bright = false) {
+  if (!rustleBuffer || rustleBuffer.sampleRate !== audioContext.sampleRate) {
+    const frameCount = Math.ceil(audioContext.sampleRate * .16);
+    rustleBuffer = audioContext.createBuffer(1, frameCount, audioContext.sampleRate);
+    const samples = rustleBuffer.getChannelData(0);
+    for (let index = 0; index < samples.length; index += 1) {
+      const envelope = 1 - index / samples.length;
+      samples[index] = (Math.random() * 2 - 1) * envelope;
+    }
+  }
+  const source = audioContext.createBufferSource();
+  const filter = audioContext.createBiquadFilter();
+  const gain = audioContext.createGain();
+  source.buffer = rustleBuffer;
+  filter.type = "bandpass";
+  filter.frequency.value = bright ? 1450 : 820;
+  filter.Q.value = .8;
+  gain.gain.setValueAtTime(bright ? .075 : .055, startAt);
+  gain.gain.exponentialRampToValueAtTime(.0001, startAt + .15);
+  source.connect(filter).connect(gain).connect(audioContext.destination);
+  source.start(startAt);
+}
+
 function playTone(kind = "hit") {
   if (!state.settings.sound) return;
   try {
-    audioContext ||= new AudioContext();
-    const oscillator = audioContext.createOscillator();
-    const gain = audioContext.createGain();
-    oscillator.type = kind === "coin" ? "sine" : "triangle";
-    oscillator.frequency.value = kind === "coin" ? 720 : 185;
-    gain.gain.setValueAtTime(kind === "coin" ? 0.035 : 0.022, audioContext.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + (kind === "coin" ? 0.12 : 0.06));
-    oscillator.connect(gain).connect(audioContext.destination);
-    oscillator.start();
-    oscillator.stop(audioContext.currentTime + 0.13);
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    audioContext ||= new AudioContextClass();
+    const schedule = () => {
+      const now = audioContext.currentTime + .008;
+      if (kind === "purchase") {
+        scheduleNote(now, 523.25, .14, .035);
+        scheduleNote(now + .075, 659.25, .16, .032);
+        scheduleNote(now + .15, 783.99, .22, .035);
+      } else if (kind === "weed" || kind === "harvest") {
+        scheduleRustle(now, kind === "harvest");
+        scheduleNote(now, kind === "weed" ? 245 : 330, .1, .022, "triangle", kind === "weed" ? 155 : 220);
+        if (kind === "harvest") scheduleNote(now + .07, 720, .14, .025, "sine", 920);
+      } else if (kind === "place") {
+        scheduleNote(now, 310, .1, .024, "triangle", 390);
+      } else {
+        scheduleNote(now, 190, .075, .026, "triangle", 120);
+      }
+    };
+    if (audioContext.state === "suspended") audioContext.resume().then(schedule).catch(() => {});
+    else schedule();
   } catch (error) { /* Audio is optional. */ }
 }
 
@@ -612,6 +661,39 @@ function cellPaintOrder() {
 }
 
 function drawEffects(now) {
+  for (let i = swingMarks.length - 1; i >= 0; i -= 1) {
+    const mark = swingMarks[i];
+    const duration = state.settings.reducedMotion ? 110 : 320;
+    const age = now - mark.startedAt;
+    if (age > duration) {
+      swingMarks.splice(i, 1);
+      continue;
+    }
+    const progress = clamp(age / duration, 0, 1);
+    const sweep = 1 - (1 - progress) ** 3;
+    ctx.save();
+    ctx.translate(mark.x, mark.y + 4);
+    ctx.rotate(-.48 + sweep * .54);
+    ctx.globalAlpha = Math.sin(progress * Math.PI) * .9;
+    ctx.strokeStyle = "#fff4b1";
+    ctx.lineWidth = 5 / camera.scale;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(-34, -15);
+    ctx.quadraticCurveTo(0, 9, 35, -11);
+    ctx.stroke();
+    ctx.strokeStyle = "#7dae50";
+    ctx.lineWidth = 2.5 / camera.scale;
+    for (let leaf = 0; leaf < 3; leaf += 1) {
+      const offset = (leaf - 1) * 18;
+      ctx.beginPath();
+      ctx.moveTo(offset, -4 - progress * 6);
+      ctx.lineTo(offset + 7, -13 - progress * 18);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   for (let i = effects.length - 1; i >= 0; i -= 1) {
     const effect = effects[i];
     const age = now - effect.startedAt;
@@ -700,7 +782,18 @@ function drawFarm(now = performance.now()) {
     const image = tool.image ? images.get(tool.image) : null;
     ctx.save();
     ctx.translate(toolCursor.x, toolCursor.y);
-    ctx.rotate(-0.18);
+    const swingProgress = clamp((now - toolCursor.swingStartedAt) / (state.settings.reducedMotion ? 80 : 280), 0, 1);
+    let toolAngle = -.18;
+    if (swingProgress < 1) {
+      if (swingProgress < .58) {
+        const strike = 1 - (1 - swingProgress / .58) ** 3;
+        toolAngle = -.68 + strike * 1.34;
+      } else {
+        toolAngle = .66 - ((swingProgress - .58) / .42) * .84;
+      }
+      ctx.scale(1 + Math.sin(swingProgress * Math.PI) * .08, 1 + Math.sin(swingProgress * Math.PI) * .08);
+    }
+    ctx.rotate(toolAngle);
     ctx.shadowColor = "rgba(22,31,20,.45)";
     ctx.shadowBlur = 6;
     ctx.shadowOffsetY = 3;
@@ -921,7 +1014,7 @@ function buyItem(kind, id) {
     selection = { kind, id, sourcePlot: null };
     showToast(`${item.name}已放入下方工具列`);
   }
-  playTone("coin");
+  playTone("purchase");
   saveNow();
   if (elements.shopDialog.open) elements.shopDialog.close();
   selectedShopProduct = null;
@@ -982,7 +1075,7 @@ function useSelection(plotId) {
   } else if (selection.kind === "harvester" || selection.kind === "sprinkler") {
     placeDevice(selection.kind, selection.id, plotId);
   }
-  playTone("coin");
+  playTone("place");
   saveNow();
   renderAll();
 }
@@ -1029,7 +1122,7 @@ function purchaseSelectedLand() {
   if (!window.confirm(`要以 ${formatMoney(plot.cost)} 購買「${plot.name}」嗎？`)) return;
   if (!buyPlot(state, plot.id)) return;
   closeLandPopover();
-  playTone("coin");
+  playTone("purchase");
   showToast(`${plot.name}已加入農場`);
   saveNow();
   renderAll();
@@ -1052,6 +1145,20 @@ function addHarvestEffects(result) {
   }
 }
 
+function triggerHarvestSwing(result) {
+  const now = performance.now();
+  toolCursor.swingStartedAt = now;
+  const targets = state.settings.reducedMotion && result.targets.length
+    ? [result.targets[Math.floor(result.targets.length / 2)]]
+    : result.targets;
+  for (const index of targets) {
+    const row = Math.floor(index / BOARD_SIZE);
+    const col = index % BOARD_SIZE;
+    const point = worldPoint(row, col);
+    swingMarks.push({ x: point.x, y: point.y, startedAt: now });
+  }
+}
+
 function handleBoardClick(index) {
   const plotId = plotIdForIndex(index);
   keyboardIndex = index;
@@ -1063,12 +1170,19 @@ function handleBoardClick(index) {
   if (selection) { useSelection(plotId); return; }
   simulateTo(state, Date.now());
   const result = manualHarvest(state, index);
+  triggerHarvestSwing(result);
   addHarvestEffects(result);
   renderHeader();
   renderShop();
   renderQuickbar();
-  if (result.results.length) playTone(result.totalCoins ? "coin" : "hit");
-  else showToast("這株植物還在生長");
+  const harvestedHits = result.results.filter((hit) => hit.harvested);
+  if (harvestedHits.length) {
+    const onlyWeeds = harvestedHits.every((hit) => state.cells[hit.index].plantId === "weed");
+    playTone(onlyWeeds ? "weed" : "harvest");
+  } else {
+    playTone("hit");
+    if (!result.results.length) showToast("這株植物還在生長");
+  }
   saveNow();
 }
 
