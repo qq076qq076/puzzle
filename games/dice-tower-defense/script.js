@@ -1,59 +1,34 @@
+import {
+  COLS, ROWS, LEGAL_DROP_BRIGHTNESS, ROAD_TEXTURE_PATH, PATH
+} from "./config/board-config.js";
+import {
+  WAVE_REWARD, INITIAL_CORE_HP, PROFILE_STORAGE_KEY, RUN_STORAGE_KEY,
+  MAX_ACTIVE_EFFECTS, IMPORTANT_EFFECT_KINDS
+} from "./config/game-config.js";
+import {
+  BUY_COST, TIER_ATTACK_RATE_MULTIPLIERS, MAX_TIER, BUILD_TIMES,
+  CRIT_CHANCES, FROST_CRIT_CHANCES, POISON_DURATIONS,
+  CRIT_DAMAGE_MULTIPLIER, TOWER_DAMAGE_MULTIPLIER, ATTACK_PULSE_DURATION,
+  MERGE_EFFECT_DURATION, TIER_FIVE_MERGE_EFFECT_DURATION,
+  TIER_SIX_MERGE_EFFECT_DURATION, TOWER_TYPES
+} from "./config/tower-config.js";
+import {
+  BOSS_LANDING_DURATION, ENEMY_VISUAL_SCALE, ENEMY_RESISTANCE_START_WAVE,
+  ENEMY_RESISTANCE_PER_WAVE, ENEMY_RESISTANCE_CAP, RESISTANCE_STYLES,
+  MAGE_DISABLE_RADIUS, MAGE_DISABLE_DURATION, MAGE_DISABLE_COOLDOWN,
+  HEALER_COOLDOWN, HEALER_HEAL_RATIO, HEALING_TARGET_COOLDOWN,
+  KNOCKBACK_PROTECTION_DISTANCE, KNOCKBACK_PROTECTION_MIN,
+  KNOCKBACK_PROTECTION_MAX, BOSS_KNOCKBACK_PROTECTION,
+  ENEMY_ABILITY_CONFIG, ENEMY_TYPES, ENEMY_MODELS
+} from "./config/enemy-config.js";
+import {
+  WAVE_COUNT_MULTIPLIER, LATE_WAVE_COUNT_MULTIPLIER,
+  ENEMY_GOLD_MULTIPLIER, SHIELDED_WAVE_START, WAVES
+} from "./config/wave-config.js";
+
 (function () {
   "use strict";
 
-  const COLS = 10;
-  const ROWS = 8;
-  const WAVE_REWARD = 35;
-  const BUY_COST = 25;
-  const PROFILE_STORAGE_KEY = "puzzle.diceTowerDefense.v1";
-  const RUN_STORAGE_KEY = "puzzle.diceTowerDefense.run.v1";
-  const WAVE_COUNT_MULTIPLIER = 2.5;
-  const LATE_WAVE_COUNT_MULTIPLIER = 1.2;
-  const ENEMY_GOLD_MULTIPLIER = 1 / 3;
-  const TIER_ATTACK_RATE_MULTIPLIERS = [0.5, 0.75, 1, 1, 1, 1];
-  const MAX_TIER = 6;
-  const BUILD_TIMES = [1.2, 2.4, 4, 5.8, 7.8, 10];
-  const INITIAL_CORE_HP = 20;
-  const CRIT_CHANCES = [0.10, 0.20, 0.35, 0.48, 0.60, 0.72];
-  const FROST_CRIT_CHANCES = [0.02, 0.03, 0.04, 0.06, 0.08, 0.10];
-  const POISON_DURATIONS = [4, 5, 6, 7, 8, 9];
-  const CRIT_DAMAGE_MULTIPLIER = 1.75;
-  const TOWER_DAMAGE_MULTIPLIER = 0.5;
-  const ATTACK_PULSE_DURATION = 0.18;
-  const MERGE_EFFECT_DURATION = 0.95;
-  const TIER_FIVE_MERGE_EFFECT_DURATION = 1.15;
-  const TIER_SIX_MERGE_EFFECT_DURATION = 1.65;
-  const BOSS_LANDING_DURATION = 0.9;
-  const ENEMY_VISUAL_SCALE = (3 / 4) * 1.5;
-  const LEGAL_DROP_BRIGHTNESS = 0.65;
-  const SHIELDED_WAVE_START = 28;
-  const ENEMY_RESISTANCE_START_WAVE = 12;
-  const ENEMY_RESISTANCE_PER_WAVE = 0.02;
-  const ENEMY_RESISTANCE_CAP = 0.36;
-  const RESISTANCE_STYLES = {
-    freeze: { label: "冰凍", icon: "❄", color: "#71d8f4" },
-    lightning: { label: "雷電", icon: "⚡", color: "#f6cf63" },
-    poison: { label: "毒素", icon: "☣", color: "#9ad86f" },
-    physical: { label: "物理", icon: "◆", color: "#c5ced9" }
-  };
-  const MAGE_DISABLE_RADIUS = 2.6;
-  const MAGE_DISABLE_DURATION = 0.7;
-  const MAGE_DISABLE_COOLDOWN = 12;
-  const HEALER_COOLDOWN = 8.5;
-  const HEALER_HEAL_RATIO = 0.05;
-  const HEALING_TARGET_COOLDOWN = 6;
-  const KNOCKBACK_PROTECTION_DISTANCE = 1.35;
-  const KNOCKBACK_PROTECTION_MIN = 0.75;
-  const KNOCKBACK_PROTECTION_MAX = 2;
-  const BOSS_KNOCKBACK_PROTECTION = 2.5;
-  const MAX_ACTIVE_EFFECTS = 420;
-  const IMPORTANT_EFFECT_KINDS = new Set(["bossExplosion", "bossLanding", "shieldBreak", "waveTransition", "merge", "goldLoss"]);
-  const ROAD_TEXTURE_PATH = "assets/road/pebble-road.png";
-  const PATH = [
-    [0, 1], [1, 1], [2, 1], [3, 1], [4, 1], [5, 1], [6, 1], [7, 1], [8, 1],
-    [8, 2], [8, 3], [7, 3], [6, 3], [5, 3], [4, 3], [3, 3], [2, 3], [1, 3],
-    [1, 4], [1, 5], [1, 6], [2, 6], [3, 6], [4, 6], [5, 6], [6, 6], [7, 6], [8, 6], [9, 6]
-  ];
   const GATE_DISTANCE = PATH.length - 0.25;
   const ROAD_CELL_KEYS = new Set(PATH.map(function (slot) { return slot[0] + "," + slot[1]; }));
   const BUILD_SLOTS = [];
@@ -63,221 +38,12 @@
     }
   }
 
-  const TOWER_TYPES = {
-    cannon: {
-      name: "炮擊骰",
-      symbol: "✹",
-      color: "#ff9b65",
-      description: "穩定的單體輸出；爆擊造成 1.75 倍傷害並以目標為中心爆炸。",
-      tiers: [
-        { damage: 5.6, range: 3, interval: 0.50 },
-        { damage: 12, range: 3.5, interval: 0.42 },
-        { damage: 29.7, range: 4, interval: 0.34 },
-        { damage: 54, range: 4.5, interval: 0.31 },
-        { damage: 105, range: 5, interval: 0.28 },
-        { damage: 180, range: 5.5, interval: 0.25 }
-      ]
-    },
-    frost: {
-      name: "霜凍骰",
-      symbol: "❄",
-      color: "#71d8f4",
-      description: "降低敵人速度；爆擊造成 1.75 倍傷害並將目標凍結。",
-      slow: [0.20, 0.28, 0.38, 0.48, 0.58, 0.68],
-      tiers: [
-        { damage: 2.4, range: 3, interval: 0.42 },
-        { damage: 4.8, range: 3.5, interval: 0.40 },
-        { damage: 11.7, range: 4, interval: 0.38 },
-        { damage: 20.7, range: 4.5, interval: 0.35 },
-        { damage: 40, range: 5, interval: 0.32 },
-        { damage: 68, range: 5.5, interval: 0.29 }
-      ]
-    },
-    poison: {
-      name: "毒蝕骰",
-      symbol: "☣",
-      color: "#9ad86f",
-      description: "施加持續毒傷；爆擊對目標周圍 1 格內所有敵人造成毒傷。",
-      tiers: [
-        { damage: 1.6, range: 2.5, interval: 0.38 },
-        { damage: 3.2, range: 3, interval: 0.36 },
-        { damage: 9, range: 3.5, interval: 0.34 },
-        { damage: 16.2, range: 4, interval: 0.31 },
-        { damage: 32, range: 4.5, interval: 0.28 },
-        { damage: 56, range: 5, interval: 0.25 }
-      ]
-    },
-    chain: {
-      name: "連鎖骰",
-      symbol: "⚡",
-      color: "#f6cf63",
-      description: "讓傷害跳向敵群；爆擊造成 1.75 倍傷害且連鎖不衰減。",
-      chainCount: [2, 3, 5, 7, 9, 12],
-      tiers: [
-        { damage: 3.2, range: 3, interval: 0.59 },
-        { damage: 7.2, range: 3.5, interval: 0.53 },
-        { damage: 17.1, range: 4, interval: 0.46 },
-        { damage: 30.6, range: 4.5, interval: 0.42 },
-        { damage: 58, range: 5, interval: 0.38 },
-        { damage: 96, range: 5.5, interval: 0.34 }
-      ]
-    },
-    pierce: {
-      name: "穿刺骰",
-      symbol: "➹",
-      color: "#d4a4ff",
-      description: "沿道路順序穿透敵人；爆擊造成 1.75 倍傷害並貫穿所有合法目標。",
-      pierceCount: [2, 4, 7, 10, 14, 20],
-      tiers: [
-        { damage: 4, range: 4, interval: 0.46 },
-        { damage: 8.8, range: 4.5, interval: 0.42 },
-        { damage: 21.6, range: 5, interval: 0.38 },
-        { damage: 37.8, range: 5.5, interval: 0.35 },
-        { damage: 72, range: 6, interval: 0.32 },
-        { damage: 120, range: 6.5, interval: 0.29 }
-      ]
-    },
-    blade: {
-      name: "刃擊骰",
-      symbol: "⚔",
-      color: "#ff718f",
-      description: "近距離物理攻擊；命中讓目標沿道路後退 0.5 格。",
-      tiers: [
-        { damage: 7.2, range: 2, interval: 0.60 },
-        { damage: 15.2, range: 2, interval: 0.56 },
-        { damage: 35, range: 2, interval: 0.52 },
-        { damage: 63, range: 3, interval: 0.49 },
-        { damage: 118, range: 3, interval: 0.46 },
-        { damage: 200, range: 3, interval: 0.43 }
-      ]
-    },
-    inspire: {
-      name: "鼓舞骰",
-      symbol: "✦",
-      color: "#ffcf85",
-      description: "讓相鄰骰塔加快攻擊；爆擊使相鄰非鼓舞骰塔的下一次攻擊必定爆擊。",
-      bonus: [0.08, 0.14, 0.22, 0.30, 0.39, 0.49],
-      tiers: [
-        { range: 1.5, interval: 0.59 },
-        { range: 1.5, interval: 0.52 },
-        { range: 1.5, interval: 0.46 },
-        { range: 1.5, interval: 0.41 },
-        { range: 1.5, interval: 0.37 },
-        { range: 1.5, interval: 0.33 }
-      ]
-    }
-  };
-
-  const ENEMY_TYPES = {
-    runner: { name: "迅捷蟲", symbol: "S", color: "#ff8d83", hp: 35, speed: 1.8, leakDamage: 1, reward: 2, waveResistanceTypes: ["freeze"] },
-    armor: { name: "裝甲蟲", symbol: "A", color: "#b3bdca", hp: 95, speed: 0.8, leakDamage: 1, reward: 3, baseResistances: { physical: 0.35 }, waveResistanceTypes: ["physical"] },
-    split: { name: "分裂蟲", symbol: "D", color: "#dc9b76", hp: 70, speed: 1.0, leakDamage: 1, reward: 3, splits: true, waveResistanceTypes: ["lightning"] },
-    child: { name: "分裂幼體", symbol: "d", color: "#e4bf7b", hp: 20, speed: 1.35, leakDamage: 1, reward: 1, waveResistanceTypes: ["poison"] },
-    ghost: { name: "幽影蟲", symbol: "G", color: "#b898ec", hp: 110, speed: 1.1, leakDamage: 1, reward: 4, canBecomeInvisible: true, waveResistanceTypes: ["physical"] },
-    healer: { name: "治療法師", symbol: "H", color: "#78d8ae", hp: 80, speed: 0.7, leakDamage: 2, reward: 5, waveResistanceTypes: ["poison"] },
-    boss: { name: "巨甲王", symbol: "B", color: "#ffbf62", hp: 900, speed: 0.45, leakDamage: 5, reward: 30, boss: true, waveResistanceTypes: ["physical"] },
-    warder: { name: "結界蟲", symbol: "W", color: "#69e7ef", hp: 145, speed: 0.74, leakDamage: 2, reward: 6, waveResistanceTypes: ["lightning"] },
-    burrower: { name: "潛地蟲", symbol: "U", color: "#dfad73", hp: 105, speed: 1.18, leakDamage: 2, reward: 5, waveResistanceTypes: ["freeze"] },
-    disruptor: { name: "干擾蟲", symbol: "J", color: "#ed82ff", hp: 175, speed: 0.68, leakDamage: 3, reward: 8, waveResistanceTypes: ["lightning"] },
-    overlord: { name: "裂界巨甲王", symbol: "O", color: "#e36eff", hp: 1800, speed: 0.38, leakDamage: 8, reward: 60, boss: true, finalBoss: true, waveResistanceTypes: ["lightning", "physical"] },
-    regenerator: { name: "再生蟲", symbol: "R", color: "#70e58c", hp: 150, speed: 0.78, leakDamage: 2, reward: 6, waveResistanceTypes: ["poison"] },
-    berserker: { name: "狂暴蟲", symbol: "K", color: "#ff665f", hp: 120, speed: 1.0, leakDamage: 2, reward: 6, waveResistanceTypes: ["freeze"] },
-    thief: { name: "掠金蟲", symbol: "T", color: "#ffd45d", hp: 85, speed: 1.45, leakDamage: 1, reward: 9, goldSteal: 12, waveResistanceTypes: ["freeze"] }
-  };
-
-  const ENEMY_SPRITE_PATHS = {
-    runner: "assets/enemies/swift-bat.png",
-    armor: "assets/enemies/armored-knight.png",
-    split: "assets/enemies/splitter-slime.png",
-    child: "assets/enemies/child-spider.png",
-    ghost: "assets/enemies/shadow-ghost.png",
-    healer: "assets/enemies/healer-wizard.png",
-    boss: "assets/enemies/boss-demon.png",
-    warder: "assets/enemies/armored-knight.png",
-    burrower: "assets/enemies/child-spider.png",
-    disruptor: "assets/enemies/shadow-ghost.png",
-    overlord: "assets/enemies/boss-demon.png",
-    regenerator: "assets/enemies/splitter-slime.png",
-    berserker: "assets/enemies/armored-knight.png",
-    thief: "assets/enemies/child-spider.png"
-  };
-
-  const enemySprites = Object.keys(ENEMY_SPRITE_PATHS).reduce(function (sprites, type) {
+  const enemySprites = Object.keys(ENEMY_MODELS).reduce(function (sprites, type) {
     const image = new Image();
-    image.src = ENEMY_SPRITE_PATHS[type];
+    image.src = ENEMY_MODELS[type].spritePath;
     sprites[type] = image;
     return sprites;
   }, {});
-
-  const WAVES = [
-    [{ type: "runner", count: 6, interval: 1.50 }],
-    [{ type: "runner", count: 8, interval: 1.40 }],
-    [{ type: "runner", count: 6, interval: 1.35 }, { type: "armor", count: 2, interval: 1.50 }, { type: "runner", count: 4, interval: 1.25 }],
-    [{ type: "armor", count: 4, interval: 1.25 }, { type: "runner", count: 8, interval: 1.10 }],
-    [{ type: "runner", count: 10, interval: 0.95 }, { type: "armor", count: 6, interval: 1.10 }, { type: "boss", count: 1, interval: 1.40 }],
-    [{ type: "runner", count: 14, interval: 0.95 }, { type: "split", count: 7, interval: 1.15 }],
-    [{ type: "armor", count: 7, interval: 1.00 }, { type: "split", count: 5, interval: 1.00 }, { type: "runner", count: 8, interval: 0.90 }],
-    [{ type: "ghost", count: 5, interval: 1.05 }, { type: "runner", count: 12, interval: 0.85 }, { type: "armor", count: 6, interval: 0.95 }],
-    [{ type: "split", count: 8, interval: 0.90 }, { type: "ghost", count: 7, interval: 0.90 }, { type: "armor", count: 8, interval: 0.90 }],
-    [{ type: "runner", count: 12, interval: 0.80 }, { type: "ghost", count: 8, interval: 0.90 }, { type: "boss", count: 1, interval: 1.20 }],
-    [{ type: "healer", count: 4, interval: 1.00 }, { type: "armor", count: 9, interval: 0.85 }, { type: "runner", count: 12, interval: 0.75 }],
-    [{ type: "healer", count: 5, interval: 0.90 }, { type: "split", count: 9, interval: 0.80 }, { type: "ghost", count: 8, interval: 0.80 }],
-    [{ type: "armor", count: 12, interval: 0.75 }, { type: "healer", count: 6, interval: 0.85 }, { type: "runner", count: 14, interval: 0.65 }, { type: "regenerator", count: 4, interval: 0.82 }],
-    [{ type: "ghost", count: 12, interval: 0.70 }, { type: "split", count: 11, interval: 0.72 }, { type: "healer", count: 7, interval: 0.80 }],
-    [
-      { type: "runner", count: 14, interval: 0.65 }, { type: "armor", count: 12, interval: 0.70 },
-      { type: "split", count: 10, interval: 0.70 }, { type: "ghost", count: 10, interval: 0.70 },
-      { type: "healer", count: 6, interval: 0.80 }, { type: "boss", count: 1, interval: 1.00 }
-    ],
-    [{ type: "runner", count: 20, interval: 0.58 }, { type: "split", count: 12, interval: 0.66 }, { type: "ghost", count: 8, interval: 0.72 }, { type: "berserker", count: 6, interval: 0.68 }],
-    [{ type: "armor", count: 6, interval: 0.68 }, { type: "healer", count: 10, interval: 0.75 }, { type: "ghost", count: 20, interval: 0.65 }],
-    [{ type: "split", count: 16, interval: 0.62 }, { type: "runner", count: 20, interval: 0.55 }, { type: "healer", count: 7, interval: 0.72 }, { type: "thief", count: 6, interval: 0.64 }],
-    [{ type: "ghost", count: 18, interval: 0.58 }, { type: "armor", count: 14, interval: 0.62 }, { type: "healer", count: 9, interval: 0.70 }],
-    [
-      { type: "armor", count: 14, interval: 0.60 }, { type: "split", count: 12, interval: 0.62 },
-      { type: "ghost", count: 12, interval: 0.60 }, { type: "healer", count: 8, interval: 0.68 },
-      { type: "boss", count: 2, interval: 1.00 }
-    ],
-    [
-      { type: "runner", count: 24, interval: 0.48 }, { type: "armor", count: 16, interval: 0.55 },
-      { type: "split", count: 14, interval: 0.56 }, { type: "ghost", count: 12, interval: 0.54 },
-      { type: "healer", count: 8, interval: 0.65 }, { type: "regenerator", count: 6, interval: 0.62 }
-    ],
-    [
-      { type: "armor", count: 18, interval: 0.52 }, { type: "split", count: 16, interval: 0.54 },
-      { type: "ghost", count: 16, interval: 0.52 }, { type: "healer", count: 10, interval: 0.60 },
-      { type: "boss", count: 2, interval: 0.90 }
-    ],
-    [
-      { type: "runner", count: 20, interval: 0.46 }, { type: "armor", count: 16, interval: 0.52 },
-      { type: "split", count: 14, interval: 0.52 }, { type: "ghost", count: 14, interval: 0.50 },
-      { type: "healer", count: 10, interval: 0.58 }, { type: "berserker", count: 6, interval: 0.58 }, { type: "boss", count: 2, interval: 0.85 }
-    ],
-    [
-      { type: "armor", count: 20, interval: 0.46 }, { type: "split", count: 18, interval: 0.48 },
-      { type: "ghost", count: 18, interval: 0.46 }, { type: "healer", count: 12, interval: 0.54 }, { type: "thief", count: 6, interval: 0.50 },
-      { type: "boss", count: 3, interval: 0.80 }
-    ],
-    [{ type: "boss", count: 8, interval: 1.50 }],
-    [
-      { type: "warder", count: 8, interval: 0.52 }, { type: "armor", count: 14, interval: 0.48 },
-      { type: "ghost", count: 12, interval: 0.46 }, { type: "healer", count: 6, interval: 0.56 }, { type: "regenerator", count: 8, interval: 0.54 }
-    ],
-    [
-      { type: "burrower", count: 12, interval: 0.48 }, { type: "runner", count: 18, interval: 0.40 },
-      { type: "split", count: 12, interval: 0.46 }, { type: "warder", count: 8, interval: 0.50 }, { type: "berserker", count: 8, interval: 0.48 }
-    ],
-    [
-      { type: "disruptor", count: 8, interval: 0.54 }, { type: "armor", count: 16, interval: 0.44 },
-      { type: "healer", count: 10, interval: 0.50 }, { type: "thief", count: 8, interval: 0.48 }, { type: "boss", count: 2, interval: 0.82 }
-    ],
-    [
-      { type: "warder", count: 10, interval: 0.46 }, { type: "burrower", count: 14, interval: 0.42 },
-      { type: "disruptor", count: 10, interval: 0.48 }, { type: "regenerator", count: 4, interval: 0.46 },
-      { type: "berserker", count: 4, interval: 0.44 }, { type: "thief", count: 4, interval: 0.42 }, { type: "boss", count: 3, interval: 0.76 }
-    ],
-    [{ type: "overlord", count: 1, interval: 4.00 }]
-  ];
 
   const elements = {
     canvas: document.getElementById("game-canvas"),
@@ -934,17 +700,23 @@
       knockbackCooldown: 0,
       healingCooldown: 0,
       invisibleRemaining: 0,
-      ghostTimer: type === "ghost" ? 6 : 0,
+      ghostTimer: type === "ghost" ? ENEMY_ABILITY_CONFIG.ghost.firstCooldown : 0,
       healerTimer: type === "healer" ? HEALER_COOLDOWN : 0,
       mageTimer: type === "healer" ? MAGE_DISABLE_COOLDOWN : 0,
-      wardTimer: type === "warder" ? 3.5 + (state.enemyOrder % 4) * 0.45 : 0,
-      burrowTimer: type === "burrower" ? 4 + (state.enemyOrder % 5) * 0.35 : 0,
+      wardTimer: type === "warder"
+        ? ENEMY_ABILITY_CONFIG.warder.firstCooldown + (state.enemyOrder % ENEMY_ABILITY_CONFIG.warder.staggerCycle) * ENEMY_ABILITY_CONFIG.warder.staggerStep
+        : 0,
+      burrowTimer: type === "burrower"
+        ? ENEMY_ABILITY_CONFIG.burrower.firstCooldown + (state.enemyOrder % ENEMY_ABILITY_CONFIG.burrower.staggerCycle) * ENEMY_ABILITY_CONFIG.burrower.staggerStep
+        : 0,
       burrowRemaining: 0,
-      disruptTimer: type === "disruptor" ? 4.5 + (state.enemyOrder % 6) * 0.4 : 0,
-      regenDelayRemaining: type === "regenerator" ? 2.5 : 0,
+      disruptTimer: type === "disruptor"
+        ? ENEMY_ABILITY_CONFIG.disruptor.firstCooldown + (state.enemyOrder % ENEMY_ABILITY_CONFIG.disruptor.staggerCycle) * ENEMY_ABILITY_CONFIG.disruptor.staggerStep
+        : 0,
+      regenDelayRemaining: type === "regenerator" ? ENEMY_ABILITY_CONFIG.regenerator.damageDelay : 0,
       regenEffectRemaining: 0,
       berserkTriggered: false,
-      bossTimer: definition.boss ? 8 : 0,
+      bossTimer: definition.boss ? ENEMY_ABILITY_CONFIG.boss.cooldown : 0,
       bossLandingRemaining: definition.boss && delay === 0 ? BOSS_LANDING_DURATION : 0,
       dead: false
     };
@@ -1013,8 +785,8 @@
       if (enemy.type === "ghost") {
         enemy.ghostTimer -= deltaTime;
         if (enemy.ghostTimer <= 0) {
-          enemy.invisibleRemaining = enemy.invisibleRemaining > 0 ? 0 : 1;
-          enemy.ghostTimer = 6;
+          enemy.invisibleRemaining = enemy.invisibleRemaining > 0 ? 0 : ENEMY_ABILITY_CONFIG.ghost.invisibleDuration;
+          enemy.ghostTimer = ENEMY_ABILITY_CONFIG.ghost.cooldown;
         }
         enemy.invisibleRemaining = Math.max(0, enemy.invisibleRemaining - deltaTime);
       }
@@ -1036,16 +808,16 @@
         enemy.regenDelayRemaining = Math.max(0, enemy.regenDelayRemaining - deltaTime);
         enemy.regenEffectRemaining = Math.max(0, enemy.regenEffectRemaining - deltaTime);
         if (enemy.regenDelayRemaining === 0 && enemy.hp < enemy.maxHp) {
-          enemy.hp = Math.min(enemy.maxHp, enemy.hp + enemy.maxHp * 0.02 * deltaTime);
+          enemy.hp = Math.min(enemy.maxHp, enemy.hp + enemy.maxHp * ENEMY_ABILITY_CONFIG.regenerator.healPerSecond * deltaTime);
           if (enemy.regenEffectRemaining === 0) {
-            enemy.regenEffectRemaining = 0.6;
+            enemy.regenEffectRemaining = ENEMY_ABILITY_CONFIG.regenerator.visualCooldown;
             const position = getEnemyPathPosition(enemy);
             addEffect({ kind: "heal", x: position.x, y: position.y, color: ENEMY_TYPES.regenerator.color, ttl: 0.45 });
           }
         }
       }
 
-      if (enemy.type === "berserker" && enemy.hp <= enemy.maxHp * 0.5 && !enemy.berserkTriggered) {
+      if (enemy.type === "berserker" && enemy.hp <= enemy.maxHp * ENEMY_ABILITY_CONFIG.berserker.hpThreshold && !enemy.berserkTriggered) {
         enemy.berserkTriggered = true;
         const position = getEnemyPathPosition(enemy);
         addEffect({ kind: "bossPulse", x: position.x, y: position.y, color: ENEMY_TYPES.berserker.color, ttl: 0.65 });
@@ -1054,16 +826,16 @@
       if (enemy.type === "warder") {
         enemy.wardTimer -= deltaTime;
         if (enemy.wardTimer <= 0) {
-          enemy.wardTimer = 5.25;
-          grantNearbyShields(enemy, 2.2, 0.08, false);
+          enemy.wardTimer = ENEMY_ABILITY_CONFIG.warder.cooldown;
+          grantNearbyShields(enemy, ENEMY_ABILITY_CONFIG.warder.radius, ENEMY_ABILITY_CONFIG.warder.shieldRatio, false);
         }
       }
 
       if (enemy.type === "burrower" && enemy.burrowRemaining <= 0) {
         enemy.burrowTimer -= deltaTime;
         if (enemy.burrowTimer <= 0) {
-          enemy.burrowTimer = 5.5;
-          enemy.burrowRemaining = 1.25;
+          enemy.burrowTimer = ENEMY_ABILITY_CONFIG.burrower.cooldown;
+          enemy.burrowRemaining = ENEMY_ABILITY_CONFIG.burrower.duration;
           const position = getEnemyPathPosition(enemy);
           addEffect({ kind: "burrow", x: position.x, y: position.y, color: ENEMY_TYPES.burrower.color, ttl: 0.65 });
         }
@@ -1072,25 +844,25 @@
       if (enemy.type === "disruptor") {
         enemy.disruptTimer -= deltaTime;
         if (enemy.disruptTimer <= 0) {
-          enemy.disruptTimer = 6;
-          disruptNearbyTowers(enemy, 2.6, 0.45);
+          enemy.disruptTimer = ENEMY_ABILITY_CONFIG.disruptor.cooldown;
+          disruptNearbyTowers(enemy, ENEMY_ABILITY_CONFIG.disruptor.radius, ENEMY_ABILITY_CONFIG.disruptor.cooldownDelay);
         }
       }
 
       if (enemy.type === "boss") {
         enemy.bossTimer -= deltaTime;
         if (enemy.bossTimer <= 0) {
-          enemy.bossTimer = 8;
+          enemy.bossTimer = ENEMY_ABILITY_CONFIG.boss.cooldown;
           if (state.wave >= 15) {
             state.enemies.forEach(function (otherEnemy) {
-              if (isEnemyOnField(otherEnemy) && !ENEMY_TYPES[otherEnemy.type].boss) otherEnemy.speedBoostRemaining = 3;
+              if (isEnemyOnField(otherEnemy) && !ENEMY_TYPES[otherEnemy.type].boss) otherEnemy.speedBoostRemaining = ENEMY_ABILITY_CONFIG.boss.speedBoostDuration;
             });
             const position = getEnemyPathPosition(enemy);
             addEffect({ kind: "bossPulse", x: position.x, y: position.y, color: "#ffbf62", ttl: 0.8 });
           }
           if (state.wave >= 10 && state.wave !== 25 && state.wave < WAVES.length && enemy.hp <= enemy.maxHp * 0.5 && !enemy.hasSummoned) {
             enemy.hasSummoned = true;
-            for (let index = 0; index < 4; index += 1) spawnEnemy("runner", enemy.pathDistance - 0.1 - index * 0.04);
+            for (let index = 0; index < ENEMY_ABILITY_CONFIG.boss.summonCount; index += 1) spawnEnemy("runner", enemy.pathDistance - 0.1 - index * 0.04);
             showToast("巨甲王召喚了迅捷蟲！", 1.8);
           }
         }
@@ -1189,9 +961,9 @@
   function getEnemyMovementSpeed(enemy) {
     if (!enemy || enemy.frozenRemaining > 0) return 0;
     const slowMultiplier = 1 - (enemy.slowRemaining > 0 ? enemy.slow : 0);
-    const boostMultiplier = enemy.speedBoostRemaining > 0 ? 1.2 : 1;
-    const burrowMultiplier = enemy.burrowRemaining > 0 ? 1.65 : 1;
-    const berserkMultiplier = enemy.type === "berserker" && enemy.berserkTriggered ? 1.7 : 1;
+    const boostMultiplier = enemy.speedBoostRemaining > 0 ? ENEMY_ABILITY_CONFIG.boss.speedBoostMultiplier : 1;
+    const burrowMultiplier = enemy.burrowRemaining > 0 ? ENEMY_ABILITY_CONFIG.burrower.speedMultiplier : 1;
+    const berserkMultiplier = enemy.type === "berserker" && enemy.berserkTriggered ? ENEMY_ABILITY_CONFIG.berserker.speedMultiplier : 1;
     return enemy.speed * slowMultiplier * boostMultiplier * burrowMultiplier * berserkMultiplier;
   }
 
@@ -1351,7 +1123,7 @@
     const baseDamage = tierData.damage * TOWER_DAMAGE_MULTIPLIER * (critical ? CRIT_DAMAGE_MULTIPLIER : 1);
 
     if (tower.type === "cannon") {
-      addProjectileEffect(tower, target, "cannon", TOWER_TYPES.cannon.color, 0.34);
+      addProjectileEffect(tower, target, "cannon", TOWER_TYPES.cannon.color, TOWER_TYPES.cannon.projectileDuration);
       hit = damageEnemy(target, baseDamage, "direct", "physical");
       if (critical && hit) {
         const targetPosition = getEnemyPathPosition(target);
@@ -1360,29 +1132,29 @@
           const position = getEnemyPathPosition(enemy);
           const deltaX = position.x - targetPosition.x;
           const deltaY = position.y - targetPosition.y;
-          if (deltaX * deltaX + deltaY * deltaY <= 1) {
-            damageEnemy(enemy, baseDamage * 0.8, "direct", "physical");
+          if (deltaX * deltaX + deltaY * deltaY <= TOWER_TYPES.cannon.criticalSplashRadius ** 2) {
+            damageEnemy(enemy, baseDamage * TOWER_TYPES.cannon.criticalSplashDamageRatio, "direct", "physical");
           }
         });
         addEffect({ kind: "burst", x: targetPosition.x, y: targetPosition.y, color: TOWER_TYPES.cannon.color, ttl: 0.45 });
       }
     } else if (tower.type === "frost") {
-      addProjectileEffect(tower, target, "frost", TOWER_TYPES.frost.color, 0.28);
+      addProjectileEffect(tower, target, "frost", TOWER_TYPES.frost.color, TOWER_TYPES.frost.projectileDuration);
       hit = damageEnemy(target, baseDamage, "direct");
-      if (hit) applySlow(target, TOWER_TYPES.frost.slow[tower.tier - 1], 2);
+      if (hit) applySlow(target, TOWER_TYPES.frost.slow[tower.tier - 1], TOWER_TYPES.frost.slowDuration);
       if (critical && hit) {
-        const freezeDuration = 1.2 * (1 - getEnemyResistance(target, "freeze"));
+        const freezeDuration = TOWER_TYPES.frost.freezeDuration * (1 - getEnemyResistance(target, "freeze"));
         target.frozenRemaining = Math.max(target.frozenRemaining, freezeDuration);
         const targetPosition = getEnemyPathPosition(target);
         addEffect({ kind: "freeze", x: targetPosition.x, y: targetPosition.y, color: TOWER_TYPES.frost.color, ttl: 0.7 });
       }
     } else if (tower.type === "poison") {
-      addProjectileEffect(tower, target, "poison", TOWER_TYPES.poison.color, 0.36);
+      addProjectileEffect(tower, target, "poison", TOWER_TYPES.poison.color, TOWER_TYPES.poison.projectileDuration);
       hit = damageEnemy(target, baseDamage, "direct", "poison");
       if (hit) applyPoison(target, baseDamage, tower.tier);
       if (critical && hit) {
         const targetPosition = getEnemyPathPosition(target);
-        const nearby = getNearbyEnemies(targetPosition.x, targetPosition.y, 1, [target]);
+        const nearby = getNearbyEnemies(targetPosition.x, targetPosition.y, TOWER_TYPES.poison.criticalRadius, [target]);
         nearby.forEach(function (enemy) {
           damageEnemy(enemy, baseDamage, "direct", "poison");
           applyPoison(enemy, baseDamage, tower.tier);
@@ -1395,15 +1167,15 @@
       const targets = getNearbyEnemies(targetPosition.x, targetPosition.y, tierData.range, [target]).slice(0, Math.max(0, maximum - 1));
       const chainTargets = [target].concat(targets);
       chainTargets.forEach(function (enemy, index) {
-        const attenuation = critical ? 1 : [1, 0.65, 0.45, 0.32, 0.24][index] || 0.2;
+        const attenuation = critical ? 1 : TOWER_TYPES.chain.attenuation[index] || TOWER_TYPES.chain.minimumAttenuation;
         hit = damageEnemy(enemy, baseDamage * attenuation, "direct", "lightning") || hit;
         if (index > 0) {
           const previousPosition = getEnemyPathPosition(chainTargets[index - 1]);
           const position = getEnemyPathPosition(enemy);
-          addEffect({ kind: "lightning", x1: previousPosition.x, y1: previousPosition.y, x2: position.x, y2: position.y, color: TOWER_TYPES.chain.color, ttl: 0.3 });
+          addEffect({ kind: "lightning", x1: previousPosition.x, y1: previousPosition.y, x2: position.x, y2: position.y, color: TOWER_TYPES.chain.color, ttl: TOWER_TYPES.chain.effectDuration });
         }
       });
-      addEffect({ kind: "lightning", x1: tower.x, y1: tower.y, x2: targetPosition.x, y2: targetPosition.y, color: TOWER_TYPES.chain.color, ttl: 0.3 });
+      addEffect({ kind: "lightning", x1: tower.x, y1: tower.y, x2: targetPosition.x, y2: targetPosition.y, color: TOWER_TYPES.chain.color, ttl: TOWER_TYPES.chain.effectDuration });
     } else if (tower.type === "pierce") {
       const maximum = critical ? state.enemies.length : TOWER_TYPES.pierce.pierceCount[tower.tier - 1];
       const targets = state.enemies.filter(function (enemy) {
@@ -1416,16 +1188,16 @@
       targets.forEach(function (enemy) {
         hit = damageEnemy(enemy, baseDamage, "direct", "physical") || hit;
       });
-      if (targets.length > 0) addProjectileEffect(tower, targets[targets.length - 1], "pierce", TOWER_TYPES.pierce.color, 0.3);
+      if (targets.length > 0) addProjectileEffect(tower, targets[targets.length - 1], "pierce", TOWER_TYPES.pierce.color, TOWER_TYPES.pierce.projectileDuration);
     } else if (tower.type === "blade") {
       const targetPosition = getEnemyPathPosition(target);
-      addEffect({ kind: "bladeSwing", x: tower.x, y: tower.y, targetX: targetPosition.x, targetY: targetPosition.y, range: tierData.range, color: TOWER_TYPES.blade.color, ttl: 0.3 });
+      addEffect({ kind: "bladeSwing", x: tower.x, y: tower.y, targetX: targetPosition.x, targetY: targetPosition.y, range: tierData.range, color: TOWER_TYPES.blade.color, ttl: TOWER_TYPES.blade.effectDuration });
       hit = damageEnemy(target, baseDamage, "direct", "physical");
       if (hit) {
         state.enemies.forEach(function (enemy) {
           if (!isEnemyTargetable(enemy)) return;
           const position = getEnemyPathPosition(enemy);
-          if (isTowerInRange(tower, position.x, position.y, tierData.range)) applyKnockback(enemy, 0.5);
+          if (isTowerInRange(tower, position.x, position.y, tierData.range)) applyKnockback(enemy, TOWER_TYPES.blade.knockbackDistance);
         });
       }
     }
@@ -1454,7 +1226,7 @@
     if (!isEnemyOnField(enemy) || (source === "direct" && !isEnemyTargetable(enemy))) return false;
     let finalDamage = amount;
     const definition = ENEMY_TYPES[enemy.type];
-    if (enemy.type === "regenerator" && amount > 0) enemy.regenDelayRemaining = 2.5;
+    if (enemy.type === "regenerator" && amount > 0) enemy.regenDelayRemaining = ENEMY_ABILITY_CONFIG.regenerator.damageDelay;
     const typedResistance = getEnemyResistance(enemy, damageType);
     if (typedResistance > 0) finalDamage *= 1 - typedResistance;
     if (enemy.shield > 0) {
@@ -1513,7 +1285,7 @@
 
   function applyPoison(enemy, damage, tier) {
     if (!enemy || enemy.dead) return;
-    const dps = damage * 0.35;
+    const dps = damage * TOWER_TYPES.poison.poisonDamageRatio;
     enemy.poisonDps = Math.max(enemy.poisonDps, dps);
     const durationIndex = Math.max(0, Math.min(POISON_DURATIONS.length - 1, tier - 1));
     enemy.poisonRemaining = Math.max(enemy.poisonRemaining, POISON_DURATIONS[durationIndex]);
@@ -2550,13 +2322,13 @@
 
   function drawEnemy(enemy) {
     const definition = ENEMY_TYPES[enemy.type];
+    const model = ENEMY_MODELS[enemy.type];
     const position = getEnemyRenderPosition(enemy);
     const center = gridCenter(position.x, position.y);
-    const visualScale = ENEMY_VISUAL_SCALE * (definition.finalBoss ? 1.5 : 1);
-    const radius = canvasMetrics.cell * (definition.boss ? 0.34 : 0.25) * visualScale;
+    const visualScale = ENEMY_VISUAL_SCALE * model.scaleMultiplier;
+    const radius = canvasMetrics.cell * model.radius * visualScale;
     const sprite = enemySprites[enemy.type];
-    const spriteScale = enemy.type === "overlord" ? 0.94 : definition.boss ? 0.82 : enemy.type === "child" ? 0.46 : 0.6;
-    const spriteSize = canvasMetrics.cell * spriteScale * visualScale;
+    const spriteSize = canvasMetrics.cell * model.spriteScale * visualScale;
     const bob = Math.sin(performance.now() / 155 + enemy.order * 1.7) * canvasMetrics.cell * 0.025 * visualScale;
     const burrowOffset = enemy.burrowRemaining > 0 ? canvasMetrics.cell * 0.08 : 0;
     const landingProgress = enemy.bossLandingRemaining > 0
