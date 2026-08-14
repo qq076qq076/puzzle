@@ -81,6 +81,20 @@ h1, h2, h3, p { margin: 0; }
 .land-popover-close { position: absolute; top: 4px; right: 5px; border: 0; color: rgba(255,255,255,.58); background: none; cursor: pointer; font-size: 1.05rem; }
 .land-buy-button { grid-column: 2 / -1; min-height: 35px; border: 0; border-radius: 10px; color: #2d2916; background: var(--gold); cursor: pointer; font-size: .68rem; font-weight: 900; }
 .land-buy-button:disabled { color: rgba(255,255,255,.45); background: rgba(255,255,255,.1); cursor: not-allowed; }
+.action-confirm-popover { position: absolute; z-index: 9; bottom: 14px; left: 14px; display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 11px 13px; width: min(410px, calc(100% - 28px)); padding: 15px; border: 1px solid rgba(255,226,124,.5); border-radius: 18px; color: #fff; background: rgba(17,48,32,.96); box-shadow: 0 18px 45px rgba(12,35,23,.38); backdrop-filter: blur(12px); }
+.action-confirm-popover[hidden] { display: none; }
+.action-confirm-art { display: grid; width: 48px; height: 48px; place-items: center; align-self: center; overflow: hidden; border: 1px solid rgba(255,255,255,.12); border-radius: 13px; background: rgba(255,255,255,.1); font-size: 1.65rem; }
+.action-confirm-art .shop-art { width: 44px; height: 44px; }
+.action-confirm-copy { min-width: 0; padding-right: 16px; }
+.action-confirm-copy > p { color: var(--gold); font-size: .58rem; font-weight: 900; letter-spacing: .08em; }
+.action-confirm-copy h3 { margin-top: 2px; font-size: .86rem; }
+.action-confirm-copy > span { display: block; margin-top: 4px; color: rgba(255,255,255,.68); font-size: .66rem; line-height: 1.45; }
+.action-confirm-close { position: absolute; top: 4px; right: 5px; border: 0; color: rgba(255,255,255,.58); background: none; cursor: pointer; font-size: 1.05rem; }
+.action-confirm-actions { display: flex; grid-column: 1 / -1; gap: 8px; }
+.action-confirm-actions button { min-height: 36px; flex: 1; border: 0; border-radius: 10px; cursor: pointer; font-size: .68rem; font-weight: 900; }
+.action-confirm-cancel { color: rgba(255,255,255,.74); background: rgba(255,255,255,.1); }
+.action-confirm-button { color: #2d2916; background: var(--gold); }
+.action-confirm-button:disabled { color: rgba(255,255,255,.45); background: rgba(255,255,255,.1); cursor: not-allowed; }
 
 .quickbar-wrap { display: flex; gap: 8px; width: 100%; margin: 0; padding: 13px 14px 14px; border-top: 1px solid rgba(255,255,255,.7); background: rgba(246,244,229,.96); }
 .quickbar { display: flex; gap: 8px; min-width: 0; min-height: 67px; padding: 9px; flex: 1; overflow-x: auto; border: 1px solid var(--line); border-radius: 18px; background: rgba(255,255,255,.72); box-shadow: 0 10px 25px rgba(41,71,42,.07); scrollbar-width: thin; }
@@ -141,6 +155,7 @@ h1, h2, h3, p { margin: 0; }
   .farm-panel { grid-template-rows: 66svh auto; min-height: 0; padding: 0; }
   .farm-canvas-shell { min-height: 66svh; max-height: 66svh; border-bottom-width: 3px; border-radius: 0; box-shadow: inset 0 -7px 16px rgba(41,30,19,.14); }
   .land-popover { right: 8px; bottom: 8px; width: calc(100% - 16px); }
+  .action-confirm-popover { bottom: 8px; left: 8px; width: calc(100% - 16px); }
   .quickbar-wrap { margin: 0; padding: 9px 8px 10px; }
   .quickbar { min-height: 62px; padding: 7px; }
   .quick-item { flex-basis: 47px; height: 46px; }

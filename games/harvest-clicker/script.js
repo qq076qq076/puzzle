@@ -34,7 +34,10 @@ const elements = {
   shopDialogBuy: $("#shop-dialog-buy"),
   landPopover: $("#land-popover"), landIcon: $("#land-state-icon"),
   landTitle: $("#land-title"), landCondition: $("#land-condition"),
-  landPrice: $("#land-price"), landBuy: $("#land-buy-button")
+  landPrice: $("#land-price"), landBuy: $("#land-buy-button"),
+  actionConfirm: $("#action-confirm-popover"), actionConfirmArt: $("#action-confirm-art"),
+  actionConfirmTitle: $("#action-confirm-title"), actionConfirmText: $("#action-confirm-text"),
+  actionConfirmButton: $("#action-confirm-button")
 };
 
 const ctx = elements.canvas.getContext("2d", { alpha: true });
@@ -57,6 +60,7 @@ let state;
 let activeTab = "tools";
 let selection = null;
 let selectedLandPlot = null;
+let pendingActionPlotId = null;
 let selectedShopProduct = null;
 let keyboardIndex = indexesForPlot(INITIAL_PLOT_ID)[4];
 let toastTimer = 0;
@@ -337,7 +341,8 @@ function pathPlotTop(geometry) {
 function drawPlotBase(plot) {
   const geometry = plotGeometry(plot.id);
   const owned = state.ownedPlots.includes(plot.id);
-  const target = selection && isValidSelectionPlot(plot.id);
+  const selectedTarget = selection && pendingActionPlotId === plot.id;
+  const selectable = selection && !selectedTarget && isValidSelectionPlot(plot.id);
 
   ctx.beginPath();
   ctx.moveTo(geometry.left.x, geometry.left.y);
@@ -405,10 +410,19 @@ function drawPlotBase(plot) {
     }
   }
 
+  if (selectedTarget) {
+    pathPlotTop(geometry);
+    ctx.fillStyle = "rgba(255,226,124,.24)";
+    ctx.fill();
+  }
+
+  ctx.save();
   pathPlotTop(geometry);
-  ctx.strokeStyle = target ? "#ffe27c" : owned ? "rgba(255,239,195,.5)" : "rgba(225,239,198,.15)";
-  ctx.lineWidth = (target ? 4 : 2) / camera.scale;
+  ctx.strokeStyle = selectedTarget ? "#ffe27c" : selectable ? "rgba(255,226,124,.48)" : owned ? "rgba(255,239,195,.5)" : "rgba(225,239,198,.15)";
+  ctx.lineWidth = (selectedTarget ? 5 : selectable ? 2.5 : 2) / camera.scale;
+  if (selectable) ctx.setLineDash([7 / camera.scale, 6 / camera.scale]);
   ctx.stroke();
+  ctx.restore();
 }
 
 function drawWeed(x, y, progress, mature) {
@@ -955,6 +969,102 @@ function isValidSelectionPlot(plotId) {
   return true;
 }
 
+function selectionActionPreview(plotId) {
+  if (!selection || !state.ownedPlots.includes(plotId)) return null;
+  const plot = PLOTS.find((item) => item.id === plotId);
+  if (!plot) return null;
+  const indexes = indexesForPlot(plotId);
+
+  if (selection.kind === "seed") {
+    const plant = getPlant(selection.id);
+    if (!plant) return null;
+    const replacing = indexes.some((index) => state.cells[index].plantId !== "weed" || state.cells[index].fertilizerId);
+    return {
+      icon: plant.emoji,
+      image: plant.image,
+      title: `在${plot.name}種植${plant.name}？`,
+      text: `將種滿這塊 3×3 土地，共 9 格。${replacing ? "現有作物、成長進度與肥料會被覆蓋。" : "確認後才會消耗 1 份種子。"}`,
+      button: "確認種植",
+      disabled: false
+    };
+  }
+
+  if (selection.kind === "fertilizer") {
+    const fertilizer = getFertilizer(selection.id);
+    if (!fertilizer || !isValidSelectionPlot(plotId)) return null;
+    const replacing = indexes.some((index) => state.cells[index].fertilizerId);
+    return {
+      icon: fertilizer.emoji,
+      title: `在${plot.name}施用${fertilizer.name}？`,
+      text: `立即作用於當下 9 格作物：生長 ×${fertilizer.growthMultiplier}、金幣 ×${fertilizer.coinMultiplier}，持續 ${fertilizer.rounds} 輪。${replacing ? "現有肥料與剩餘輪數會被覆蓋。" : ""}`,
+      button: "確認施肥",
+      disabled: false
+    };
+  }
+
+  if (selection.kind === "harvester" || selection.kind === "sprinkler") {
+    const isHarvester = selection.kind === "harvester";
+    const item = isHarvester ? getHarvester(selection.id) : getSprinkler(selection.id);
+    if (!item) return null;
+    const list = isHarvester ? state.harvesters : state.sprinklers;
+    const currentAtTarget = list.find((placed) => placed.plotId === plotId);
+    const staysInPlace = selection.sourcePlot === plotId;
+    const effect = isHarvester
+      ? `${item.range}×${item.range} 範圍，每 ${item.intervalSeconds} 秒造成 ${item.damage} 傷害。`
+      : `${item.range}×${item.range} 範圍，作物生長時間 ×${item.growthMultiplier}。`;
+    const movement = staysInPlace
+      ? "設備目前已配置在這塊土地，不需要移動。"
+      : currentAtTarget
+        ? "這會替換此處的同類設備，原設備將收回工具列。"
+        : selection.sourcePlot != null
+          ? "設備將從原土地移到這裡。"
+          : "確認後才會從工具列取出設備。";
+    return {
+      icon: item.emoji,
+      image: item.image,
+      title: `在${plot.name}配置${item.name}？`,
+      text: `${effect}${movement}`,
+      button: staysInPlace ? "已配置於此" : "確認配置",
+      disabled: staysInPlace
+    };
+  }
+  return null;
+}
+
+function closeActionConfirm() {
+  pendingActionPlotId = null;
+  elements.actionConfirm.hidden = true;
+}
+
+function renderActionConfirm() {
+  const preview = pendingActionPlotId == null ? null : selectionActionPreview(pendingActionPlotId);
+  if (!preview) {
+    closeActionConfirm();
+    return;
+  }
+  elements.actionConfirmArt.innerHTML = assetMarkup(preview.image, preview.icon);
+  elements.actionConfirmTitle.textContent = preview.title;
+  elements.actionConfirmText.textContent = preview.text;
+  elements.actionConfirmButton.textContent = preview.button;
+  elements.actionConfirmButton.disabled = preview.disabled;
+  elements.actionConfirm.hidden = false;
+}
+
+function stageSelection(plotId) {
+  closeActionConfirm();
+  if (!state.ownedPlots.includes(plotId)) {
+    showToast("請先購買這塊土地");
+    return;
+  }
+  if (selection?.kind === "fertilizer" && !isValidSelectionPlot(plotId)) {
+    showToast("含有雜草的地塊不能施肥");
+    return;
+  }
+  pendingActionPlotId = plotId;
+  closeLandPopover();
+  renderActionConfirm();
+}
+
 function renderHeader() {
   elements.gold.textContent = formatMoney(state.gold);
   document.body.classList.toggle("reduce-motion", state.settings.reducedMotion);
@@ -1116,6 +1226,8 @@ function renderAll() {
   renderShop();
   renderQuickbar();
   if (selectedLandPlot != null) showLandPopover(selectedLandPlot);
+  if (pendingActionPlotId != null && selection) renderActionConfirm();
+  else elements.actionConfirm.hidden = true;
 }
 
 function setActiveTab(tab) {
@@ -1151,6 +1263,7 @@ function buyItem(kind, id) {
     state.gold -= price;
     const key = `${kind}_${id}`;
     state.inventory[key] = inventoryCount(key) + 1;
+    closeActionConfirm();
     selection = { kind, id, sourcePlot: null };
     showToast(`${item.name}已放入下方工具列`);
   }
@@ -1175,7 +1288,6 @@ function placeDevice(kind, id, plotId) {
   const list = kind === "harvester" ? state.harvesters : state.sprinklers;
   const currentAtTarget = list.find((item) => item.plotId === plotId);
   if (selection.sourcePlot === plotId) { selection = null; showToast("設備留在原地"); return false; }
-  if (currentAtTarget && !window.confirm("這塊土地已有同類設備。要替換並把原設備收回工具列嗎？")) return false;
   if (currentAtTarget) {
     state.inventory[`${kind}_${currentAtTarget.id}`] = inventoryCount(`${kind}_${currentAtTarget.id}`) + 1;
     list.splice(list.indexOf(currentAtTarget), 1);
@@ -1218,13 +1330,13 @@ function triggerDeviceAnimation(kind, plotId) {
 }
 
 function useSelection(plotId) {
-  if (!state.ownedPlots.includes(plotId)) { showToast("請先購買這塊土地"); return; }
+  if (!selection || pendingActionPlotId !== plotId || !state.ownedPlots.includes(plotId)) {
+    showToast("請先選取要施作的 3×3 土地");
+    return;
+  }
   let feedbackSound = "place";
   if (selection.kind === "seed") {
     const plantId = selection.id;
-    const indexes = indexesForPlot(plotId);
-    const replacing = indexes.some((index) => state.cells[index].plantId !== "weed" || state.cells[index].fertilizerId);
-    if (replacing && !window.confirm("播種會覆蓋這塊土地現有的作物、成長進度與肥料。確定繼續嗎？")) return;
     if (!consumeInventory("seed", plantId)) return;
     sowPlot(state, plotId, plantId);
     triggerPlantingAnimation(plotId, plantId);
@@ -1232,9 +1344,7 @@ function useSelection(plotId) {
     selection = null;
     feedbackSound = "plant";
   } else if (selection.kind === "fertilizer") {
-    if (!isValidSelectionPlot(plotId)) { showToast("含有雜草的地塊不能施肥"); return; }
-    const hasFertilizer = indexesForPlot(plotId).some((index) => state.cells[index].fertilizerId);
-    if (hasFertilizer && !window.confirm("這會覆蓋目前剩餘的肥料輪數。確定繼續嗎？")) return;
+    if (!isValidSelectionPlot(plotId)) { closeActionConfirm(); showToast("含有雜草的地塊不能施肥"); return; }
     if (!consumeInventory("fertilizer", selection.id)) return;
     fertilizePlot(state, plotId, selection.id);
     showToast(`${getFertilizer(selection.id).name}已施用，立即生效 ${getFertilizer(selection.id).rounds} 輪`);
@@ -1249,6 +1359,7 @@ function useSelection(plotId) {
     triggerDeviceAnimation(deviceKind, plotId);
     feedbackSound = deviceKind === "sprinkler" ? "water" : "machine";
   }
+  closeActionConfirm();
   playTone(feedbackSound);
   saveNow();
   renderAll();
@@ -1260,6 +1371,7 @@ function showLandPopover(plotId) {
     closeLandPopover();
     return;
   }
+  closeActionConfirm();
   selectedLandPlot = plotId;
   const plotOrder = PLOTS.findIndex((item) => item.id === plotId);
   const nextOrder = state.ownedPlots.length;
@@ -1349,7 +1461,7 @@ function handleBoardClick(index) {
     return;
   }
   closeLandPopover();
-  if (selection) { useSelection(plotId); return; }
+  if (selection) { stageSelection(plotId); return; }
   simulateTo(state, Date.now());
   const result = manualHarvest(state, index);
   triggerHarvestSwing(result);
@@ -1522,10 +1634,17 @@ elements.canvas.addEventListener("keydown", (event) => {
 
 $("#land-close").addEventListener("click", closeLandPopover);
 elements.landBuy.addEventListener("click", purchaseSelectedLand);
+$("#action-confirm-close").addEventListener("click", () => { closeActionConfirm(); renderAll(); });
+$("#action-confirm-cancel").addEventListener("click", () => { closeActionConfirm(); renderAll(); });
+elements.actionConfirmButton.addEventListener("click", () => {
+  if (pendingActionPlotId == null || elements.actionConfirmButton.disabled) return;
+  useSelection(pendingActionPlotId);
+});
 
 elements.quickbar.addEventListener("click", (event) => {
   if (event.target.closest("[data-cancel-selection]")) {
     selection = null;
+    closeActionConfirm();
     renderAll();
     return;
   }
@@ -1533,6 +1652,7 @@ elements.quickbar.addEventListener("click", (event) => {
   if (tool) {
     state.equippedToolId = tool.dataset.toolId;
     selection = null;
+    closeActionConfirm();
     showToast(`已裝備 ${getTool(state.equippedToolId).name}`);
     saveNow(); renderAll(); return;
   }
@@ -1544,6 +1664,7 @@ elements.quickbar.addEventListener("click", (event) => {
     sourcePlot: item.dataset.sourcePlot == null ? null : Number(item.dataset.sourcePlot)
   };
   const sameSelection = selection && selection.kind === nextSelection.kind && selection.id === nextSelection.id && selection.sourcePlot === nextSelection.sourcePlot;
+  closeActionConfirm();
   selection = sameSelection ? null : nextSelection;
   closeLandPopover();
   renderAll();
@@ -1590,6 +1711,9 @@ elements.importInput.addEventListener("change", async () => {
     state.harvesters ||= [];
     state.sprinklers ||= [];
     state.stats ||= { manualClicks: 0, offlineGold: 0 };
+    selection = null;
+    closeActionConfirm();
+    closeLandPopover();
     simulateTo(state, Date.now());
     saveNow(true); renderAll(); focusOwnedFarm(); elements.settingsDialog.close();
     showToast("存檔匯入完成");
@@ -1601,6 +1725,7 @@ $("#reset-button").addEventListener("click", () => {
   if (!window.confirm("確定清除所有金幣、土地、工具與植物，重新建立農場嗎？")) return;
   state = createInitialState(Date.now());
   selection = null;
+  closeActionConfirm();
   closeLandPopover();
   saveNow(true); renderAll(); focusOwnedFarm(); elements.settingsDialog.close();
   showToast("已建立新的農場");
@@ -1608,7 +1733,8 @@ $("#reset-button").addEventListener("click", () => {
 
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
-    if (selection) { selection = null; renderAll(); }
+    if (pendingActionPlotId != null) { closeActionConfirm(); renderAll(); }
+    else if (selection) { selection = null; renderAll(); }
     else closeLandPopover();
   }
   const number = Number(event.key);
@@ -1617,6 +1743,7 @@ window.addEventListener("keydown", (event) => {
     if (owned[number - 1]) {
       state.equippedToolId = owned[number - 1].id;
       selection = null;
+      closeActionConfirm();
       saveNow(); renderAll();
     }
   }

@@ -60,6 +60,19 @@
               <strong id="land-price">0$</strong>
               <button class="land-buy-button" id="land-buy-button" type="button">購買</button>
             </section>
+            <section class="action-confirm-popover" id="action-confirm-popover" aria-live="polite" hidden>
+              <button class="action-confirm-close" id="action-confirm-close" type="button" aria-label="取消施作">×</button>
+              <span class="action-confirm-art" id="action-confirm-art" aria-hidden="true">🌱</span>
+              <div class="action-confirm-copy">
+                <p>已選取 3×3 土地</p>
+                <h3 id="action-confirm-title">確認施作</h3>
+                <span id="action-confirm-text"></span>
+              </div>
+              <div class="action-confirm-actions">
+                <button class="action-confirm-cancel" id="action-confirm-cancel" type="button">重新選擇</button>
+                <button class="action-confirm-button" id="action-confirm-button" type="button">確認</button>
+              </div>
+            </section>
           </div>
           <section class="quickbar-wrap" aria-label="農具與物品">
             <button class="mobile-shop-button" id="mobile-shop-button" type="button" aria-controls="shop-panel" aria-expanded="false">商店</button>
