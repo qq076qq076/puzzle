@@ -6,7 +6,7 @@ const {
   fertilizePlot, buyPlot, formatNumber, formatTime, getPlant, getTool,
   getHarvester, getSprinkler, getFertilizer, getProductPrice, plotIdForIndex, indexesForPlot,
   isToolUnlocked, isPlantUnlocked, isFertilizerUnlocked, isAutomationUnlocked,
-  normalizeStateData
+  growthDurationSeconds, normalizeStateData
 } = globalThis.HarvestCore;
 
 const STORAGE_KEY = "puzzle-club-save:harvest-clicker:v4";
@@ -79,6 +79,25 @@ const toolCursor = { x: 0, y: 0, visible: false, swingStartedAt: -Infinity };
 
 function formatMoney(value) {
   return `${formatNumber(value)}$`;
+}
+
+function remainingGrowthTime(index) {
+  const cell = state.cells[index];
+  if (!cell || cell.phase !== "growing") return 0;
+  const progress = clamp(Number(cell.growthProgress) || 0, 0, 1);
+  return Math.max(1, Math.ceil((1 - progress) * growthDurationSeconds(state, cell, plotIdForIndex(index), index)));
+}
+
+function formatGrowthCountdown(seconds) {
+  const total = Math.max(1, Math.ceil(seconds));
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor(total % 86400 / 3600);
+  const minutes = Math.floor(total % 3600 / 60);
+  const remainder = total % 60;
+  if (days) return `${days} 天${hours ? ` ${hours} 小時` : ""}`;
+  if (hours) return `${hours} 小時${minutes ? ` ${minutes} 分鐘` : ""}`;
+  if (minutes) return `${minutes} 分鐘${remainder ? ` ${remainder} 秒` : ""}`;
+  return `${remainder} 秒`;
 }
 
 function assetMarkup(fileName, fallback, className = "shop-art") {
@@ -1476,7 +1495,8 @@ function handleBoardClick(index) {
     playTone("damage");
   } else {
     playTone("hit");
-    showToast("這株植物還在生長");
+    const plant = getPlant(state.cells[index].plantId);
+    showToast(`${plant?.name || "這株植物"}還要 ${formatGrowthCountdown(remainingGrowthTime(index))}成熟`);
   }
   saveNow();
 }
