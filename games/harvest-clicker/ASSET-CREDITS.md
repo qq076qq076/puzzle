@@ -12,4 +12,12 @@
 - 農具：`vegetable-peeler.png`、`pruning-shears.png`、`hand-trowel.png`、`garden-spade.png`、`farm-scythe.png`、`garden-hoe.png`、`compost-pile-pitchfork.png`、`copper-pickaxe.png`、`iron-hoe.png`
 - 設備：`combine-harvester.png`、`watering-can-metal.png`、`sprinkler-head.png`
 
+## 林業擴充素材
+
+- 來源：[FreeGameSprites — Farm & Ranch Pack](https://freegamesprites.com/en/packs/farm)
+- 授權：來源頁標示為 [Creative Commons Zero 1.0 Universal（CC0）](https://creativecommons.org/publicdomain/zero/1.0/)。
+- 樹木：`apple-tree.png`、`orange-tree.png`、`cherry-tree.png`、`peach-tree.png`、`lemon-tree.png`、`banana-tree.png`、`coconut-palm.png`、`ginkgo-tree-yellow.png`、`maple-tree-red-autumn.png`、`cypress-tree.png`
+- 伐木工具：`woodcutter-hand-axe.png`、`steel-hatchet.png`、`hand-saw-crosscut.png`、`double-bit-war-axe.png`、`circular-saw-mini.png`
+- 林業設備：`sawmill.webp`、`lumber-mill.webp`
+
 植物 PNG 只裁除透明留白，讓根部能貼齊土面；Canvas 在執行時縮放、加上接觸陰影，並依等角座標排序，以形成 2.5D 呈現。土壤與山、水、樹、野花、農舍景觀皆由 Canvas 程式繪製。

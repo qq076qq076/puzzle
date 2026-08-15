@@ -603,7 +603,7 @@ function plantMetrics(cell) {
   const progress = mature ? 1 : clamp(cell.growthProgress, 0, 1);
   const growthScale = 0.28 + progress * 0.72;
   const image = plant.image ? images.get(plant.image) : null;
-  const base = TALL_PLANT_IDS.has(plant.id) ? 94 : plant.id === "cabbage" ? 70 : 82;
+  const base = plant.type === "tree" ? 116 : TALL_PLANT_IDS.has(plant.id) ? 94 : plant.id === "cabbage" ? 70 : 82;
   const ratio = image ? (image.naturalWidth / image.naturalHeight || 1) : 1;
   const height = plant.image ? base * growthScale : 42 * growthScale;
   const width = plant.image ? Math.min(base * 1.18, height * ratio) : 52 * growthScale;
@@ -1030,7 +1030,7 @@ function selectionActionPreview(plotId) {
     const currentAtTarget = list.find((placed) => placed.plotId === plotId);
     const staysInPlace = selection.sourcePlot === plotId;
     const effect = isHarvester
-      ? `${item.range}×${item.range} 範圍，每 ${item.intervalSeconds} 秒造成 ${item.damage} 傷害。`
+      ? `${item.targetType === "tree" ? "只處理樹木；" : ""}${item.range}×${item.range} 範圍，每 ${item.intervalSeconds} 秒造成 ${item.damage} 傷害。`
       : `${item.range}×${item.range} 範圍，作物生長時間 ×${item.growthMultiplier}。`;
     const movement = staysInPlace
       ? "設備目前已配置在這塊土地，不需要移動。"
@@ -1169,7 +1169,7 @@ function isShopProductOwned(kind, item) {
 function shopProductDescription(kind, item) {
   if (kind === "tool") return `用途：裝備後點擊土地進行手動收割。每格 ${item.damage} 傷害，命中 ${item.cells} 格${item.regrowth < 1 ? `，收割後下輪生長時間 ×${item.regrowth}` : ""}。`;
   if (kind === "seed") return `用途：選取後點擊已購土地，一次種滿 3×3，之後會持續再生。單格 HP ${item.hp}，每格收成 ${formatMoney(item.coins)}，生長 ${formatTime(item.growSeconds)}。`;
-  if (kind === "harvester") return `用途：配置到土地後自動攻擊範圍內的成熟作物，離線也會工作。範圍 ${item.range}×${item.range}（最多 ${item.range ** 2} 格），每 ${item.intervalSeconds} 秒造成 ${item.damage} 傷害。`;
+  if (kind === "harvester") return `用途：配置到土地後自動攻擊範圍內的成熟${item.targetType === "tree" ? "樹木，不會處理一般作物" : "作物"}，離線也會工作。範圍 ${item.range}×${item.range}（最多 ${item.range ** 2} 格），每 ${item.intervalSeconds} 秒造成 ${item.damage} 傷害。`;
   if (kind === "sprinkler") return `用途：配置到土地後持續加速範圍內作物，離線生長同樣有效。範圍 ${item.range}×${item.range}（最多 ${item.range ** 2} 格），生長時間 ×${item.growthMultiplier}。`;
   return `用途：${item.purpose} 選取後施用於一塊 3×3 作物，當下立即生效；生長 ×${item.growthMultiplier}、金幣 ×${item.coinMultiplier}，持續 ${item.rounds} 輪。`;
 }

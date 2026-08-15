@@ -28,7 +28,17 @@ const PLANTS = [
   { id: "rice", name: "月白稻束", emoji: "🍚", image: "rice-paddy-bundle.png", seedCost: 11000000, hp: 650, coins: 1700000, growSeconds: 259200, color: "#d6c983", unlock: { type: "harvested", value: 25000 } },
   { id: "grape", name: "暮色葡萄", emoji: "🍇", image: "grape-vine.png", seedCost: 25000000, hp: 900, coins: 3800000, growSeconds: 432000, color: "#735893", unlock: { type: "plots", value: 36 } },
   { id: "vanilla", name: "銀香香草", emoji: "🌼", image: "vanilla-vine.png", seedCost: 60000000, hp: 1300, coins: 9000000, growSeconds: 691200, color: "#e7dfb0", unlock: { type: "lifetimeGold", value: 75000000 } },
-  { id: "coffee", name: "曜石咖啡", emoji: "☕", image: "coffee-bean-plant.png", seedCost: 150000000, hp: 1800, coins: 23000000, growSeconds: 1036800, color: "#7f4b34", unlock: { type: "plots", value: 49 } }
+  { id: "coffee", name: "曜石咖啡", emoji: "☕", image: "coffee-bean-plant.png", seedCost: 150000000, hp: 1800, coins: 23000000, growSeconds: 1036800, color: "#7f4b34", unlock: { type: "plots", value: 49 } },
+  { id: "apple_tree", name: "晨紅蘋果樹", emoji: "🍎", image: "apple-tree.png", type: "tree", seedCost: 400000000, hp: 2400, coins: 60000000, growSeconds: 1296000, color: "#76a947", unlock: { type: "lifetimeGold", value: 150000000 } },
+  { id: "orange_tree", name: "蜜香橙樹", emoji: "🍊", image: "orange-tree.png", type: "tree", seedCost: 900000000, hp: 3200, coins: 140000000, growSeconds: 1555200, color: "#dc8d36", unlock: { type: "tool", value: "forester_axe" } },
+  { id: "cherry_tree", name: "緋櫻果樹", emoji: "🍒", image: "cherry-tree.png", type: "tree", seedCost: 2200000000, hp: 4300, coins: 340000000, growSeconds: 1814400, color: "#ce4f5e", unlock: { type: "harvested", value: 90000 } },
+  { id: "peach_tree", name: "霞蜜桃樹", emoji: "🍑", image: "peach-tree.png", type: "tree", seedCost: 5000000000, hp: 5800, coins: 780000000, growSeconds: 2160000, color: "#e9a477", unlock: { type: "tool", value: "steel_hatchet" } },
+  { id: "lemon_tree", name: "金露檸檬樹", emoji: "🍋", image: "lemon-tree.png", type: "tree", seedCost: 12000000000, hp: 7600, coins: 1800000000, growSeconds: 2592000, color: "#e0ca4e", unlock: { type: "plots", value: 64 } },
+  { id: "banana_tree", name: "月彎香蕉樹", emoji: "🍌", image: "banana-tree.png", type: "tree", seedCost: 30000000000, hp: 10000, coins: 4500000000, growSeconds: 3024000, color: "#dfc448", unlock: { type: "lifetimeGold", value: 30000000000 } },
+  { id: "coconut_tree", name: "海風椰子樹", emoji: "🥥", image: "coconut-palm.png", type: "tree", seedCost: 75000000000, hp: 14000, coins: 11000000000, growSeconds: 3628800, color: "#5d9e58", unlock: { type: "tool", value: "crosscut_saw" } },
+  { id: "ginkgo_tree", name: "黃金銀杏樹", emoji: "🍂", image: "ginkgo-tree-yellow.png", type: "tree", seedCost: 190000000000, hp: 19000, coins: 28000000000, growSeconds: 4320000, color: "#e5b735", unlock: { type: "harvested", value: 150000 } },
+  { id: "maple_tree", name: "赤霞楓樹", emoji: "🍁", image: "maple-tree-red-autumn.png", type: "tree", seedCost: 480000000000, hp: 26000, coins: 72000000000, growSeconds: 5184000, color: "#c95036", unlock: { type: "tool", value: "double_bit_axe" } },
+  { id: "cypress_tree", name: "千年檜木", emoji: "🌲", image: "cypress-tree.png", type: "tree", seedCost: 1200000000000, hp: 36000, coins: 185000000000, growSeconds: 6048000, color: "#3f7351", unlock: { type: "tool", value: "power_saw" } }
 ];
 
 const TOOLS = [
@@ -43,7 +53,12 @@ const TOOLS = [
   { id: "steel_harvester", name: "精鋼鋤", emoji: "🛠️", image: "iron-hoe.png", cost: 300000, damage: 25, shape: "square3", cells: 9, regrowth: 0.8, unlock: { type: "plots", value: 25 } },
   { id: "wide_scythe", name: "廣域鐮刀", emoji: "⚒️", image: "farm-scythe.png", cost: 1200000, damage: 32, shape: "cross9", cells: 9, regrowth: 0.72, unlock: { type: "harvested", value: 12000 } },
   { id: "prosperity_blade", name: "聯合收割機", emoji: "🚜", image: "combine-harvester.png", cost: 6000000, damage: 60, shape: "square5", cells: 25, regrowth: 0.6, unlock: { type: "plots", value: 36 } },
-  { id: "grand_harvester", name: "巨型聯合收割機", emoji: "🚜", image: "combine-harvester.png", cost: 30000000, damage: 110, shape: "square7", cells: 49, regrowth: 0.5, unlock: { type: "harvested", value: 50000 } }
+  { id: "grand_harvester", name: "巨型聯合收割機", emoji: "🚜", image: "combine-harvester.png", cost: 30000000, damage: 110, shape: "square7", cells: 49, regrowth: 0.5, unlock: { type: "harvested", value: 50000 } },
+  { id: "forester_axe", name: "林務雙刃斧", emoji: "🪓", image: "woodcutter-hand-axe.png", cost: 120000000, damage: 220, shape: "single", cells: 1, regrowth: 0.48, unlock: { type: "harvested", value: 70000 } },
+  { id: "steel_hatchet", name: "精鋼伐木斧", emoji: "🪓", image: "steel-hatchet.png", cost: 350000000, damage: 420, shape: "cross", cells: 5, regrowth: 0.44, unlock: { type: "harvested", value: 90000 } },
+  { id: "crosscut_saw", name: "橫切手鋸", emoji: "🪚", image: "hand-saw-crosscut.png", cost: 1100000000, damage: 650, shape: "row5", cells: 5, regrowth: 0.4, unlock: { type: "plots", value: 64 } },
+  { id: "double_bit_axe", name: "重型雙刃斧", emoji: "🪓", image: "double-bit-war-axe.png", cost: 4000000000, damage: 1000, shape: "square3", cells: 9, regrowth: 0.34, unlock: { type: "harvested", value: 140000 } },
+  { id: "power_saw", name: "動力圓鋸", emoji: "🪚", image: "circular-saw-mini.png", cost: 15000000000, damage: 1800, shape: "square5", cells: 25, regrowth: 0.28, unlock: { type: "harvested", value: 200000 } }
 ];
 
 function roundLandPrice(value) {
@@ -80,7 +95,9 @@ const HARVESTERS = [
   { id: "clockwork", name: "發條割草機", emoji: "🦾", image: "combine-harvester.png", cost: 120000, damage: 6, intervalSeconds: 30, regrowth: 1, range: 3, tier: 2 },
   { id: "copper", name: "銅輪收割機", emoji: "⚙️", image: "combine-harvester.png", cost: 450000, damage: 12, intervalSeconds: 20, regrowth: 0.95, range: 5, tier: 3 },
   { id: "steam", name: "蒸汽收割機", emoji: "🚜", image: "combine-harvester.png", cost: 1800000, damage: 30, intervalSeconds: 12, regrowth: 0.85, range: 7, tier: 4 },
-  { id: "starcore", name: "星核聯合收割機", emoji: "🤖", image: "combine-harvester.png", cost: 8000000, damage: 90, intervalSeconds: 5, regrowth: 0.7, range: 9, tier: 5 }
+  { id: "starcore", name: "星核聯合收割機", emoji: "🤖", image: "combine-harvester.png", cost: 8000000, damage: 90, intervalSeconds: 5, regrowth: 0.7, range: 9, tier: 5 },
+  { id: "tree_sawmill", name: "自動鋸木站", emoji: "🪵", image: "sawmill.webp", cost: 25000000000, damage: 1400, intervalSeconds: 8, regrowth: 0.55, range: 5, tier: 6, targetType: "tree" },
+  { id: "tree_lumber_mill", name: "林業採伐廠", emoji: "🏭", image: "lumber-mill.webp", cost: 180000000000, damage: 4000, intervalSeconds: 4, regrowth: 0.38, range: 9, tier: 7, targetType: "tree" }
 ];
 
 const SPRINKLERS = [
@@ -255,11 +272,13 @@ function automationTargetIndexes(range, plotId, ownedPlots) {
   return indexes;
 }
 
-function getDeviceStateForIndex(state, list, getter, index) {
+function getDeviceStateForIndex(state, list, getter, index, cell = null) {
   return list
     .filter((placed) => {
       const item = getter(placed.id);
-      return item && automationTargetIndexes(item.range, placed.plotId, state.ownedPlots).includes(index);
+      const plant = cell ? getPlant(cell.plantId) : null;
+      const canTargetPlant = !item?.targetType || item.targetType === plant?.type;
+      return item && canTargetPlant && automationTargetIndexes(item.range, placed.plotId, state.ownedPlots).includes(index);
     })
     .sort((a, b) => (getter(b.id)?.tier || 0) - (getter(a.id)?.tier || 0))[0] || null;
 }
@@ -428,7 +447,7 @@ function simulateTo(state, targetTime) {
   for (const plotId of state.ownedPlots) {
     for (const index of indexesForPlot(plotId)) {
       const cell = state.cells[index];
-      const machineState = getDeviceStateForIndex(state, state.harvesters, getHarvester, index);
+      const machineState = getDeviceStateForIndex(state, state.harvesters, getHarvester, index, cell);
       if (machineState && getHarvester(machineState.id)) {
         simulateAutoCell(state, cell, plotId, index, machineState, from, to, summary);
       } else {

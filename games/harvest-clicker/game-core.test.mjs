@@ -32,13 +32,18 @@ test("舊存檔中未記錄輪數的肥料保留一次效果", () => {
 });
 
 test("所有商品售價與規格書一致且為有效金額", () => {
-  assert.deepEqual(TOOLS.map((item) => item.cost), [0, 45, 160, 420, 1800, 6000, 22000, 85000, 300000, 1200000, 6000000, 30000000]);
+  assert.deepEqual(TOOLS.map((item) => item.cost), [
+    0, 45, 160, 420, 1800, 6000, 22000, 85000, 300000, 1200000, 6000000, 30000000,
+    120000000, 350000000, 1100000000, 4000000000, 15000000000
+  ]);
   assert.deepEqual(PLANTS.map((item) => item.seedCost), [
     0, 18, 90, 220, 420, 900, 1900, 4200, 8500, 18000, 40000,
     85000, 190000, 420000, 950000, 2200000, 5000000, 11000000,
-    25000000, 60000000, 150000000
+    25000000, 60000000, 150000000, 400000000, 900000000, 2200000000,
+    5000000000, 12000000000, 30000000000, 75000000000, 190000000000,
+    480000000000, 1200000000000
   ]);
-  assert.deepEqual(HARVESTERS.map((item) => item.cost), [25000, 120000, 450000, 1800000, 8000000]);
+  assert.deepEqual(HARVESTERS.map((item) => item.cost), [25000, 120000, 450000, 1800000, 8000000, 25000000000, 180000000000]);
   assert.deepEqual(SPRINKLERS.map((item) => item.cost), [18000, 75000, 260000, 900000, 5500000]);
   assert.deepEqual(FERTILIZERS.map((item) => item.cost), [300, 1200, 6000, 28000, 120000, 300000, 900000, 2800000, 9000000, 30000000]);
   assert.deepEqual(FERTILIZERS.map((item) => item.rounds), [3, 4, 5, 5, 8, 6, 8, 9, 10, 12]);
@@ -90,6 +95,14 @@ test("所有作物收割時都發放各自設定的單格金幣", () => {
   }
 });
 
+test("新增的十種作物全為樹木且具備獨立素材與有效數值", () => {
+  const trees = PLANTS.filter((plant) => plant.type === "tree");
+  assert.equal(trees.length, 10);
+  assert.equal(new Set(trees.map((tree) => tree.image)).size, 10);
+  assert.ok(trees.every((tree) => tree.image && tree.hp > 0 && tree.coins > 0 && tree.growSeconds > 0));
+  assert.ok(trees.every((tree) => Number.isSafeInteger(tree.seedCost) && Number.isSafeInteger(tree.coins)));
+});
+
 test("新遊戲從中央 9×9 成熟雜草與小刀開始", () => {
   const state = createInitialState(0);
   const initialIndexes = INITIAL_PLOT_IDS.flatMap(indexesForPlot);
@@ -124,11 +137,27 @@ test("範圍工具會依棋盤邊界與已購土地裁切", () => {
   assert.equal(getToolTargetIndexes("grand_harvester", centerOfPlot, state.ownedPlots).length, 49);
 });
 
-test("五階自動化設備由單格擴張到 9×9", () => {
+test("一般與林業自動設備依階級覆蓋指定範圍", () => {
   const state = createInitialState(0);
-  assert.deepEqual(HARVESTERS.map((item) => item.range), [1, 3, 5, 7, 9]);
+  assert.deepEqual(HARVESTERS.map((item) => item.range), [1, 3, 5, 7, 9, 5, 9]);
   assert.deepEqual(SPRINKLERS.map((item) => item.range), [1, 3, 5, 7, 9]);
-  assert.deepEqual(HARVESTERS.map((item) => automationTargetIndexes(item.range, INITIAL_PLOT_ID, state.ownedPlots).length), [1, 9, 25, 49, 81]);
+  assert.deepEqual(HARVESTERS.map((item) => automationTargetIndexes(item.range, INITIAL_PLOT_ID, state.ownedPlots).length), [1, 9, 25, 49, 81, 25, 81]);
+  assert.deepEqual(HARVESTERS.filter((item) => item.targetType === "tree").map((item) => item.id), ["tree_sawmill", "tree_lumber_mill"]);
+});
+
+test("林業自動設備只採伐樹木，不會攻擊一般作物", () => {
+  const state = createInitialState(0);
+  const [treeIndex, cropIndex] = indexesForPlot(INITIAL_PLOT_ID);
+  state.cells[treeIndex] = { plantId: "apple_tree", phase: "mature", growthProgress: 1, currentHp: 2400, nextGrowthMultiplier: 1, fertilizerId: null, fertilizerRounds: 0 };
+  state.cells[cropIndex] = { plantId: "tomato", phase: "mature", growthProgress: 1, currentHp: 4, nextGrowthMultiplier: 1, fertilizerId: null, fertilizerRounds: 0 };
+  state.harvesters.push({ id: "tree_sawmill", plotId: INITIAL_PLOT_ID, nextRunAt: 8000 });
+
+  const summary = simulateTo(state, 16000);
+  assert.equal(summary.harvested, 1);
+  assert.equal(summary.gold, 60000000);
+  assert.equal(state.cells[treeIndex].phase, "growing");
+  assert.equal(state.cells[cropIndex].phase, "mature");
+  assert.equal(state.cells[cropIndex].currentHp, 4);
 });
 
 test("十種肥料依各自條件解鎖", () => {
