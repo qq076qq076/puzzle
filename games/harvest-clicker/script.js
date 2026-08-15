@@ -75,6 +75,9 @@ let didInitialFocus = false;
 let hoverIndex = -1;
 let plotPaintOrder = null;
 let fullFarmBounds = null;
+let cameraFocusAnimation = null;
+let focusedPlotId = null;
+let focusedPlotStartedAt = -Infinity;
 const toolCursor = { x: 0, y: 0, visible: false, swingStartedAt: -Infinity };
 
 function formatMoney(value) {
@@ -234,6 +237,10 @@ function playTone(kind = "hit") {
       } else if (kind === "water") {
         scheduleNote(now, 680, .13, .022, "sine", 430);
         scheduleNote(now + .09, 840, .16, .018, "sine", 560);
+      } else if (kind === "fertilizer") {
+        scheduleRustle(now, false);
+        scheduleNote(now, 145, .15, .03, "square", 105);
+        scheduleNote(now + .08, 330, .14, .022, "triangle", 460);
       } else if (kind === "place") {
         scheduleNote(now, 310, .1, .024, "triangle", 390);
       } else {
@@ -319,6 +326,43 @@ function focusOwnedFarm() {
   camera.x = canvasWidth / 2 - ((minX + maxX) / 2) * scale;
   camera.y = canvasHeight / 2 - ((minY + maxY) / 2) * scale;
   constrainCamera();
+}
+
+function focusPlot(plotId) {
+  if (!state?.ownedPlots.includes(plotId) || !canvasWidth || !canvasHeight) return false;
+  const center = plotGeometry(plotId).center;
+  const targetScale = clamp(Math.min(canvasWidth / (TILE_W * 5.2), canvasHeight / (TILE_H * 7)), 0.78, 1.55);
+  const from = { scale: camera.scale, x: camera.x, y: camera.y };
+  camera.scale = targetScale;
+  camera.x = canvasWidth / 2 - center.x * targetScale;
+  camera.y = canvasHeight * 0.51 - center.y * targetScale;
+  constrainCamera();
+  const target = { scale: camera.scale, x: camera.x, y: camera.y };
+  camera.scale = from.scale;
+  camera.x = from.x;
+  camera.y = from.y;
+  const now = performance.now();
+  cameraFocusAnimation = state.settings.reducedMotion
+    ? null
+    : { from, target, startedAt: now, duration: 440 };
+  if (!cameraFocusAnimation) Object.assign(camera, target);
+  focusedPlotId = plotId;
+  focusedPlotStartedAt = now;
+  keyboardIndex = indexesForPlot(plotId)[4];
+  return true;
+}
+
+function updateCameraFocus(now) {
+  if (!cameraFocusAnimation) return;
+  const progress = clamp((now - cameraFocusAnimation.startedAt) / cameraFocusAnimation.duration, 0, 1);
+  const eased = 1 - (1 - progress) ** 3;
+  camera.scale = cameraFocusAnimation.from.scale + (cameraFocusAnimation.target.scale - cameraFocusAnimation.from.scale) * eased;
+  camera.x = cameraFocusAnimation.from.x + (cameraFocusAnimation.target.x - cameraFocusAnimation.from.x) * eased;
+  camera.y = cameraFocusAnimation.from.y + (cameraFocusAnimation.target.y - cameraFocusAnimation.from.y) * eased;
+  if (progress >= 1) {
+    cameraFocusAnimation = null;
+    constrainCamera();
+  }
 }
 
 function pathDiamond(context, x, y) {
@@ -646,57 +690,171 @@ function drawBar(x, y, ratio, color) {
   ctx.fillRect(x - width / 2 + 1, y + 1, (width - 2) * clamp(ratio, 0, 1), height - 2);
 }
 
-function drawDevices(plotId, x, y, now) {
-  const harvester = state.harvesters.find((item) => item.plotId === plotId);
-  const sprinkler = state.sprinklers.find((item) => item.plotId === plotId);
-  if (!harvester && !sprinkler) return;
+function drawDeviceBadge(device, x, y, accent) {
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const devices = [
-    harvester && { kind: "harvester", item: getHarvester(harvester.id) },
-    sprinkler && { kind: "sprinkler", item: getSprinkler(sprinkler.id) }
-  ].filter(Boolean);
-  devices.forEach(({ kind, item: device }, deviceIndex) => {
-    const badgeX = x + (devices.length === 1 ? 0 : deviceIndex ? 25 : -25);
-    const motion = state.settings.reducedMotion ? 0 : now / (kind === "harvester" ? 150 : 220);
-    const badgeY = y - 35 + (state.settings.reducedMotion ? 0 : Math.sin(motion * .15 + plotId) * 1.6);
-    ctx.save();
-    ctx.translate(badgeX, badgeY);
-    if (kind === "harvester") {
-      ctx.rotate(motion * .12);
-      ctx.strokeStyle = "rgba(239,189,75,.72)";
-      ctx.lineWidth = 2.2 / camera.scale;
-      ctx.beginPath(); ctx.arc(0, 0, 23, 0, Math.PI * 2); ctx.stroke();
-      for (let tooth = 0; tooth < 8; tooth += 1) {
-        ctx.rotate(Math.PI / 4);
-        ctx.beginPath(); ctx.moveTo(21, 0); ctx.lineTo(26, 0); ctx.stroke();
-      }
-    } else {
-      ctx.strokeStyle = "rgba(125,213,230,.72)";
-      ctx.lineWidth = 2 / camera.scale;
-      for (let drop = 0; drop < 3; drop += 1) {
-        const angle = motion * .1 + drop * Math.PI * 2 / 3;
-        const radius = 23 + Math.sin(motion * .12 + drop) * 3;
-        ctx.beginPath();
-        ctx.arc(Math.cos(angle) * radius, Math.sin(angle) * radius * .45, 2.5, 0, Math.PI * 2);
-        ctx.stroke();
-      }
+  ctx.fillStyle = "rgba(255,250,232,.94)";
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 2 / camera.scale;
+  ctx.beginPath(); ctx.arc(x, y, 20, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  const image = device.image ? images.get(device.image) : null;
+  if (image) ctx.drawImage(image, x - 15, y - 15, 30, 30);
+  else {
+    ctx.fillStyle = "#203b28";
+    ctx.font = "18px sans-serif";
+    ctx.fillText(device.emoji, x, y);
+  }
+  ctx.fillStyle = "#173b2a";
+  ctx.font = "800 8px sans-serif";
+  ctx.fillText(`${device.range}×${device.range}`, x, y + 24);
+  ctx.restore();
+}
+
+function drawHarvesterOperation(device, plotId, x, y, now) {
+  const phase = state.settings.reducedMotion ? .12 : (now / Math.max(3800, 9200 - device.tier * 520) + plotId * .137) % 1;
+  const angle = phase * Math.PI * 2;
+  const radiusX = 67 + Math.min(9, device.range) * 2;
+  const radiusY = 29 + Math.min(9, device.range) * .9;
+  const vehicleX = x + Math.cos(angle) * radiusX;
+  const vehicleY = y + 7 + Math.sin(angle) * radiusY;
+  const direction = Math.cos(angle) >= 0 ? 1 : -1;
+  const forestry = device.targetType === "tree";
+
+  ctx.save();
+  ctx.strokeStyle = forestry ? "rgba(132,92,54,.58)" : "rgba(239,189,75,.58)";
+  ctx.lineWidth = 2 / camera.scale;
+  ctx.setLineDash([7 / camera.scale, 8 / camera.scale]);
+  ctx.beginPath(); ctx.ellipse(x, y + 7, radiusX, radiusY, 0, 0, Math.PI * 2); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = "rgba(39,32,21,.25)";
+  ctx.beginPath(); ctx.ellipse(vehicleX, vehicleY + 10, 22, 7, 0, 0, Math.PI * 2); ctx.fill();
+
+  if (!state.settings.reducedMotion) {
+    ctx.fillStyle = forestry ? "rgba(126,84,44,.72)" : "rgba(114,145,67,.66)";
+    for (let particle = 0; particle < 5; particle += 1) {
+      const lag = 11 + particle * 6;
+      ctx.beginPath();
+      ctx.arc(vehicleX - direction * lag, vehicleY + 4 + (particle % 2) * 4, 1.8 + particle % 2, 0, Math.PI * 2);
+      ctx.fill();
     }
+  }
+
+  ctx.translate(vehicleX, vehicleY - 6);
+  ctx.scale(direction, 1);
+  ctx.rotate(Math.sin(angle) * .09);
+  const vehicleImage = images.get("combine-harvester.png");
+  if (vehicleImage) ctx.drawImage(vehicleImage, -21, -22, 42, 42);
+  else {
+    ctx.font = "31px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("🚜", 0, 9);
+  }
+  if (forestry) {
+    ctx.font = "13px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("🪵", -17, -8);
+  }
+  ctx.restore();
+}
+
+function drawSprinklerOperation(device, plotId, x, y, now) {
+  const phase = state.settings.reducedMotion ? 0 : now / 720 + plotId;
+  const reachX = 42 + device.range * 4;
+  const reachY = 15 + device.range * 1.6;
+  ctx.save();
+  ctx.strokeStyle = "rgba(148,226,241,.72)";
+  ctx.fillStyle = "rgba(196,242,250,.84)";
+  ctx.lineWidth = 2 / camera.scale;
+  for (let jet = 0; jet < 4; jet += 1) {
+    const angle = phase + jet * Math.PI / 2;
+    const endX = x + Math.cos(angle) * reachX;
+    const endY = y + 2 + Math.sin(angle) * reachY;
+    ctx.beginPath();
+    ctx.moveTo(x, y - 16);
+    ctx.quadraticCurveTo((x + endX) / 2, Math.min(y - 42, endY - 35), endX, endY);
+    ctx.stroke();
+    ctx.beginPath(); ctx.arc(endX, endY, 2.8, 0, Math.PI * 2); ctx.fill();
+  }
+  const ripple = state.settings.reducedMotion ? 14 : 10 + (now / 45 % 22);
+  ctx.globalAlpha = state.settings.reducedMotion ? .45 : 1 - (ripple - 10) / 24;
+  ctx.beginPath(); ctx.ellipse(x, y + 8, ripple * 2.2, ripple * .7, 0, 0, Math.PI * 2); ctx.stroke();
+  ctx.restore();
+}
+
+function drawDevices(plotId, x, y, now) {
+  const harvesterState = state.harvesters.find((item) => item.plotId === plotId);
+  const sprinklerState = state.sprinklers.find((item) => item.plotId === plotId);
+  const harvester = harvesterState ? getHarvester(harvesterState.id) : null;
+  const sprinkler = sprinklerState ? getSprinkler(sprinklerState.id) : null;
+  if (!harvester && !sprinkler) return;
+
+  if (harvester) drawHarvesterOperation(harvester, plotId, x, y, now);
+  if (sprinkler) drawSprinklerOperation(sprinkler, plotId, x, y, now);
+  if (harvester) drawDeviceBadge(harvester, x + (sprinkler ? -25 : 0), y - 38, "rgba(226,174,67,.82)");
+  if (sprinkler) drawDeviceBadge(sprinkler, x + (harvester ? 25 : 0), y - 38, "rgba(105,197,218,.82)");
+}
+
+function drawFertilizerOperation(plotId, x, y, now) {
+  const fertilizedCells = indexesForPlot(plotId).map((index) => state.cells[index]).filter((cell) => cell.fertilizerId);
+  if (!fertilizedCells.length) return;
+  const fertilizer = getFertilizer(fertilizedCells[0].fertilizerId);
+  if (!fertilizer) return;
+  const rounds = Math.max(...fertilizedCells.map((cell) => cell.fertilizerRounds));
+  const cycle = state.settings.reducedMotion ? .5 : (now / 6200 + plotId * .071) % 1;
+  const laneProgress = cycle * 3;
+  const lane = Math.min(2, Math.floor(laneProgress));
+  const localProgress = laneProgress - lane;
+  const direction = lane % 2 === 0 ? 1 : -1;
+  const travel = direction > 0 ? localProgress : 1 - localProgress;
+  const machineX = x - 58 + travel * 116;
+  const machineY = y - 2 + (lane - 1) * 15;
+  const wheelSpin = state.settings.reducedMotion ? 0 : now / 95 * direction;
+
+  ctx.save();
+  ctx.fillStyle = "rgba(46,33,20,.24)";
+  ctx.beginPath(); ctx.ellipse(machineX, machineY + 13, 23, 7, 0, 0, Math.PI * 2); ctx.fill();
+  if (!state.settings.reducedMotion) {
+    ctx.fillStyle = "rgba(183,133,65,.76)";
+    for (let grain = 0; grain < 7; grain += 1) {
+      const drift = 10 + grain * 5;
+      const grainX = machineX - direction * drift;
+      const grainY = machineY + 8 + Math.sin(now / 120 + grain) * 5;
+      ctx.beginPath(); ctx.arc(grainX, grainY, 1.7 + grain % 2, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  ctx.translate(machineX, machineY);
+  ctx.scale(direction, 1);
+  ctx.fillStyle = "#d6a94f";
+  ctx.strokeStyle = "#70492e";
+  ctx.lineWidth = 2 / camera.scale;
+  ctx.beginPath();
+  ctx.moveTo(-15, -4); ctx.lineTo(14, -4); ctx.lineTo(11, 10); ctx.lineTo(-13, 10); ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = "#8d6439";
+  ctx.beginPath(); ctx.moveTo(-9, -17); ctx.lineTo(9, -17); ctx.lineTo(13, -4); ctx.lineTo(-13, -4); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = "#5d4935";
+  ctx.beginPath(); ctx.moveTo(13, -8); ctx.lineTo(24, -16); ctx.stroke();
+  for (const wheelX of [-10, 10]) {
+    ctx.save(); ctx.translate(wheelX, 11); ctx.rotate(wheelSpin);
+    ctx.fillStyle = "#3d382f";
+    ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#c2a06a";
+    ctx.beginPath(); ctx.moveTo(-4, 0); ctx.lineTo(4, 0); ctx.moveTo(0, -4); ctx.lineTo(0, 4); ctx.stroke();
     ctx.restore();
-    ctx.fillStyle = "rgba(255,250,232,.94)";
-    ctx.beginPath(); ctx.arc(badgeX, badgeY, 20, 0, Math.PI * 2); ctx.fill();
-    const image = device.image ? images.get(device.image) : null;
-    if (image) ctx.drawImage(image, badgeX - 15, badgeY - 15, 30, 30);
-    else {
-      ctx.fillStyle = "#203b28";
-      ctx.font = "18px sans-serif";
-      ctx.fillText(device.emoji, badgeX, badgeY);
-    }
-    ctx.fillStyle = "#173b2a";
-    ctx.font = "800 8px sans-serif";
-    ctx.fillText(`${device.range}×${device.range}`, badgeX, badgeY + 24);
-  });
+  }
+  ctx.restore();
+
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = "800 10px sans-serif";
+  ctx.fillStyle = "rgba(255,249,222,.94)";
+  ctx.strokeStyle = "rgba(93,73,53,.55)";
+  ctx.lineWidth = 1 / camera.scale;
+  ctx.beginPath(); ctx.roundRect(machineX - 18, machineY - 32, 36, 15, 7); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = "#624728";
+  ctx.fillText(`${fertilizer.emoji} ×${rounds}`, machineX, machineY - 24.5);
   ctx.restore();
 }
 
@@ -774,7 +932,7 @@ function drawActionAnimations(now) {
 
   for (let i = deviceBursts.length - 1; i >= 0; i -= 1) {
     const burst = deviceBursts[i];
-    const duration = state.settings.reducedMotion ? 180 : burst.kind === "sprinkler" ? 920 : 760;
+    const duration = state.settings.reducedMotion ? 180 : burst.kind === "fertilizer" ? 1100 : burst.kind === "sprinkler" ? 920 : 760;
     const age = now - burst.startedAt;
     if (age > duration) {
       deviceBursts.splice(i, 1);
@@ -784,7 +942,28 @@ function drawActionAnimations(now) {
     const fade = 1 - progress;
     ctx.save();
     ctx.translate(burst.x, burst.y - 8);
-    if (burst.kind === "sprinkler") {
+    if (burst.kind === "fertilizer") {
+      ctx.strokeStyle = `rgba(147,102,55,${fade * .86})`;
+      ctx.fillStyle = `rgba(215,174,89,${fade * .92})`;
+      ctx.lineWidth = 3 / camera.scale;
+      for (let lane = -1; lane <= 1; lane += 1) {
+        const sweep = (progress * 2 - 1) * 72 * (lane % 2 ? -1 : 1);
+        ctx.beginPath();
+        ctx.moveTo(-70, lane * 16 + 16);
+        ctx.lineTo(70, lane * 16 + 16);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(sweep, lane * 16 + 10, 6 + fade * 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      for (let grain = 0; grain < 15; grain += 1) {
+        const angle = grain * Math.PI * 2 / 15;
+        const radius = 15 + progress * (35 + grain % 4 * 8);
+        ctx.beginPath();
+        ctx.arc(Math.cos(angle) * radius, 10 + Math.sin(angle) * radius * .36, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (burst.kind === "sprinkler") {
       ctx.strokeStyle = `rgba(132,225,241,${fade * .9})`;
       ctx.lineWidth = 3 / camera.scale;
       for (let ring = 0; ring < 3; ring += 1) {
@@ -891,6 +1070,7 @@ function drawEffects(now) {
 
 function drawFarm(now = performance.now()) {
   if (!state || !canvasWidth || !canvasHeight) return;
+  updateCameraFocus(now);
   ctx.clearRect(0, 0, canvasWidth, canvasHeight);
   ctx.save();
   ctx.translate(camera.x, camera.y);
@@ -925,7 +1105,21 @@ function drawFarm(now = performance.now()) {
       ctx.font = "13px sans-serif";
       ctx.fillText(`✦${cell.fertilizerRounds}`, point.x - 31, point.y - 15);
     }
-    if (index === indexesForPlot(plotId)[4]) drawDevices(plotId, point.x, point.y, now);
+  }
+
+  for (const plotId of state.ownedPlots) {
+    const center = plotGeometry(plotId).center;
+    drawFertilizerOperation(plotId, center.x, center.y, now);
+    drawDevices(plotId, center.x, center.y, now);
+  }
+
+  if (focusedPlotId != null) {
+    const age = now - focusedPlotStartedAt;
+    if (age > 1800) focusedPlotId = null;
+    else {
+      const pulse = state.settings.reducedMotion ? .75 : .56 + Math.sin(age / 95) * .2;
+      plotOutline(focusedPlotId, `rgba(255,224,105,${pulse})`, 5);
+    }
   }
 
   drawActionAnimations(now);
@@ -1231,11 +1425,11 @@ function renderQuickbar() {
   }
   for (const placed of state.harvesters) {
     const item = getHarvester(placed.id);
-    items.push(quickButton({ image: item.image, emoji: item.emoji, title: `${item.name}｜點擊可移動`, attributes: `data-installed-kind="harvester" data-inventory-id="${item.id}" data-source-plot="${placed.plotId}"`, installed: true, selected: selection?.kind === "harvester" && selection.sourcePlot === placed.plotId }));
+    items.push(quickButton({ image: item.image, emoji: item.emoji, title: `${item.name}｜點擊定位，可再選土地移動`, attributes: `data-installed-kind="harvester" data-inventory-id="${item.id}" data-source-plot="${placed.plotId}"`, installed: true, selected: selection?.kind === "harvester" && selection.sourcePlot === placed.plotId }));
   }
   for (const placed of state.sprinklers) {
     const item = getSprinkler(placed.id);
-    items.push(quickButton({ image: item.image, emoji: item.emoji, title: `${item.name}｜點擊可移動`, attributes: `data-installed-kind="sprinkler" data-inventory-id="${item.id}" data-source-plot="${placed.plotId}"`, installed: true, selected: selection?.kind === "sprinkler" && selection.sourcePlot === placed.plotId }));
+    items.push(quickButton({ image: item.image, emoji: item.emoji, title: `${item.name}｜點擊定位，可再選土地移動`, attributes: `data-installed-kind="sprinkler" data-inventory-id="${item.id}" data-source-plot="${placed.plotId}"`, installed: true, selected: selection?.kind === "sprinkler" && selection.sourcePlot === placed.plotId }));
   }
   const cancel = selection ? '<button class="quick-item quick-cancel" type="button" data-cancel-selection aria-label="取消使用物品">×</button>' : "";
   elements.quickbar.innerHTML = tools.join("") + (items.length ? '<span class="quick-divider" aria-hidden="true"></span>' + items.join("") : "") + cancel;
@@ -1365,10 +1559,13 @@ function useSelection(plotId) {
     feedbackSound = "plant";
   } else if (selection.kind === "fertilizer") {
     if (!isValidSelectionPlot(plotId)) { closeActionConfirm(); showToast("含有雜草的地塊不能施肥"); return; }
-    if (!consumeInventory("fertilizer", selection.id)) return;
-    fertilizePlot(state, plotId, selection.id);
-    showToast(`${getFertilizer(selection.id).name}已施用，立即生效 ${getFertilizer(selection.id).rounds} 輪`);
+    const fertilizerId = selection.id;
+    if (!consumeInventory("fertilizer", fertilizerId)) return;
+    fertilizePlot(state, plotId, fertilizerId);
+    triggerDeviceAnimation("fertilizer", plotId);
+    showToast(`${getFertilizer(fertilizerId).name}已施用，施肥機開始運作 ${getFertilizer(fertilizerId).rounds} 輪`);
     selection = null;
+    feedbackSound = "fertilizer";
   } else if (selection.kind === "harvester" || selection.kind === "sprinkler") {
     const deviceKind = selection.kind;
     const deviceId = selection.id;
@@ -1554,6 +1751,7 @@ elements.shopDialog.addEventListener("close", () => { selectedShopProduct = null
 elements.canvas.addEventListener("pointerdown", (event) => {
   if (event.button > 0) return;
   event.preventDefault();
+  cameraFocusAnimation = null;
   elements.canvas.setPointerCapture(event.pointerId);
   const point = canvasPosition(event);
   activePointers.set(event.pointerId, point);
@@ -1633,6 +1831,7 @@ elements.canvas.addEventListener("pointerup", endPointer);
 elements.canvas.addEventListener("pointercancel", endPointer);
 elements.canvas.addEventListener("wheel", (event) => {
   event.preventDefault();
+  cameraFocusAnimation = null;
   const point = canvasPosition(event);
   setZoom(camera.scale * Math.exp(-event.deltaY * 0.0015), point.x, point.y);
   closeLandPopover();
@@ -1688,6 +1887,11 @@ elements.quickbar.addEventListener("click", (event) => {
   selection = sameSelection ? null : nextSelection;
   closeLandPopover();
   renderAll();
+  if (nextSelection.sourcePlot != null && focusPlot(nextSelection.sourcePlot)) {
+    const device = nextSelection.kind === "harvester" ? getHarvester(nextSelection.id) : getSprinkler(nextSelection.id);
+    const plot = PLOTS.find((candidate) => candidate.id === nextSelection.sourcePlot);
+    showToast(`${device?.name || "設備"}位於${plot?.name || "這塊土地"}`);
+  }
 });
 
 elements.mobileShop.addEventListener("click", () => {
