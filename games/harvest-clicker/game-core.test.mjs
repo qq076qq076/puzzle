@@ -6,7 +6,7 @@ const {
   getToolTargetIndexes, automationTargetIndexes, indexesForPlot, buyPlot, validateState,
   INITIAL_PLOT_ID, INITIAL_PLOT_IDS, BOARD_SIZE, PLOTS,
   PLANTS, TOOLS, HARVESTERS, SPRINKLERS, FERTILIZERS, getProductPrice,
-  normalizeStateData, isFertilizerUnlocked
+  getLandPrice, normalizeStateData, isFertilizerUnlocked
 } = globalThis.HarvestCore;
 
 test("舊存檔的胡蘿蔔植株與種子會無損轉成樁架番茄", () => {
@@ -45,9 +45,11 @@ test("所有商品售價與規格書一致且為有效金額", () => {
   assert.equal(FERTILIZERS.length, 10);
   assert.ok(FERTILIZERS.every((item) => item.purpose && item.unlock));
   assert.equal(PLOTS.length, 81);
-  assert.ok(PLOTS.slice(0, 9).every((item) => item.cost === 0));
-  assert.equal(PLOTS[9].cost, 1200);
-  assert.ok(PLOTS.slice(10).every((item, index) => item.cost >= PLOTS[index + 9].cost));
+  const landPrices = Array.from({ length: PLOTS.length - INITIAL_PLOT_IDS.length }, (_, index) => getLandPrice(INITIAL_PLOT_IDS.length + index));
+  assert.equal(landPrices[0], 1200);
+  assert.equal(landPrices.at(-1), 340000000000000);
+  assert.ok(landPrices.slice(1).every((price, index) => price >= landPrices[index]));
+  assert.equal(getLandPrice(PLOTS.length), null);
 
   const pricedItems = [
     ...TOOLS.map((item) => [item.name, item.cost]),
@@ -55,7 +57,7 @@ test("所有商品售價與規格書一致且為有效金額", () => {
     ...HARVESTERS.map((item) => [item.name, item.cost]),
     ...SPRINKLERS.map((item) => [item.name, item.cost]),
     ...FERTILIZERS.map((item) => [item.name, item.cost]),
-    ...PLOTS.map((item) => [item.name, item.cost])
+    ...landPrices.map((price, index) => [`第 ${INITIAL_PLOT_IDS.length + index + 1} 塊土地`, price])
   ];
   for (const [name, price] of pricedItems) {
     assert.ok(Number.isSafeInteger(price) && price >= 0, `${name} 的售價必須是非負安全整數`);
@@ -200,15 +202,22 @@ test("肥料立即加速當下作物並持續指定收割輪數", () => {
   assert.ok(indexesForPlot(INITIAL_PLOT_ID).every((index) => state.cells[index].fertilizerRounds === 0));
 });
 
-test("土地只能依順序購買並扣除指定金額", () => {
+test("土地可任選位置，價格只依已擁有數量增加", () => {
   const state = createInitialState(0);
-  const next = PLOTS[INITIAL_PLOT_IDS.length];
-  state.gold = next.cost * 2;
-  assert.equal(buyPlot(state, PLOTS[INITIAL_PLOT_IDS.length + 1].id), false);
-  assert.equal(buyPlot(state, next.id), true);
-  assert.equal(state.gold, next.cost);
-  assert.deepEqual(state.ownedPlots, [...INITIAL_PLOT_IDS, next.id]);
-  assert.ok(indexesForPlot(next.id).every((index) => state.cells[index].phase === "growing"));
+  const firstPrice = getLandPrice(state.ownedPlots.length);
+  const secondPrice = getLandPrice(state.ownedPlots.length + 1);
+  const farPlot = PLOTS.at(-1);
+  const otherPlot = PLOTS.find((plot) => !INITIAL_PLOT_IDS.includes(plot.id) && plot.id !== farPlot.id);
+  state.gold = firstPrice + secondPrice;
+
+  assert.equal(buyPlot(state, farPlot.id), true);
+  assert.equal(state.gold, secondPrice);
+  assert.equal(getLandPrice(state.ownedPlots.length), secondPrice);
+  assert.equal(buyPlot(state, farPlot.id), false);
+  assert.equal(buyPlot(state, otherPlot.id), true);
+  assert.equal(state.gold, 0);
+  assert.deepEqual(state.ownedPlots, [...INITIAL_PLOT_IDS, farPlot.id, otherPlot.id]);
+  assert.ok(indexesForPlot(farPlot.id).every((index) => state.cells[index].phase === "growing"));
 });
 
 test("v3 的 15×15 存檔會遷移為 v4 的 27×27 農場", () => {

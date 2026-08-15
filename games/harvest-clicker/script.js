@@ -4,7 +4,7 @@ const {
   BOARD_SIZE, PLOT_GRID_SIZE, INITIAL_PLOT_ID, PLANTS, TOOLS, PLOTS, HARVESTERS, SPRINKLERS, FERTILIZERS,
   createInitialState, validateState, simulateTo, manualHarvest, sowPlot,
   fertilizePlot, buyPlot, formatNumber, formatTime, getPlant, getTool,
-  getHarvester, getSprinkler, getFertilizer, getProductPrice, plotIdForIndex, indexesForPlot,
+  getHarvester, getSprinkler, getFertilizer, getProductPrice, getLandPrice, plotIdForIndex, indexesForPlot,
   isToolUnlocked, isPlantUnlocked, isFertilizerUnlocked, isAutomationUnlocked,
   growthDurationSeconds, normalizeStateData
 } = globalThis.HarvestCore;
@@ -709,23 +709,24 @@ function plotOutline(plotId, color, lineWidth = 3) {
 }
 
 function drawLockedPlots() {
+  const price = getLandPrice(state.ownedPlots.length);
+  const affordable = price != null && state.gold >= price;
   for (const plot of PLOTS) {
     if (state.ownedPlots.includes(plot.id)) continue;
     const indexes = indexesForPlot(plot.id);
     const centerIndex = indexes[4];
     const point = worldPoint(Math.floor(centerIndex / BOARD_SIZE), centerIndex % BOARD_SIZE);
-    const isNext = PLOTS[state.ownedPlots.length]?.id === plot.id;
-    plotOutline(plot.id, isNext ? "rgba(255,223,109,.72)" : "rgba(231,241,209,.2)", isNext ? 3 : 2);
+    plotOutline(plot.id, affordable ? "rgba(255,223,109,.72)" : "rgba(231,241,209,.2)", affordable ? 3 : 2);
     ctx.save();
     ctx.translate(point.x, point.y - 8);
-    ctx.fillStyle = isNext ? "rgba(20,55,35,.88)" : "rgba(25,51,34,.62)";
+    ctx.fillStyle = affordable ? "rgba(20,55,35,.88)" : "rgba(25,51,34,.62)";
     ctx.beginPath();
     ctx.arc(0, 0, 23, 0, Math.PI * 2);
     ctx.fill();
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.font = "22px sans-serif";
-    ctx.fillText("🔒", 0, 1);
+    ctx.fillText(affordable ? "＋" : "🔒", 0, 1);
     ctx.restore();
   }
 }
@@ -1392,24 +1393,22 @@ function showLandPopover(plotId) {
   }
   closeActionConfirm();
   selectedLandPlot = plotId;
-  const plotOrder = PLOTS.findIndex((item) => item.id === plotId);
-  const nextOrder = state.ownedPlots.length;
-  const isNext = plotOrder === nextOrder;
-  const affordable = state.gold >= plot.cost;
+  const price = getLandPrice(state.ownedPlots.length);
+  const affordable = price != null && state.gold >= price;
   elements.landPopover.hidden = false;
-  elements.landIcon.textContent = isNext ? (affordable ? "🌱" : "🔒") : "🔒";
+  elements.landIcon.textContent = affordable ? "🌱" : "🔒";
   elements.landTitle.textContent = plot.name;
-  elements.landPrice.textContent = formatMoney(plot.cost);
-  if (!isNext) {
-    elements.landCondition.textContent = `條件：先購買 ${PLOTS[nextOrder]?.name || "前一塊土地"}`;
+  elements.landPrice.textContent = price == null ? "已購完" : formatMoney(price);
+  if (price == null) {
+    elements.landCondition.textContent = "所有土地都已購買。";
     elements.landBuy.disabled = true;
-    elements.landBuy.innerHTML = '<span aria-hidden="true">🔒</span><span class="sr-only">尚未解鎖</span>';
+    elements.landBuy.textContent = "已購完";
   } else if (!affordable) {
-    elements.landCondition.textContent = `可購買 3×3 土地，還差 ${formatMoney(plot.cost - state.gold)}`;
+    elements.landCondition.textContent = `位置可自由選擇；下一塊土地還差 ${formatMoney(price - state.gold)}`;
     elements.landBuy.disabled = true;
     elements.landBuy.textContent = "金幣不足";
   } else {
-    elements.landCondition.textContent = "可購買 3×3 土地，購買後會長出 9 格雜草。";
+    elements.landCondition.textContent = `位置可自由選擇；這是第 ${state.ownedPlots.length + 1} 塊土地。`;
     elements.landBuy.disabled = false;
     elements.landBuy.textContent = "購買";
   }
@@ -1423,8 +1422,9 @@ function closeLandPopover() {
 function purchaseSelectedLand() {
   if (selectedLandPlot == null) return;
   const plot = PLOTS.find((item) => item.id === selectedLandPlot);
-  if (!plot || state.gold < plot.cost || PLOTS[state.ownedPlots.length]?.id !== plot.id) return;
-  if (!window.confirm(`要以 ${formatMoney(plot.cost)} 購買「${plot.name}」嗎？`)) return;
+  const price = getLandPrice(state.ownedPlots.length);
+  if (!plot || state.ownedPlots.includes(plot.id) || price == null || state.gold < price) return;
+  if (!window.confirm(`要以 ${formatMoney(price)} 購買「${plot.name}」嗎？`)) return;
   if (!buyPlot(state, plot.id)) return;
   closeLandPopover();
   playTone("purchase");

@@ -61,11 +61,19 @@ const remainingPlotIds = Array.from({ length: PLOT_GRID_SIZE * PLOT_GRID_SIZE },
     return aRing - bRing || Math.atan2(aRow - 4, aCol - 4) - Math.atan2(bRow - 4, bCol - 4);
   });
 
-const PLOTS = [...INITIAL_PLOT_IDS, ...remainingPlotIds].map((id, order) => ({
+const PLOTS = [...INITIAL_PLOT_IDS, ...remainingPlotIds].map((id) => ({
   id,
-  name: order === 0 ? "中央田" : `第 ${order + 1} 區農田`,
-  cost: order < INITIAL_PLOT_IDS.length ? 0 : roundLandPrice(1200 * (1.45 ** (order - INITIAL_PLOT_IDS.length)))
+  name: id === INITIAL_PLOT_ID
+    ? "中央田"
+    : `第 ${Math.floor(id / PLOT_GRID_SIZE) + 1} 列・第 ${id % PLOT_GRID_SIZE + 1} 欄農田`
 }));
+
+function getLandPrice(ownedPlotCount) {
+  const count = Math.max(0, Math.floor(Number(ownedPlotCount) || 0));
+  if (count < INITIAL_PLOT_IDS.length) return 0;
+  if (count >= PLOTS.length) return null;
+  return roundLandPrice(1200 * (1.45 ** (count - INITIAL_PLOT_IDS.length)));
+}
 
 const HARVESTERS = [
   { id: "micro", name: "單點採收器", emoji: "🦾", image: "combine-harvester.png", cost: 25000, damage: 3, intervalSeconds: 45, regrowth: 1, range: 1, tier: 1 },
@@ -468,9 +476,10 @@ function fertilizePlot(state, plotId, fertilizerId) {
 }
 
 function buyPlot(state, plotId) {
-  const next = PLOTS[state.ownedPlots.length];
-  if (!next || next.id !== plotId || state.gold < next.cost) return false;
-  state.gold -= next.cost;
+  const plot = PLOTS.find((item) => item.id === plotId);
+  const price = getLandPrice(state.ownedPlots.length);
+  if (!plot || state.ownedPlots.includes(plotId) || price == null || state.gold < price) return false;
+  state.gold -= price;
   state.ownedPlots.push(plotId);
   for (const index of indexesForPlot(plotId)) {
     state.cells[index] = {
@@ -592,7 +601,7 @@ globalThis.HarvestCore = Object.freeze({
   BOARD_SIZE, PLOT_GRID_SIZE, INITIAL_PLOT_ID, INITIAL_PLOT_IDS, SAVE_VERSION, PLANTS, TOOLS, PLOTS,
   HARVESTERS, SPRINKLERS, FERTILIZERS, getPlant, getTool,
   getHarvester, getSprinkler, getFertilizer, getProductPrice, plotIdForIndex,
-  indexesForPlot, createInitialState, isAutomationUnlocked,
+  indexesForPlot, getLandPrice, createInitialState, isAutomationUnlocked,
   isToolUnlocked, isPlantUnlocked, isFertilizerUnlocked,
   getToolTargetIndexes, automationTargetIndexes, manualHarvest, growthDurationSeconds,
   simulateTo, sowPlot, fertilizePlot, buyPlot, formatNumber,
