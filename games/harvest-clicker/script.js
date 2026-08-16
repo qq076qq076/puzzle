@@ -5,6 +5,7 @@ const {
   createInitialState, validateState, simulateTo, manualHarvest, sowPlot,
   fertilizePlot, buyPlot, formatNumber, formatTime, getPlant, getTool,
   getHarvester, getSprinkler, getFertilizer, getProductPrice, getLandPrice, plotIdForIndex, indexesForPlot,
+  automationTargetIndexes,
   isToolUnlocked, isPlantUnlocked, isFertilizerUnlocked, isAutomationUnlocked,
   growthDurationSeconds, normalizeStateData
 } = globalThis.HarvestCore;
@@ -19,6 +20,8 @@ const MIN_ZOOM = 0.35;
 const MAX_ZOOM = 2.4;
 const $ = (selector) => document.querySelector(selector);
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+const LOW_POWER_RENDER = Boolean(window.matchMedia?.("(pointer: coarse)")?.matches || (navigator.hardwareConcurrency || 8) <= 4);
+const FRAME_INTERVAL = LOW_POWER_RENDER ? 1000 / 24 : 0;
 
 const elements = {
   gold: $("#gold-value"), shop: $("#shop-panel"),
@@ -61,6 +64,7 @@ let activeTab = "tools";
 let selection = null;
 let selectedLandPlot = null;
 let pendingActionPlotId = null;
+let pendingActionIndex = null;
 let selectedShopProduct = null;
 let keyboardIndex = indexesForPlot(INITIAL_PLOT_ID)[4];
 let toastTimer = 0;
@@ -78,6 +82,7 @@ let fullFarmBounds = null;
 let cameraFocusAnimation = null;
 let focusedPlotId = null;
 let focusedPlotStartedAt = -Infinity;
+let lastFarmFrameAt = -Infinity;
 const toolCursor = { x: 0, y: 0, visible: false, swingStartedAt: -Infinity };
 
 function formatMoney(value) {
@@ -258,7 +263,7 @@ function worldPoint(row, col) {
 
 function resizeCanvas() {
   const rect = elements.canvasShell.getBoundingClientRect();
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const dpr = Math.min(LOW_POWER_RENDER ? 1.25 : 2, window.devicePixelRatio || 1);
   canvasWidth = Math.max(1, rect.width);
   canvasHeight = Math.max(1, rect.height);
   elements.canvas.width = Math.round(canvasWidth * dpr);
@@ -404,8 +409,9 @@ function pathPlotTop(geometry) {
 function drawPlotBase(plot) {
   const geometry = plotGeometry(plot.id);
   const owned = state.ownedPlots.includes(plot.id);
-  const selectedTarget = selection && pendingActionPlotId === plot.id;
-  const selectable = selection && !selectedTarget && isValidSelectionPlot(plot.id);
+  const rangeSelection = selection && (selection.kind === "harvester" || selection.kind === "sprinkler");
+  const selectedTarget = selection && !rangeSelection && pendingActionPlotId === plot.id;
+  const selectable = selection && !rangeSelection && !selectedTarget && isValidSelectionPlot(plot.id);
 
   ctx.beginPath();
   ctx.moveTo(geometry.left.x, geometry.left.y);
@@ -667,15 +673,17 @@ function drawPlant(cell, x, y, now) {
     ctx.fillText(plant.emoji, x, y + contactY);
     return;
   }
-  const bob = mature && !state.settings.reducedMotion ? Math.sin(now / 650 + x * 0.03) * .65 : 0;
+  const bob = mature && !state.settings.reducedMotion && !LOW_POWER_RENDER ? Math.sin(now / 650 + x * 0.03) * .65 : 0;
   ctx.save();
   ctx.fillStyle = "rgba(47,35,22,.25)";
   ctx.beginPath();
   ctx.ellipse(x, y + contactY - 2, 23 * growthScale, 7 * growthScale, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.shadowColor = "rgba(39,28,19,.28)";
-  ctx.shadowBlur = 7;
-  ctx.shadowOffsetY = 5;
+  if (!LOW_POWER_RENDER) {
+    ctx.shadowColor = "rgba(39,28,19,.28)";
+    ctx.shadowBlur = 7;
+    ctx.shadowOffsetY = 5;
+  }
   ctx.globalAlpha = mature ? 1 : 0.82;
   ctx.drawImage(image, x - width / 2, y + contactY - height + bob, width, height);
   ctx.restore();
@@ -730,7 +738,7 @@ function drawHarvesterOperation(device, plotId, x, y, now) {
   ctx.fillStyle = "rgba(39,32,21,.25)";
   ctx.beginPath(); ctx.ellipse(vehicleX, vehicleY + 10, 22, 7, 0, 0, Math.PI * 2); ctx.fill();
 
-  if (!state.settings.reducedMotion) {
+  if (!state.settings.reducedMotion && !LOW_POWER_RENDER) {
     ctx.fillStyle = forestry ? "rgba(126,84,44,.72)" : "rgba(114,145,67,.66)";
     for (let particle = 0; particle < 5; particle += 1) {
       const lag = 11 + particle * 6;
@@ -766,7 +774,7 @@ function drawSprinklerOperation(device, plotId, x, y, now) {
   ctx.strokeStyle = "rgba(148,226,241,.72)";
   ctx.fillStyle = "rgba(196,242,250,.84)";
   ctx.lineWidth = 2 / camera.scale;
-  for (let jet = 0; jet < 4; jet += 1) {
+  for (let jet = 0; jet < (LOW_POWER_RENDER ? 2 : 4); jet += 1) {
     const angle = phase + jet * Math.PI / 2;
     const endX = x + Math.cos(angle) * reachX;
     const endY = y + 2 + Math.sin(angle) * reachY;
@@ -782,6 +790,14 @@ function drawSprinklerOperation(device, plotId, x, y, now) {
   ctx.restore();
 }
 
+function deviceAnchorPoint(placed, fallback) {
+  const index = Number.isInteger(placed?.centerIndex) && placed.centerIndex >= 0 && placed.centerIndex < BOARD_SIZE * BOARD_SIZE
+    ? placed.centerIndex
+    : null;
+  if (index == null) return fallback;
+  return worldPoint(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE);
+}
+
 function drawDevices(plotId, x, y, now) {
   const harvesterState = state.harvesters.find((item) => item.plotId === plotId);
   const sprinklerState = state.sprinklers.find((item) => item.plotId === plotId);
@@ -789,10 +805,13 @@ function drawDevices(plotId, x, y, now) {
   const sprinkler = sprinklerState ? getSprinkler(sprinklerState.id) : null;
   if (!harvester && !sprinkler) return;
 
-  if (harvester) drawHarvesterOperation(harvester, plotId, x, y, now);
-  if (sprinkler) drawSprinklerOperation(sprinkler, plotId, x, y, now);
-  if (harvester) drawDeviceBadge(harvester, x + (sprinkler ? -25 : 0), y - 38, "rgba(226,174,67,.82)");
-  if (sprinkler) drawDeviceBadge(sprinkler, x + (harvester ? 25 : 0), y - 38, "rgba(105,197,218,.82)");
+  const harvesterPoint = harvesterState ? deviceAnchorPoint(harvesterState, { x, y }) : null;
+  const sprinklerPoint = sprinklerState ? deviceAnchorPoint(sprinklerState, { x, y }) : null;
+  if (harvester) drawHarvesterOperation(harvester, plotId, harvesterPoint.x, harvesterPoint.y, now);
+  if (sprinkler) drawSprinklerOperation(sprinkler, plotId, sprinklerPoint.x, sprinklerPoint.y, now);
+  const sameAnchor = harvesterPoint && sprinklerPoint && harvesterPoint.x === sprinklerPoint.x && harvesterPoint.y === sprinklerPoint.y;
+  if (harvester) drawDeviceBadge(harvester, harvesterPoint.x + (sameAnchor ? -25 : 0), harvesterPoint.y - 38, "rgba(226,174,67,.82)");
+  if (sprinkler) drawDeviceBadge(sprinkler, sprinklerPoint.x + (sameAnchor ? 25 : 0), sprinklerPoint.y - 38, "rgba(105,197,218,.82)");
 }
 
 function drawFertilizerOperation(plotId, x, y, now) {
@@ -816,7 +835,7 @@ function drawFertilizerOperation(plotId, x, y, now) {
   ctx.beginPath(); ctx.ellipse(machineX, machineY + 13, 23, 7, 0, 0, Math.PI * 2); ctx.fill();
   if (!state.settings.reducedMotion) {
     ctx.fillStyle = "rgba(183,133,65,.76)";
-    for (let grain = 0; grain < 7; grain += 1) {
+    for (let grain = 0; grain < (LOW_POWER_RENDER ? 3 : 7); grain += 1) {
       const drift = 10 + grain * 5;
       const grainX = machineX - direction * drift;
       const grainY = machineY + 8 + Math.sin(now / 120 + grain) * 5;
@@ -889,6 +908,35 @@ function drawLockedPlots() {
   }
 }
 
+function drawAutomationSelectionPreview() {
+  if (!isRangeSelection() || pendingActionPlotId == null || pendingActionIndex == null) return;
+  const item = selection.kind === "harvester" ? getHarvester(selection.id) : getSprinkler(selection.id);
+  const targets = selectedAutomationTargetIndexes(pendingActionPlotId, item);
+  const center = selectedAutomationCenterIndex();
+  ctx.save();
+  ctx.fillStyle = selection.kind === "sprinkler" ? "rgba(115,216,236,.16)" : "rgba(245,197,82,.16)";
+  ctx.strokeStyle = selection.kind === "sprinkler" ? "rgba(168,239,250,.72)" : "rgba(255,224,105,.74)";
+  ctx.lineWidth = 2 / camera.scale;
+  for (const index of targets) {
+    const row = Math.floor(index / BOARD_SIZE);
+    const col = index % BOARD_SIZE;
+    const point = worldPoint(row, col);
+    pathDiamond(ctx, point.x, point.y);
+    ctx.fill();
+    ctx.stroke();
+  }
+  const centerRow = Math.floor(center / BOARD_SIZE);
+  const centerCol = center % BOARD_SIZE;
+  const centerPoint = worldPoint(centerRow, centerCol);
+  pathDiamond(ctx, centerPoint.x, centerPoint.y);
+  ctx.fillStyle = "rgba(255,255,255,.12)";
+  ctx.fill();
+  ctx.strokeStyle = "#fff4ad";
+  ctx.lineWidth = 4 / camera.scale;
+  ctx.stroke();
+  ctx.restore();
+}
+
 function cellPaintOrder() {
   return CELL_PAINT_ORDER;
 }
@@ -956,7 +1004,7 @@ function drawActionAnimations(now) {
         ctx.arc(sweep, lane * 16 + 10, 6 + fade * 5, 0, Math.PI * 2);
         ctx.fill();
       }
-      for (let grain = 0; grain < 15; grain += 1) {
+      for (let grain = 0; grain < (LOW_POWER_RENDER ? 7 : 15); grain += 1) {
         const angle = grain * Math.PI * 2 / 15;
         const radius = 15 + progress * (35 + grain % 4 * 8);
         ctx.beginPath();
@@ -1070,6 +1118,11 @@ function drawEffects(now) {
 
 function drawFarm(now = performance.now()) {
   if (!state || !canvasWidth || !canvasHeight) return;
+  if (FRAME_INTERVAL && now - lastFarmFrameAt < FRAME_INTERVAL) {
+    window.requestAnimationFrame(drawFarm);
+    return;
+  }
+  lastFarmFrameAt = now;
   updateCameraFocus(now);
   ctx.clearRect(0, 0, canvasWidth, canvasHeight);
   ctx.save();
@@ -1112,6 +1165,7 @@ function drawFarm(now = performance.now()) {
     drawFertilizerOperation(plotId, center.x, center.y, now);
     drawDevices(plotId, center.x, center.y, now);
   }
+  drawAutomationSelectionPreview();
 
   if (focusedPlotId != null) {
     const age = now - focusedPlotStartedAt;
@@ -1164,9 +1218,11 @@ function drawFarm(now = performance.now()) {
       ctx.scale(1 + Math.sin(swingProgress * Math.PI) * .08, 1 + Math.sin(swingProgress * Math.PI) * .08);
     }
     ctx.rotate(toolAngle);
-    ctx.shadowColor = "rgba(22,31,20,.45)";
-    ctx.shadowBlur = 6;
-    ctx.shadowOffsetY = 3;
+    if (!LOW_POWER_RENDER) {
+      ctx.shadowColor = "rgba(22,31,20,.45)";
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetY = 3;
+    }
     if (image) ctx.drawImage(image, -9, -39, 44, 44);
     else {
       ctx.font = "30px sans-serif";
@@ -1181,6 +1237,19 @@ function isValidSelectionPlot(plotId) {
   if (!selection || !state.ownedPlots.includes(plotId)) return false;
   if (selection.kind === "fertilizer") return indexesForPlot(plotId).every((index) => state.cells[index].plantId !== "weed");
   return true;
+}
+
+function isRangeSelection(value = selection) {
+  return value?.kind === "harvester" || value?.kind === "sprinkler";
+}
+
+function selectedAutomationCenterIndex(plotId = pendingActionPlotId) {
+  return pendingActionIndex ?? (plotId == null ? -1 : indexesForPlot(plotId)[4]);
+}
+
+function selectedAutomationTargetIndexes(plotId, item) {
+  if (!item || plotId == null) return [];
+  return automationTargetIndexes(item.range, plotId, state.ownedPlots, selectedAutomationCenterIndex(plotId));
 }
 
 function selectionActionPreview(plotId) {
@@ -1223,6 +1292,7 @@ function selectionActionPreview(plotId) {
     const list = isHarvester ? state.harvesters : state.sprinklers;
     const currentAtTarget = list.find((placed) => placed.plotId === plotId);
     const staysInPlace = selection.sourcePlot === plotId;
+    const coveredCells = selectedAutomationTargetIndexes(plotId, item).length;
     const effect = isHarvester
       ? `${item.targetType === "tree" ? "只處理樹木；" : ""}${item.range}×${item.range} 範圍，每 ${item.intervalSeconds} 秒造成 ${item.damage} 傷害。`
       : `${item.range}×${item.range} 範圍，作物生長時間 ×${item.growthMultiplier}。`;
@@ -1236,8 +1306,8 @@ function selectionActionPreview(plotId) {
     return {
       icon: item.emoji,
       image: item.image,
-      title: `在${plot.name}配置${item.name}？`,
-      text: `${effect}${movement}`,
+      title: `以${plot.name}的選取格為中心配置${item.name}？`,
+      text: `${effect}目前會覆蓋已購土地 ${coveredCells} 格；畫面中的金色框是作用中心，可自由選在已購土地內。${movement}`,
       button: staysInPlace ? "已配置於此" : "確認配置",
       disabled: staysInPlace
     };
@@ -1247,6 +1317,7 @@ function selectionActionPreview(plotId) {
 
 function closeActionConfirm() {
   pendingActionPlotId = null;
+  pendingActionIndex = null;
   elements.actionConfirm.hidden = true;
 }
 
@@ -1264,7 +1335,7 @@ function renderActionConfirm() {
   elements.actionConfirm.hidden = false;
 }
 
-function stageSelection(plotId) {
+function stageSelection(plotId, index = indexesForPlot(plotId)[4]) {
   closeActionConfirm();
   if (!state.ownedPlots.includes(plotId)) {
     showToast("請先購買這塊土地");
@@ -1275,6 +1346,7 @@ function stageSelection(plotId) {
     return;
   }
   pendingActionPlotId = plotId;
+  pendingActionIndex = isRangeSelection() ? index : null;
   closeLandPopover();
   renderActionConfirm();
 }
@@ -1363,8 +1435,8 @@ function isShopProductOwned(kind, item) {
 function shopProductDescription(kind, item) {
   if (kind === "tool") return `用途：裝備後點擊土地進行手動收割。每格 ${item.damage} 傷害，命中 ${item.cells} 格${item.regrowth < 1 ? `，收割後下輪生長時間 ×${item.regrowth}` : ""}。`;
   if (kind === "seed") return `用途：選取後點擊已購土地，一次種滿 3×3，之後會持續再生。單格 HP ${item.hp}，每格收成 ${formatMoney(item.coins)}，生長 ${formatTime(item.growSeconds)}。`;
-  if (kind === "harvester") return `用途：配置到土地後自動攻擊範圍內的成熟${item.targetType === "tree" ? "樹木，不會處理一般作物" : "作物"}，離線也會工作。範圍 ${item.range}×${item.range}（最多 ${item.range ** 2} 格），每 ${item.intervalSeconds} 秒造成 ${item.damage} 傷害。`;
-  if (kind === "sprinkler") return `用途：配置到土地後持續加速範圍內作物，離線生長同樣有效。範圍 ${item.range}×${item.range}（最多 ${item.range ** 2} 格），生長時間 ×${item.growthMultiplier}。`;
+  if (kind === "harvester") return `用途：配置到已購土地內任一中心格後，自動攻擊範圍內的成熟${item.targetType === "tree" ? "樹木，不會處理一般作物" : "作物"}，離線也會工作。範圍 ${item.range}×${item.range}（最多 ${item.range ** 2} 格），每 ${item.intervalSeconds} 秒造成 ${item.damage} 傷害。`;
+  if (kind === "sprinkler") return `用途：配置到已購土地內任一中心格後，持續加速範圍內作物，離線生長同樣有效。範圍 ${item.range}×${item.range}（最多 ${item.range ** 2} 格），生長時間 ×${item.growthMultiplier}。`;
   return `用途：${item.purpose} 選取後施用於一塊 3×3 作物，當下立即生效；生長 ×${item.growthMultiplier}、金幣 ×${item.coinMultiplier}，持續 ${item.rounds} 輪。`;
 }
 
@@ -1498,7 +1570,7 @@ function consumeInventory(kind, id) {
   return true;
 }
 
-function placeDevice(kind, id, plotId) {
+function placeDevice(kind, id, plotId, centerIndex = indexesForPlot(plotId)[4]) {
   const list = kind === "harvester" ? state.harvesters : state.sprinklers;
   const currentAtTarget = list.find((item) => item.plotId === plotId);
   if (selection.sourcePlot === plotId) { selection = null; showToast("設備留在原地"); return false; }
@@ -1514,8 +1586,8 @@ function placeDevice(kind, id, plotId) {
     selection = null;
     return false;
   }
-  if (kind === "harvester") list.push({ id, plotId, nextRunAt: Date.now() + getHarvester(id).intervalSeconds * 1000 });
-  else list.push({ id, plotId });
+  if (kind === "harvester") list.push({ id, plotId, centerIndex, nextRunAt: Date.now() + getHarvester(id).intervalSeconds * 1000 });
+  else list.push({ id, plotId, centerIndex });
   showToast(`${kind === "harvester" ? getHarvester(id).name : getSprinkler(id).name}已配置`);
   selection = null;
   return true;
@@ -1537,15 +1609,14 @@ function triggerPlantingAnimation(plotId, plantId) {
   });
 }
 
-function triggerDeviceAnimation(kind, plotId) {
-  const centerIndex = indexesForPlot(plotId)[4];
+function triggerDeviceAnimation(kind, plotId, centerIndex = indexesForPlot(plotId)[4]) {
   const point = worldPoint(Math.floor(centerIndex / BOARD_SIZE), centerIndex % BOARD_SIZE);
   deviceBursts.push({ kind, x: point.x, y: point.y, startedAt: performance.now() });
 }
 
 function useSelection(plotId) {
   if (!selection || pendingActionPlotId !== plotId || !state.ownedPlots.includes(plotId)) {
-    showToast("請先選取要施作的 3×3 土地");
+    showToast(isRangeSelection() ? "請先選取設備中心格" : "請先選取要施作的 3×3 土地");
     return;
   }
   let feedbackSound = "place";
@@ -1569,11 +1640,12 @@ function useSelection(plotId) {
   } else if (selection.kind === "harvester" || selection.kind === "sprinkler") {
     const deviceKind = selection.kind;
     const deviceId = selection.id;
-    if (!placeDevice(deviceKind, deviceId, plotId)) {
+    const centerIndex = selectedAutomationCenterIndex(plotId);
+    if (!placeDevice(deviceKind, deviceId, plotId, centerIndex)) {
       renderAll();
       return;
     }
-    triggerDeviceAnimation(deviceKind, plotId);
+    triggerDeviceAnimation(deviceKind, plotId, centerIndex);
     feedbackSound = deviceKind === "sprinkler" ? "water" : "machine";
   }
   closeActionConfirm();
@@ -1677,7 +1749,7 @@ function handleBoardClick(index) {
     return;
   }
   closeLandPopover();
-  if (selection) { stageSelection(plotId); return; }
+  if (selection) { stageSelection(plotId, index); return; }
   simulateTo(state, Date.now());
   const result = manualHarvest(state, index);
   triggerHarvestSwing(result);

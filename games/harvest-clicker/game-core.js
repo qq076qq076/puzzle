@@ -255,8 +255,7 @@ function getToolTargetIndexes(toolId, centerIndex, ownedPlots) {
   }).filter((index) => index >= 0 && owned.has(plotIdForIndex(index)));
 }
 
-function automationTargetIndexes(range, plotId, ownedPlots) {
-  const centerIndex = indexesForPlot(plotId)[4];
+function automationTargetIndexes(range, plotId, ownedPlots, centerIndex = indexesForPlot(plotId)[4]) {
   const centerRow = Math.floor(centerIndex / BOARD_SIZE);
   const centerCol = centerIndex % BOARD_SIZE;
   const radius = Math.floor(Math.max(1, range) / 2);
@@ -278,7 +277,7 @@ function getDeviceStateForIndex(state, list, getter, index, cell = null) {
       const item = getter(placed.id);
       const plant = cell ? getPlant(cell.plantId) : null;
       const canTargetPlant = !item?.targetType || item.targetType === plant?.type;
-      return item && canTargetPlant && automationTargetIndexes(item.range, placed.plotId, state.ownedPlots).includes(index);
+      return item && canTargetPlant && automationTargetIndexes(item.range, placed.plotId, state.ownedPlots, placed.centerIndex).includes(index);
     })
     .sort((a, b) => (getter(b.id)?.tier || 0) - (getter(a.id)?.tier || 0))[0] || null;
 }

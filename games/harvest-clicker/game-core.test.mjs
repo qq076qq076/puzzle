@@ -142,7 +142,14 @@ test("一般與林業自動設備依階級覆蓋指定範圍", () => {
   assert.deepEqual(HARVESTERS.map((item) => item.range), [1, 3, 5, 7, 9, 5, 9]);
   assert.deepEqual(SPRINKLERS.map((item) => item.range), [1, 3, 5, 7, 9]);
   assert.deepEqual(HARVESTERS.map((item) => automationTargetIndexes(item.range, INITIAL_PLOT_ID, state.ownedPlots).length), [1, 9, 25, 49, 81, 25, 81]);
+  const edgeCell = indexesForPlot(INITIAL_PLOT_ID)[0];
+  assert.deepEqual(automationTargetIndexes(1, INITIAL_PLOT_ID, state.ownedPlots, edgeCell), [edgeCell]);
   assert.deepEqual(HARVESTERS.filter((item) => item.targetType === "tree").map((item) => item.id), ["tree_sawmill", "tree_lumber_mill"]);
+
+  state.harvesters.push({ id: "micro", plotId: INITIAL_PLOT_ID, centerIndex: edgeCell, nextRunAt: 45000 });
+  simulateTo(state, 45000);
+  assert.equal(state.cells[edgeCell].phase, "growing");
+  assert.equal(state.cells[indexesForPlot(INITIAL_PLOT_ID)[4]].phase, "mature");
 });
 
 test("林業自動設備只採伐樹木，不會攻擊一般作物", () => {
