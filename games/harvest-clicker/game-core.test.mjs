@@ -2,11 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 await import("./game-core.js");
 const {
-  createInitialState, manualHarvest, simulateTo, sowPlot, fertilizePlot,
+  createInitialState, manualHarvest, simulateTo, sowPlot, sowPlantAt, fertilizePlot,
   getToolTargetIndexes, automationTargetIndexes, indexesForPlot, buyPlot, validateState,
   INITIAL_PLOT_ID, INITIAL_PLOT_IDS, BOARD_SIZE, PLOTS,
   PLANTS, TOOLS, HARVESTERS, SPRINKLERS, FERTILIZERS, getProductPrice,
-  getLandPrice, normalizeStateData, isFertilizerUnlocked
+  getLandPrice, getPlantFootprint, getPlantPlacementIndexes, normalizeStateData, isFertilizerUnlocked
 } = globalThis.HarvestCore;
 
 test("舊存檔的胡蘿蔔植株與種子會無損轉成樁架番茄", () => {
@@ -39,9 +39,9 @@ test("所有商品售價與規格書一致且為有效金額", () => {
   assert.deepEqual(PLANTS.map((item) => item.seedCost), [
     0, 18, 90, 220, 420, 900, 1900, 4200, 8500, 18000, 40000,
     85000, 190000, 420000, 950000, 2200000, 5000000, 11000000,
-    25000000, 60000000, 150000000, 400000000, 900000000, 2200000000,
-    5000000000, 12000000000, 30000000000, 75000000000, 190000000000,
-    480000000000, 1200000000000
+    25000000, 60000000, 150000000, 400000000, 1200000000, 3500000000,
+    9000000000, 22000000000, 55000000000, 135000000000,
+    320000000000, 760000000000, 1800000000000
   ]);
   assert.deepEqual(HARVESTERS.map((item) => item.cost), [25000, 120000, 450000, 1800000, 8000000, 25000000000, 180000000000]);
   assert.deepEqual(SPRINKLERS.map((item) => item.cost), [18000, 75000, 260000, 900000, 5500000]);
@@ -101,6 +101,73 @@ test("新增的十種作物全為樹木且具備獨立素材與有效數值", ()
   assert.equal(new Set(trees.map((tree) => tree.image)).size, 10);
   assert.ok(trees.every((tree) => tree.image && tree.hp > 0 && tree.coins > 0 && tree.growSeconds > 0));
   assert.ok(trees.every((tree) => Number.isSafeInteger(tree.seedCost) && Number.isSafeInteger(tree.coins)));
+  assert.equal(getPlantFootprint("weed"), 1);
+  assert.equal(getPlantFootprint("clover"), 3);
+  assert.deepEqual(trees.map((tree) => getPlantFootprint(tree)), [1, 3, 5, 7, 9, 11, 13, 15, 17, 19]);
+  assert.ok(trees.every((tree) => tree.seedCost > 0 && tree.coins > tree.seedCost / 8));
+});
+
+test("樹木種子一次只種一棵，且依正方形占地完整驗證土地", () => {
+  const state = createInitialState(0);
+  const centerIndex = indexesForPlot(INITIAL_PLOT_ID)[4];
+  const tree = PLANTS.find((plant) => plant.id === "orange_tree");
+  const footprintIndexes = getPlantPlacementIndexes(centerIndex, tree.id);
+  assert.equal(footprintIndexes.length, 9);
+  assert.equal(sowPlantAt(state, centerIndex, tree.id), true);
+  assert.ok(footprintIndexes.every((index) => state.cells[index].plantId === tree.id));
+  assert.equal(state.cells.filter((cell) => cell.plantId === tree.id).length, 9);
+  assert.equal(state.cells[footprintIndexes[0]].plantRootIndex, footprintIndexes[0]);
+  assert.equal(state.cells[footprintIndexes[0]].plantAnchorIndex, centerIndex);
+
+  const edgeState = createInitialState(0);
+  assert.equal(sowPlantAt(edgeState, indexesForPlot(INITIAL_PLOT_ID)[0], "coconut_tree"), false);
+  assert.equal(getPlantPlacementIndexes(0, "orange_tree").length, 4);
+});
+
+test("大樹占用多格但收割只結算一次樹木收益", () => {
+  const state = createInitialState(0);
+  const centerIndex = indexesForPlot(INITIAL_PLOT_ID)[4];
+  assert.equal(sowPlantAt(state, centerIndex, "orange_tree"), true);
+  const tree = PLANTS.find((plant) => plant.id === "orange_tree");
+  const footprintIndexes = getPlantPlacementIndexes(centerIndex, tree.id);
+  const rootIndex = footprintIndexes[0];
+  state.cells[rootIndex].phase = "mature";
+  state.cells[rootIndex].growthProgress = 1;
+  state.cells[rootIndex].currentHp = 1;
+  state.equippedToolId = "steel_harvester";
+  const result = manualHarvest(state, centerIndex);
+  assert.equal(result.totalCoins, tree.coins);
+  assert.equal(result.results.length, 1);
+  assert.equal(state.harvestedCells, 1);
+  assert.ok(footprintIndexes.every((index) => state.cells[index].phase === "growing"));
+  assert.equal(manualHarvest(state, centerIndex).totalCoins, 0);
+});
+
+test("肥料可以從樹木所在的 3×3 地塊套用到整棵樹", () => {
+  const state = createInitialState(0);
+  const centerIndex = indexesForPlot(INITIAL_PLOT_ID)[4];
+  assert.equal(sowPlantAt(state, centerIndex, "orange_tree"), true);
+  assert.equal(fertilizePlot(state, INITIAL_PLOT_ID, "quick"), true);
+  const treeIndexes = getPlantPlacementIndexes(centerIndex, "orange_tree");
+  assert.ok(treeIndexes.every((index) => state.cells[index].fertilizerId === "quick"));
+  assert.ok(treeIndexes.every((index) => state.cells[index].fertilizerRounds === 3));
+});
+
+test("舊版以 3×3 種下的樹木會遷移成單棵樹", () => {
+  const state = createInitialState(0);
+  const indexes = indexesForPlot(INITIAL_PLOT_ID);
+  for (const index of indexes) {
+    state.cells[index] = {
+      plantId: "orange_tree", phase: "mature", growthProgress: 1, currentHp: 1,
+      nextGrowthMultiplier: 1, fertilizerId: null, fertilizerRounds: 0
+    };
+  }
+  normalizeStateData(state);
+  assert.equal(new Set(indexes.map((index) => state.cells[index].plantRootIndex)).size, 1);
+  assert.equal(new Set(indexes.map((index) => state.cells[index].plantAnchorIndex)).size, 1);
+  const result = manualHarvest(state, indexes[4]);
+  assert.equal(result.totalCoins, PLANTS.find((plant) => plant.id === "orange_tree").coins);
+  assert.equal(state.harvestedCells, 1);
 });
 
 test("新遊戲從中央 9×9 成熟雜草與小刀開始", () => {

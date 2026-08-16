@@ -29,16 +29,16 @@ const PLANTS = [
   { id: "grape", name: "暮色葡萄", emoji: "🍇", image: "grape-vine.png", seedCost: 25000000, hp: 900, coins: 3800000, growSeconds: 432000, color: "#735893", unlock: { type: "plots", value: 36 } },
   { id: "vanilla", name: "銀香香草", emoji: "🌼", image: "vanilla-vine.png", seedCost: 60000000, hp: 1300, coins: 9000000, growSeconds: 691200, color: "#e7dfb0", unlock: { type: "lifetimeGold", value: 75000000 } },
   { id: "coffee", name: "曜石咖啡", emoji: "☕", image: "coffee-bean-plant.png", seedCost: 150000000, hp: 1800, coins: 23000000, growSeconds: 1036800, color: "#7f4b34", unlock: { type: "plots", value: 49 } },
-  { id: "apple_tree", name: "晨紅蘋果樹", emoji: "🍎", image: "apple-tree.png", type: "tree", seedCost: 400000000, hp: 2400, coins: 60000000, growSeconds: 1296000, color: "#76a947", unlock: { type: "lifetimeGold", value: 150000000 } },
-  { id: "orange_tree", name: "蜜香橙樹", emoji: "🍊", image: "orange-tree.png", type: "tree", seedCost: 900000000, hp: 3200, coins: 140000000, growSeconds: 1555200, color: "#dc8d36", unlock: { type: "tool", value: "forester_axe" } },
-  { id: "cherry_tree", name: "緋櫻果樹", emoji: "🍒", image: "cherry-tree.png", type: "tree", seedCost: 2200000000, hp: 4300, coins: 340000000, growSeconds: 1814400, color: "#ce4f5e", unlock: { type: "harvested", value: 90000 } },
-  { id: "peach_tree", name: "霞蜜桃樹", emoji: "🍑", image: "peach-tree.png", type: "tree", seedCost: 5000000000, hp: 5800, coins: 780000000, growSeconds: 2160000, color: "#e9a477", unlock: { type: "tool", value: "steel_hatchet" } },
-  { id: "lemon_tree", name: "金露檸檬樹", emoji: "🍋", image: "lemon-tree.png", type: "tree", seedCost: 12000000000, hp: 7600, coins: 1800000000, growSeconds: 2592000, color: "#e0ca4e", unlock: { type: "plots", value: 64 } },
-  { id: "banana_tree", name: "月彎香蕉樹", emoji: "🍌", image: "banana-tree.png", type: "tree", seedCost: 30000000000, hp: 10000, coins: 4500000000, growSeconds: 3024000, color: "#dfc448", unlock: { type: "lifetimeGold", value: 30000000000 } },
-  { id: "coconut_tree", name: "海風椰子樹", emoji: "🥥", image: "coconut-palm.png", type: "tree", seedCost: 75000000000, hp: 14000, coins: 11000000000, growSeconds: 3628800, color: "#5d9e58", unlock: { type: "tool", value: "crosscut_saw" } },
-  { id: "ginkgo_tree", name: "黃金銀杏樹", emoji: "🍂", image: "ginkgo-tree-yellow.png", type: "tree", seedCost: 190000000000, hp: 19000, coins: 28000000000, growSeconds: 4320000, color: "#e5b735", unlock: { type: "harvested", value: 150000 } },
-  { id: "maple_tree", name: "赤霞楓樹", emoji: "🍁", image: "maple-tree-red-autumn.png", type: "tree", seedCost: 480000000000, hp: 26000, coins: 72000000000, growSeconds: 5184000, color: "#c95036", unlock: { type: "tool", value: "double_bit_axe" } },
-  { id: "cypress_tree", name: "千年檜木", emoji: "🌲", image: "cypress-tree.png", type: "tree", seedCost: 1200000000000, hp: 36000, coins: 185000000000, growSeconds: 6048000, color: "#3f7351", unlock: { type: "tool", value: "power_saw" } }
+  { id: "apple_tree", name: "晨紅蘋果樹", emoji: "🍎", image: "apple-tree.png", type: "tree", footprint: 1, seedCost: 400000000, hp: 2400, coins: 60000000, growSeconds: 1296000, color: "#76a947", unlock: { type: "lifetimeGold", value: 150000000 } },
+  { id: "orange_tree", name: "蜜香橙樹", emoji: "🍊", image: "orange-tree.png", type: "tree", footprint: 3, seedCost: 1200000000, hp: 3600, coins: 190000000, growSeconds: 1468800, color: "#dc8d36", unlock: { type: "tool", value: "forester_axe" } },
+  { id: "cherry_tree", name: "緋櫻果樹", emoji: "🍒", image: "cherry-tree.png", type: "tree", footprint: 5, seedCost: 3500000000, hp: 5200, coins: 560000000, growSeconds: 1728000, color: "#ce4f5e", unlock: { type: "harvested", value: 90000 } },
+  { id: "peach_tree", name: "霞蜜桃樹", emoji: "🍑", image: "peach-tree.png", type: "tree", footprint: 7, seedCost: 9000000000, hp: 7600, coins: 1400000000, growSeconds: 2073600, color: "#e9a477", unlock: { type: "tool", value: "steel_hatchet" } },
+  { id: "lemon_tree", name: "金露檸檬樹", emoji: "🍋", image: "lemon-tree.png", type: "tree", footprint: 9, seedCost: 22000000000, hp: 10500, coins: 3600000000, growSeconds: 2419200, color: "#e0ca4e", unlock: { type: "plots", value: 64 } },
+  { id: "banana_tree", name: "月彎香蕉樹", emoji: "🍌", image: "banana-tree.png", type: "tree", footprint: 11, seedCost: 55000000000, hp: 14500, coins: 9000000000, growSeconds: 2851200, color: "#dfc448", unlock: { type: "lifetimeGold", value: 30000000000 } },
+  { id: "coconut_tree", name: "海風椰子樹", emoji: "🥥", image: "coconut-palm.png", type: "tree", footprint: 13, seedCost: 135000000000, hp: 19000, coins: 22000000000, growSeconds: 3369600, color: "#5d9e58", unlock: { type: "tool", value: "crosscut_saw" } },
+  { id: "ginkgo_tree", name: "黃金銀杏樹", emoji: "🍂", image: "ginkgo-tree-yellow.png", type: "tree", footprint: 15, seedCost: 320000000000, hp: 24500, coins: 52000000000, growSeconds: 3974400, color: "#e5b735", unlock: { type: "harvested", value: 150000 } },
+  { id: "maple_tree", name: "赤霞楓樹", emoji: "🍁", image: "maple-tree-red-autumn.png", type: "tree", footprint: 17, seedCost: 760000000000, hp: 31000, coins: 125000000000, growSeconds: 4665600, color: "#c95036", unlock: { type: "tool", value: "double_bit_axe" } },
+  { id: "cypress_tree", name: "千年檜木", emoji: "🌲", image: "cypress-tree.png", type: "tree", footprint: 19, seedCost: 1800000000000, hp: 39000, coins: 300000000000, growSeconds: 5529600, color: "#3f7351", unlock: { type: "tool", value: "power_saw" } }
 ];
 
 const TOOLS = [
@@ -271,18 +271,60 @@ function automationTargetIndexes(range, plotId, ownedPlots, centerIndex = indexe
   return indexes;
 }
 
+function getPlantFootprint(plantOrId) {
+  const plant = typeof plantOrId === "string" ? getPlant(plantOrId) : plantOrId;
+  if (plant?.id === "weed") return 1;
+  return plant?.type === "tree" ? Math.max(1, Math.floor(plant.footprint || 1)) : 3;
+}
+
+function getPlantPlacementIndexes(centerIndex, plantId) {
+  const footprint = getPlantFootprint(plantId);
+  const centerRow = Math.floor(centerIndex / BOARD_SIZE);
+  const centerCol = centerIndex % BOARD_SIZE;
+  const startRow = centerRow - Math.floor(footprint / 2);
+  const startCol = centerCol - Math.floor(footprint / 2);
+  const indexes = [];
+  for (let row = startRow; row < startRow + footprint; row += 1) {
+    for (let col = startCol; col < startCol + footprint; col += 1) {
+      if (row < 0 || row >= BOARD_SIZE || col < 0 || col >= BOARD_SIZE) continue;
+      indexes.push(row * BOARD_SIZE + col);
+    }
+  }
+  return indexes;
+}
+
+function plantRootIndexForCell(cell, index) {
+  return Number.isInteger(cell?.plantRootIndex) ? cell.plantRootIndex : index;
+}
+
+function plantAnchorIndexForCell(cell, index) {
+  return Number.isInteger(cell?.plantAnchorIndex) ? cell.plantAnchorIndex : index;
+}
+
+function isPlantRootCell(cell, index) {
+  return plantRootIndexForCell(cell, index) === index;
+}
+
+function occupiedIndexesForRoot(state, rootIndex) {
+  const rootCell = state.cells[rootIndex];
+  if (!rootCell) return [];
+  const indexes = getPlantPlacementIndexes(plantAnchorIndexForCell(rootCell, rootIndex), rootCell.plantId);
+  return indexes.filter((index) => plantRootIndexForCell(state.cells[index], index) === rootIndex);
+}
+
 function getDeviceStateForIndex(state, list, getter, index, cell = null) {
   return list
     .filter((placed) => {
       const item = getter(placed.id);
       const plant = cell ? getPlant(cell.plantId) : null;
       const canTargetPlant = !item?.targetType || item.targetType === plant?.type;
-      return item && canTargetPlant && automationTargetIndexes(item.range, placed.plotId, state.ownedPlots, placed.centerIndex).includes(index);
+      const targetIndex = plantAnchorIndexForCell(cell, index);
+      return item && canTargetPlant && automationTargetIndexes(item.range, placed.plotId, state.ownedPlots, placed.centerIndex).includes(targetIndex);
     })
     .sort((a, b) => (getter(b.id)?.tier || 0) - (getter(a.id)?.tier || 0))[0] || null;
 }
 
-function awardHarvest(state, cell, regrowthMultiplier) {
+function awardHarvest(state, cell, regrowthMultiplier, rootIndex) {
   const plant = getPlant(cell.plantId) || PLANTS[0];
   const remainingRounds = Number.isInteger(cell.fertilizerRounds) ? cell.fertilizerRounds : (cell.fertilizerId ? 1 : 0);
   const fertilizer = remainingRounds > 0 && cell.fertilizerId ? getFertilizer(cell.fertilizerId) : null;
@@ -290,14 +332,20 @@ function awardHarvest(state, cell, regrowthMultiplier) {
   state.gold += coins;
   state.lifetimeGold += coins;
   state.harvestedCells += 1;
-  cell.phase = "growing";
-  cell.growthProgress = 0;
-  cell.currentHp = 0;
-  cell.nextGrowthMultiplier = regrowthMultiplier;
-  if (fertilizer && remainingRounds > 1) cell.fertilizerRounds = remainingRounds - 1;
-  else {
-    cell.fertilizerId = null;
-    cell.fertilizerRounds = 0;
+  const occupiedIndexes = Number.isInteger(rootIndex) ? occupiedIndexesForRoot(state, rootIndex) : [];
+  const resetIndexes = occupiedIndexes.length ? occupiedIndexes : [state.cells.indexOf(cell)];
+  for (const index of resetIndexes) {
+    const occupiedCell = state.cells[index];
+    if (!occupiedCell) continue;
+    occupiedCell.phase = "growing";
+    occupiedCell.growthProgress = 0;
+    occupiedCell.currentHp = 0;
+    occupiedCell.nextGrowthMultiplier = regrowthMultiplier;
+    if (fertilizer && remainingRounds > 1) occupiedCell.fertilizerRounds = remainingRounds - 1;
+    else {
+      occupiedCell.fertilizerId = null;
+      occupiedCell.fertilizerRounds = 0;
+    }
   }
   return coins;
 }
@@ -306,30 +354,34 @@ function manualHarvest(state, centerIndex) {
   const tool = getTool(state.equippedToolId) || TOOLS[0];
   const targets = getToolTargetIndexes(tool.id, centerIndex, state.ownedPlots);
   const results = [];
+  const harvestedRoots = new Set();
   let totalCoins = 0;
   state.stats.manualClicks += 1;
   for (const index of targets) {
-    const cell = state.cells[index];
+    const rootIndex = plantRootIndexForCell(state.cells[index], index);
+    if (harvestedRoots.has(rootIndex)) continue;
+    harvestedRoots.add(rootIndex);
+    const cell = state.cells[rootIndex];
     if (!cell || cell.phase !== "mature") continue;
     cell.currentHp = Math.max(0, cell.currentHp - tool.damage);
     let coins = 0;
     if (cell.currentHp === 0) {
-      coins = awardHarvest(state, cell, tool.regrowth);
+      coins = awardHarvest(state, cell, tool.regrowth, rootIndex);
       totalCoins += coins;
     }
-    results.push({ index, damage: tool.damage, coins, harvested: coins > 0 });
+    results.push({ index: rootIndex, damage: tool.damage, coins, harvested: coins > 0 });
   }
   return { targets, results, totalCoins };
 }
 
-function getSprinklerForIndex(state, index) {
-  const placed = getDeviceStateForIndex(state, state.sprinklers, getSprinkler, index);
+function getSprinklerForIndex(state, index, cell = null) {
+  const placed = getDeviceStateForIndex(state, state.sprinklers, getSprinkler, index, cell);
   return placed ? getSprinkler(placed.id) : null;
 }
 
 function growthDurationSeconds(state, cell, plotId, index = indexesForPlot(plotId)[4]) {
   const plant = getPlant(cell.plantId) || PLANTS[0];
-  const sprinkler = getSprinklerForIndex(state, index);
+  const sprinkler = getSprinklerForIndex(state, index, cell);
   const fertilizer = cell.fertilizerId && cell.plantId !== "weed" ? getFertilizer(cell.fertilizerId) : null;
   const multiplier = (cell.nextGrowthMultiplier || 1) * (sprinkler?.growthMultiplier || 1) * (fertilizer?.growthMultiplier || 1);
   return plant.growSeconds * Math.max(0.2, multiplier);
@@ -380,7 +432,7 @@ function simulateAutoCell(state, cell, plotId, index, machineState, from, to, su
     return;
   }
 
-  const firstCoins = awardHarvest(state, cell, machine.regrowth);
+  const firstCoins = awardHarvest(state, cell, machine.regrowth, index);
   summary.gold += firstCoins;
   summary.harvested += 1;
 
@@ -392,7 +444,7 @@ function simulateAutoCell(state, cell, plotId, index, machineState, from, to, su
     const fertilizedCycleDuration = fertilizedFirstHitOffset + (fertilizedHits - 1) * interval;
     const nextHarvestAt = lastHarvestAt + fertilizedCycleDuration;
     if (nextHarvestAt > to) break;
-    const coins = awardHarvest(state, cell, machine.regrowth);
+    const coins = awardHarvest(state, cell, machine.regrowth, index);
     summary.gold += coins;
     summary.harvested += 1;
     lastHarvestAt = nextHarvestAt;
@@ -446,6 +498,7 @@ function simulateTo(state, targetTime) {
   for (const plotId of state.ownedPlots) {
     for (const index of indexesForPlot(plotId)) {
       const cell = state.cells[index];
+      if (!isPlantRootCell(cell, index)) continue;
       const machineState = getDeviceStateForIndex(state, state.harvesters, getHarvester, index, cell);
       if (machineState && getHarvester(machineState.id)) {
         simulateAutoCell(state, cell, plotId, index, machineState, from, to, summary);
@@ -465,18 +518,51 @@ function simulateTo(state, targetTime) {
   return summary;
 }
 
-function sowPlot(state, plotId, plantId) {
-  if (!state.ownedPlots.includes(plotId) || !getPlant(plantId) || plantId === "weed") return false;
-  for (const index of indexesForPlot(plotId)) {
+function makeGrowingCell(plantId, metadata = {}) {
+  return {
+    plantId,
+    phase: "growing",
+    growthProgress: 0,
+    currentHp: 0,
+    nextGrowthMultiplier: 1,
+    fertilizerId: null,
+    fertilizerRounds: 0,
+    ...metadata
+  };
+}
+
+function clearPlantFootprint(state, rootIndex) {
+  const indexes = occupiedIndexesForRoot(state, rootIndex);
+  for (const index of indexes) {
     state.cells[index] = {
-      plantId,
-      phase: "growing",
-      growthProgress: 0,
-      currentHp: 0,
-      nextGrowthMultiplier: 1,
-      fertilizerId: null,
-      fertilizerRounds: 0
+      plantId: "weed", phase: "mature", growthProgress: 1,
+      currentHp: 1, nextGrowthMultiplier: 1, fertilizerId: null, fertilizerRounds: 0
     };
+  }
+}
+
+function sowPlot(state, plotId, plantId) {
+  const plant = getPlant(plantId);
+  if (!state.ownedPlots.includes(plotId) || !plant || plantId === "weed" || plant.type === "tree") return false;
+  const indexes = indexesForPlot(plotId);
+  const roots = new Set(indexes.map((index) => plantRootIndexForCell(state.cells[index], index)));
+  for (const rootIndex of roots) clearPlantFootprint(state, rootIndex);
+  for (const index of indexes) state.cells[index] = makeGrowingCell(plantId);
+  return true;
+}
+
+function sowPlantAt(state, centerIndex, plantId) {
+  const plant = getPlant(plantId);
+  if (!plant || plantId === "weed") return false;
+  if (plant.type !== "tree") return sowPlot(state, plotIdForIndex(centerIndex), plantId);
+  const indexes = getPlantPlacementIndexes(centerIndex, plantId);
+  const owned = new Set(state.ownedPlots);
+  if (indexes.length !== getPlantFootprint(plant) ** 2 || !indexes.every((index) => owned.has(plotIdForIndex(index)))) return false;
+  const roots = new Set(indexes.map((index) => plantRootIndexForCell(state.cells[index], index)));
+  for (const rootIndex of roots) clearPlantFootprint(state, rootIndex);
+  const rootIndex = indexes[0];
+  for (const index of indexes) {
+    state.cells[index] = makeGrowingCell(plantId, { plantRootIndex: rootIndex, plantAnchorIndex: centerIndex });
   }
   return true;
 }
@@ -485,10 +571,16 @@ function fertilizePlot(state, plotId, fertilizerId) {
   const fertilizer = getFertilizer(fertilizerId);
   if (!state.ownedPlots.includes(plotId) || !fertilizer) return false;
   const indexes = indexesForPlot(plotId);
-  if (indexes.some((index) => state.cells[index].plantId === "weed")) return false;
-  for (const index of indexes) {
-    state.cells[index].fertilizerId = fertilizerId;
-    state.cells[index].fertilizerRounds = fertilizer.rounds;
+  const roots = new Set(indexes
+    .filter((index) => state.cells[index]?.plantId && state.cells[index].plantId !== "weed")
+    .map((index) => plantRootIndexForCell(state.cells[index], index)));
+  if (!roots.size) return false;
+  for (const rootIndex of roots) {
+    const occupiedIndexes = occupiedIndexesForRoot(state, rootIndex);
+    for (const index of occupiedIndexes.length ? occupiedIndexes : [rootIndex]) {
+      state.cells[index].fertilizerId = fertilizerId;
+      state.cells[index].fertilizerRounds = fertilizer.rounds;
+    }
   }
   return true;
 }
@@ -518,6 +610,24 @@ function migrateLegacyCropIds(state) {
   if (state.inventory && Number.isFinite(state.inventory.seed_carrot)) {
     state.inventory.seed_tomato = (state.inventory.seed_tomato || 0) + state.inventory.seed_carrot;
     delete state.inventory.seed_carrot;
+  }
+  return state;
+}
+
+function migrateLegacyTreeFootprints(state) {
+  if (!state || !Array.isArray(state.cells)) return state;
+  for (const plot of PLOTS) {
+    const indexes = indexesForPlot(plot.id);
+    const treeIds = new Set(indexes.map((index) => state.cells[index]?.plantId).filter((plantId) => getPlant(plantId)?.type === "tree"));
+    if (treeIds.size !== 1 || indexes.some((index) => Number.isInteger(state.cells[index]?.plantRootIndex) || Number.isInteger(state.cells[index]?.plantAnchorIndex))) continue;
+    const treeId = [...treeIds][0];
+    if (!indexes.every((index) => state.cells[index]?.plantId === treeId)) continue;
+    const rootIndex = indexes[0];
+    const anchorIndex = indexes[4];
+    for (const index of indexes) {
+      state.cells[index].plantRootIndex = rootIndex;
+      state.cells[index].plantAnchorIndex = anchorIndex;
+    }
   }
   return state;
 }
@@ -574,6 +684,7 @@ function migrateLegacyBoard(state) {
 function normalizeStateData(state) {
   migrateLegacyBoard(state);
   migrateLegacyCropIds(state);
+  migrateLegacyTreeFootprints(state);
   if (!state || !Array.isArray(state.cells)) return state;
   for (const cell of state.cells) {
     if (!cell) continue;
@@ -619,10 +730,10 @@ globalThis.HarvestCore = Object.freeze({
   BOARD_SIZE, PLOT_GRID_SIZE, INITIAL_PLOT_ID, INITIAL_PLOT_IDS, SAVE_VERSION, PLANTS, TOOLS, PLOTS,
   HARVESTERS, SPRINKLERS, FERTILIZERS, getPlant, getTool,
   getHarvester, getSprinkler, getFertilizer, getProductPrice, plotIdForIndex,
-  indexesForPlot, getLandPrice, createInitialState, isAutomationUnlocked,
+  indexesForPlot, getLandPrice, getPlantFootprint, getPlantPlacementIndexes, createInitialState, isAutomationUnlocked,
   isToolUnlocked, isPlantUnlocked, isFertilizerUnlocked,
   getToolTargetIndexes, automationTargetIndexes, manualHarvest, growthDurationSeconds,
-  simulateTo, sowPlot, fertilizePlot, buyPlot, formatNumber,
+  simulateTo, sowPlot, sowPlantAt, fertilizePlot, buyPlot, formatNumber,
   formatTime, migrateLegacyCropIds, normalizeStateData, validateState
 });
 }(globalThis));

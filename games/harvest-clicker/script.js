@@ -2,16 +2,17 @@
 
 const {
   BOARD_SIZE, PLOT_GRID_SIZE, INITIAL_PLOT_ID, PLANTS, TOOLS, PLOTS, HARVESTERS, SPRINKLERS, FERTILIZERS,
-  createInitialState, validateState, simulateTo, manualHarvest, sowPlot,
+  createInitialState, validateState, simulateTo, manualHarvest, sowPlantAt,
   fertilizePlot, buyPlot, formatNumber, formatTime, getPlant, getTool,
   getHarvester, getSprinkler, getFertilizer, getProductPrice, getLandPrice, plotIdForIndex, indexesForPlot,
-  automationTargetIndexes,
+  automationTargetIndexes, getPlantFootprint, getPlantPlacementIndexes,
   isToolUnlocked, isPlantUnlocked, isFertilizerUnlocked, isAutomationUnlocked,
   growthDurationSeconds, normalizeStateData
 } = globalThis.HarvestCore;
 
 const STORAGE_KEY = "puzzle-club-save:harvest-clicker:v4";
 const LEGACY_STORAGE_KEYS = ["puzzle-club-save:harvest-clicker:v3"];
+const CLOUD_SAVE_KEY = "harvest-clicker";
 const ASSET_ROOT = "assets/";
 const TILE_W = 96;
 const TILE_H = 48;
@@ -83,6 +84,12 @@ let cameraFocusAnimation = null;
 let focusedPlotId = null;
 let focusedPlotStartedAt = -Infinity;
 let lastFarmFrameAt = -Infinity;
+let localSavedAt = 0;
+let initialLocalSavedAt = 0;
+let cloudReady = !window.PuzzleFirebase?.enabled;
+let cloudSaveTimer = null;
+let cloudSavePending = null;
+let cloudSaveInFlight = Promise.resolve();
 const toolCursor = { x: 0, y: 0, visible: false, swingStartedAt: -Infinity };
 
 function formatMoney(value) {
@@ -127,22 +134,82 @@ function preloadAssets() {
   }
 }
 
+function normalizeLoadedState(candidate) {
+  const parsed = normalizeStateData(candidate);
+  if (!validateState(parsed)) return null;
+  parsed.inventory ||= {};
+  parsed.harvesters ||= [];
+  parsed.sprinklers ||= [];
+  parsed.stats ||= { manualClicks: 0, offlineGold: 0 };
+  parsed.settings ||= { sound: true, reducedMotion: false };
+  return parsed;
+}
+
+function applyLoadedState(candidate, showSummary = true) {
+  const parsed = normalizeLoadedState(candidate);
+  if (!parsed) return false;
+  state = parsed;
+  const summary = simulateTo(state, Date.now());
+  state.stats.offlineGold = (state.stats.offlineGold || 0) + summary.gold;
+  if (showSummary && (summary.elapsedMs >= 60000 || summary.gold > 0)) showOfflineSummary(summary);
+  return true;
+}
+
+function queueCloudSave(immediate = false) {
+  if (!window.PuzzleFirebase?.enabled || !cloudReady || !state) return;
+  cloudSavePending = JSON.parse(JSON.stringify(state));
+  if (immediate) {
+    flushCloudSave();
+  } else if (!cloudSaveTimer) {
+    cloudSaveTimer = window.setTimeout(flushCloudSave, 5000);
+  }
+}
+
+function flushCloudSave() {
+  cloudSaveTimer = null;
+  if (!window.PuzzleFirebase?.enabled || !cloudReady || !cloudSavePending) return;
+  const snapshot = cloudSavePending;
+  cloudSavePending = null;
+  cloudSaveInFlight = cloudSaveInFlight.then(() => window.PuzzleFirebase.save(CLOUD_SAVE_KEY, snapshot)).then(() => {
+    if (cloudSavePending && !cloudSaveTimer) cloudSaveTimer = window.setTimeout(flushCloudSave, 5000);
+  });
+}
+
+async function syncCloudState(gate) {
+  if (!window.PuzzleFirebase?.enabled) {
+    cloudReady = true;
+    gate?.close();
+    return;
+  }
+
+  let remote = null;
+  try { remote = await window.PuzzleFirebase.load(CLOUD_SAVE_KEY); } catch (error) { /* Local save remains available. */ }
+  const remoteState = remote ? normalizeLoadedState(remote.data) : null;
+  const remoteSavedAt = Number(remote?.clientSavedAt) || 0;
+  const shouldUseRemote = Boolean(remoteState && remoteSavedAt >= initialLocalSavedAt);
+
+  if (shouldUseRemote) {
+    applyLoadedState(remoteState, true);
+    localSavedAt = remoteSavedAt;
+    saveNow(false);
+  }
+
+  cloudReady = true;
+  if (!shouldUseRemote) queueCloudSave(true);
+  gate?.close();
+  renderAll();
+}
+
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY) || LEGACY_STORAGE_KEYS.map((key) => localStorage.getItem(key)).find(Boolean);
     if (raw) {
-      const parsed = normalizeStateData(JSON.parse(raw));
-      if (validateState(parsed)) {
-        parsed.inventory ||= {};
-        parsed.harvesters ||= [];
-        parsed.sprinklers ||= [];
-        parsed.stats ||= { manualClicks: 0, offlineGold: 0 };
-        parsed.settings ||= { sound: true, reducedMotion: false };
-        state = parsed;
-        const summary = simulateTo(state, Date.now());
-        state.stats.offlineGold = (state.stats.offlineGold || 0) + summary.gold;
-        if (summary.elapsedMs >= 60000 || summary.gold > 0) showOfflineSummary(summary);
-        saveNow(true);
+      const stored = JSON.parse(raw);
+      const candidate = stored && stored.version === 1 && stored.data ? stored.data : stored;
+      if (applyLoadedState(candidate)) {
+        localSavedAt = Number(stored?.savedAt) || Number(state.lastSimulatedAt) || 0;
+        initialLocalSavedAt = localSavedAt;
+        saveNow(false);
         return;
       }
     }
@@ -150,13 +217,17 @@ function loadState() {
     console.warn("無法讀取農場存檔", error);
   }
   state = createInitialState(Date.now());
+  localSavedAt = 0;
+  initialLocalSavedAt = 0;
   saveNow(true);
 }
 
-function saveNow() {
+function saveNow(forceCloud = false) {
   if (!state) return;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localSavedAt = Date.now();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, savedAt: localSavedAt, data: state }));
+    queueCloudSave(forceCloud);
   } catch (error) {
     console.warn("無法儲存農場進度", error);
   }
@@ -409,9 +480,9 @@ function pathPlotTop(geometry) {
 function drawPlotBase(plot) {
   const geometry = plotGeometry(plot.id);
   const owned = state.ownedPlots.includes(plot.id);
-  const rangeSelection = selection && (selection.kind === "harvester" || selection.kind === "sprinkler");
-  const selectedTarget = selection && !rangeSelection && pendingActionPlotId === plot.id;
-  const selectable = selection && !rangeSelection && !selectedTarget && isValidSelectionPlot(plot.id);
+  const areaSelection = isRangeSelection() || isFootprintPlantSelection();
+  const selectedTarget = selection && !areaSelection && pendingActionPlotId === plot.id;
+  const selectable = selection && !areaSelection && !selectedTarget && isValidSelectionPlot(plot.id);
 
   ctx.beginPath();
   ctx.moveTo(geometry.left.x, geometry.left.y);
@@ -653,15 +724,16 @@ function plantMetrics(cell) {
   const progress = mature ? 1 : clamp(cell.growthProgress, 0, 1);
   const growthScale = 0.28 + progress * 0.72;
   const image = plant.image ? images.get(plant.image) : null;
-  const base = plant.type === "tree" ? 116 : TALL_PLANT_IDS.has(plant.id) ? 94 : plant.id === "cabbage" ? 70 : 82;
+  const footprint = getPlantFootprint(plant);
+  const base = plant.type === "tree" ? 94 + footprint * 8 : TALL_PLANT_IDS.has(plant.id) ? 94 : plant.id === "cabbage" ? 70 : 82;
   const ratio = image ? (image.naturalWidth / image.naturalHeight || 1) : 1;
   const height = plant.image ? base * growthScale : 42 * growthScale;
   const width = plant.image ? Math.min(base * 1.18, height * ratio) : 52 * growthScale;
-  return { plant, mature, progress, growthScale, image, height, width, contactY: TILE_H * 0.42 };
+  return { plant, mature, progress, growthScale, image, height, width, footprint, contactY: TILE_H * 0.42 };
 }
 
 function drawPlant(cell, x, y, now) {
-  const { plant, mature, progress, growthScale, image, height, width, contactY } = plantMetrics(cell);
+  const { plant, mature, progress, growthScale, image, height, width, footprint, contactY } = plantMetrics(cell);
   if (!plant.image) {
     drawWeed(x, y, progress, mature);
     return;
@@ -677,7 +749,7 @@ function drawPlant(cell, x, y, now) {
   ctx.save();
   ctx.fillStyle = "rgba(47,35,22,.25)";
   ctx.beginPath();
-  ctx.ellipse(x, y + contactY - 2, 23 * growthScale, 7 * growthScale, 0, 0, Math.PI * 2);
+  ctx.ellipse(x, y + contactY - 2, Math.max(23, footprint * TILE_W * .23) * growthScale, Math.max(7, footprint * TILE_H * .14) * growthScale, 0, 0, Math.PI * 2);
   ctx.fill();
   if (!LOW_POWER_RENDER) {
     ctx.shadowColor = "rgba(39,28,19,.28)";
@@ -815,11 +887,24 @@ function drawDevices(plotId, x, y, now) {
 }
 
 function drawFertilizerOperation(plotId, x, y, now) {
-  const fertilizedCells = indexesForPlot(plotId).map((index) => state.cells[index]).filter((cell) => cell.fertilizerId);
-  if (!fertilizedCells.length) return;
-  const fertilizer = getFertilizer(fertilizedCells[0].fertilizerId);
+  const fertilizedEntries = indexesForPlot(plotId)
+    .map((index) => ({ index, cell: state.cells[index] }))
+    .filter(({ cell }) => cell?.fertilizerId);
+  if (!fertilizedEntries.length) return;
+  const rootIndexes = [...new Set(fertilizedEntries.map(({ index, cell }) => Number.isInteger(cell.plantRootIndex) ? cell.plantRootIndex : index))];
+  const treeRootIndex = rootIndexes.find((rootIndex) => getPlant(state.cells[rootIndex]?.plantId)?.type === "tree");
+  if (treeRootIndex != null) {
+    if (plotIdForIndex(treeRootIndex) !== plotId) return;
+    const anchorIndex = Number.isInteger(state.cells[treeRootIndex]?.plantAnchorIndex)
+      ? state.cells[treeRootIndex].plantAnchorIndex
+      : treeRootIndex;
+    const anchorPoint = worldPoint(Math.floor(anchorIndex / BOARD_SIZE), anchorIndex % BOARD_SIZE);
+    x = anchorPoint.x;
+    y = anchorPoint.y;
+  }
+  const fertilizer = getFertilizer(state.cells[treeRootIndex ?? fertilizedEntries[0].index].fertilizerId);
   if (!fertilizer) return;
-  const rounds = Math.max(...fertilizedCells.map((cell) => cell.fertilizerRounds));
+  const rounds = Math.max(...fertilizedEntries.map(({ cell }) => cell.fertilizerRounds));
   const cycle = state.settings.reducedMotion ? .5 : (now / 6200 + plotId * .071) % 1;
   const laneProgress = cycle * 3;
   const lane = Math.min(2, Math.floor(laneProgress));
@@ -908,14 +993,21 @@ function drawLockedPlots() {
   }
 }
 
-function drawAutomationSelectionPreview() {
-  if (!isRangeSelection() || pendingActionPlotId == null || pendingActionIndex == null) return;
-  const item = selection.kind === "harvester" ? getHarvester(selection.id) : getSprinkler(selection.id);
-  const targets = selectedAutomationTargetIndexes(pendingActionPlotId, item);
+function drawPlacementSelectionPreview() {
+  if (!selectionUsesCenter() || pendingActionPlotId == null || pendingActionIndex == null) return;
+  const isAutomation = isRangeSelection();
+  const item = isAutomation
+    ? selection.kind === "harvester" ? getHarvester(selection.id) : getSprinkler(selection.id)
+    : getPlant(selection.id);
+  const targets = isAutomation
+    ? selectedAutomationTargetIndexes(pendingActionPlotId, item)
+    : getPlantPlacementIndexes(pendingActionIndex, selection.id);
   const center = selectedAutomationCenterIndex();
+  const expectedSize = isAutomation ? targets.length : getPlantFootprint(item) ** 2;
+  const validPlacement = isAutomation || (targets.length === expectedSize && targets.every((index) => state.ownedPlots.includes(plotIdForIndex(index))));
   ctx.save();
-  ctx.fillStyle = selection.kind === "sprinkler" ? "rgba(115,216,236,.16)" : "rgba(245,197,82,.16)";
-  ctx.strokeStyle = selection.kind === "sprinkler" ? "rgba(168,239,250,.72)" : "rgba(255,224,105,.74)";
+  ctx.fillStyle = !validPlacement ? "rgba(232,111,92,.18)" : isAutomation && selection.kind === "sprinkler" ? "rgba(115,216,236,.16)" : "rgba(245,197,82,.16)";
+  ctx.strokeStyle = !validPlacement ? "rgba(255,151,125,.8)" : isAutomation && selection.kind === "sprinkler" ? "rgba(168,239,250,.72)" : "rgba(255,224,105,.74)";
   ctx.lineWidth = 2 / camera.scale;
   for (const index of targets) {
     const row = Math.floor(index / BOARD_SIZE);
@@ -931,7 +1023,7 @@ function drawAutomationSelectionPreview() {
   pathDiamond(ctx, centerPoint.x, centerPoint.y);
   ctx.fillStyle = "rgba(255,255,255,.12)";
   ctx.fill();
-  ctx.strokeStyle = "#fff4ad";
+  ctx.strokeStyle = validPlacement ? "#fff4ad" : "#ff9a7a";
   ctx.lineWidth = 4 / camera.scale;
   ctx.stroke();
   ctx.restore();
@@ -1144,8 +1236,11 @@ function drawFarm(now = performance.now()) {
     const col = index % BOARD_SIZE;
     const plotId = plotIdForIndex(index);
     if (!owned.has(plotId)) continue;
-    const point = worldPoint(row, col);
     const cell = state.cells[index];
+    const plantRootIndex = Number.isInteger(cell.plantRootIndex) ? cell.plantRootIndex : index;
+    if (plantRootIndex !== index) continue;
+    const anchorIndex = Number.isInteger(cell.plantAnchorIndex) ? cell.plantAnchorIndex : index;
+    const point = worldPoint(Math.floor(anchorIndex / BOARD_SIZE), anchorIndex % BOARD_SIZE);
     const metrics = plantMetrics(cell);
     const statusBarY = point.y + metrics.contactY - metrics.height - 10;
     drawPlant(cell, point.x, point.y, now);
@@ -1165,7 +1260,7 @@ function drawFarm(now = performance.now()) {
     drawFertilizerOperation(plotId, center.x, center.y, now);
     drawDevices(plotId, center.x, center.y, now);
   }
-  drawAutomationSelectionPreview();
+  drawPlacementSelectionPreview();
 
   if (focusedPlotId != null) {
     const age = now - focusedPlotStartedAt;
@@ -1235,12 +1330,20 @@ function drawFarm(now = performance.now()) {
 
 function isValidSelectionPlot(plotId) {
   if (!selection || !state.ownedPlots.includes(plotId)) return false;
-  if (selection.kind === "fertilizer") return indexesForPlot(plotId).every((index) => state.cells[index].plantId !== "weed");
+  if (selection.kind === "fertilizer") return indexesForPlot(plotId).some((index) => state.cells[index]?.plantId && state.cells[index].plantId !== "weed");
   return true;
 }
 
 function isRangeSelection(value = selection) {
   return value?.kind === "harvester" || value?.kind === "sprinkler";
+}
+
+function isFootprintPlantSelection(value = selection) {
+  return value?.kind === "seed" && getPlant(value.id)?.type === "tree";
+}
+
+function selectionUsesCenter(value = selection) {
+  return isRangeSelection(value) || isFootprintPlantSelection(value);
 }
 
 function selectedAutomationCenterIndex(plotId = pendingActionPlotId) {
@@ -1261,6 +1364,23 @@ function selectionActionPreview(plotId) {
   if (selection.kind === "seed") {
     const plant = getPlant(selection.id);
     if (!plant) return null;
+    if (plant.type === "tree") {
+      const centerIndex = selectedAutomationCenterIndex(plotId);
+      const footprint = getPlantFootprint(plant);
+      const targetIndexes = getPlantPlacementIndexes(centerIndex, plant.id);
+      const owned = targetIndexes.length === footprint ** 2 && targetIndexes.every((index) => state.ownedPlots.includes(plotIdForIndex(index)));
+      const replacing = targetIndexes.some((index) => state.cells[index]?.plantId !== "weed" || state.cells[index]?.fertilizerId);
+      return {
+        icon: plant.emoji,
+        image: plant.image,
+        title: `以${plot.name}的選取格種植${plant.name}？`,
+        text: owned
+          ? `一份種子只種植 1 棵樹，占用 ${footprint}×${footprint} 格。${replacing ? "範圍內現有作物與肥料會被覆蓋。" : "確認後才會消耗 1 份種子。"}`
+          : `這棵樹需要完整的 ${footprint}×${footprint} 已購土地；目前範圍碰到未購土地或棋盤邊界。請換一個中心格。`,
+        button: owned ? "確認種植" : "範圍不可用",
+        disabled: !owned
+      };
+    }
     const replacing = indexes.some((index) => state.cells[index].plantId !== "weed" || state.cells[index].fertilizerId);
     return {
       icon: plant.emoji,
@@ -1279,7 +1399,7 @@ function selectionActionPreview(plotId) {
     return {
       icon: fertilizer.emoji,
       title: `在${plot.name}施用${fertilizer.name}？`,
-      text: `立即作用於當下 9 格作物：生長 ×${fertilizer.growthMultiplier}、金幣 ×${fertilizer.coinMultiplier}，持續 ${fertilizer.rounds} 輪。${replacing ? "現有肥料與剩餘輪數會被覆蓋。" : ""}`,
+      text: `立即作用於選取區塊內的作物；若包含樹木則套用整棵樹：生長 ×${fertilizer.growthMultiplier}、金幣 ×${fertilizer.coinMultiplier}，持續 ${fertilizer.rounds} 輪。${replacing ? "現有肥料與剩餘輪數會被覆蓋。" : ""}`,
       button: "確認施肥",
       disabled: false
     };
@@ -1342,11 +1462,11 @@ function stageSelection(plotId, index = indexesForPlot(plotId)[4]) {
     return;
   }
   if (selection?.kind === "fertilizer" && !isValidSelectionPlot(plotId)) {
-    showToast("含有雜草的地塊不能施肥");
+    showToast("這塊土地沒有可施作的作物");
     return;
   }
   pendingActionPlotId = plotId;
-  pendingActionIndex = isRangeSelection() ? index : null;
+  pendingActionIndex = selectionUsesCenter() ? index : null;
   closeLandPopover();
   renderActionConfirm();
 }
@@ -1434,10 +1554,13 @@ function isShopProductOwned(kind, item) {
 
 function shopProductDescription(kind, item) {
   if (kind === "tool") return `用途：裝備後點擊土地進行手動收割。每格 ${item.damage} 傷害，命中 ${item.cells} 格${item.regrowth < 1 ? `，收割後下輪生長時間 ×${item.regrowth}` : ""}。`;
-  if (kind === "seed") return `用途：選取後點擊已購土地，一次種滿 3×3，之後會持續再生。單格 HP ${item.hp}，每格收成 ${formatMoney(item.coins)}，生長 ${formatTime(item.growSeconds)}。`;
+  if (kind === "seed") {
+    if (item.type === "tree") return `用途：選取後點擊已購土地內的中心格，一份種子種植 1 棵，占用 ${getPlantFootprint(item)}×${getPlantFootprint(item)} 格。HP ${item.hp}，每棵收成 ${formatMoney(item.coins)}，生長 ${formatTime(item.growSeconds)}。`;
+    return `用途：選取後點擊已購土地，一次種滿 3×3，之後會持續再生。單格 HP ${item.hp}，每格收成 ${formatMoney(item.coins)}，生長 ${formatTime(item.growSeconds)}。`;
+  }
   if (kind === "harvester") return `用途：配置到已購土地內任一中心格後，自動攻擊範圍內的成熟${item.targetType === "tree" ? "樹木，不會處理一般作物" : "作物"}，離線也會工作。範圍 ${item.range}×${item.range}（最多 ${item.range ** 2} 格），每 ${item.intervalSeconds} 秒造成 ${item.damage} 傷害。`;
   if (kind === "sprinkler") return `用途：配置到已購土地內任一中心格後，持續加速範圍內作物，離線生長同樣有效。範圍 ${item.range}×${item.range}（最多 ${item.range ** 2} 格），生長時間 ×${item.growthMultiplier}。`;
-  return `用途：${item.purpose} 選取後施用於一塊 3×3 作物，當下立即生效；生長 ×${item.growthMultiplier}、金幣 ×${item.coinMultiplier}，持續 ${item.rounds} 輪。`;
+  return `用途：${item.purpose} 選取後施用於一塊 3×3 作物；若區塊內有樹木則套用整棵樹，當下立即生效。生長 ×${item.growthMultiplier}、金幣 ×${item.coinMultiplier}，持續 ${item.rounds} 輪。`;
 }
 
 function openShopProduct(kind, id) {
@@ -1593,10 +1716,15 @@ function placeDevice(kind, id, plotId, centerIndex = indexesForPlot(plotId)[4]) 
   return true;
 }
 
-function triggerPlantingAnimation(plotId, plantId) {
+function triggerPlantingAnimation(indexes, plantId) {
   const plant = getPlant(plantId);
   const now = performance.now();
-  indexesForPlot(plotId).forEach((index, order) => {
+  const maxBursts = LOW_POWER_RENDER ? 9 : 24;
+  const stride = Math.max(1, Math.ceil(indexes.length / maxBursts));
+  const animationIndexes = indexes.filter((_, index) => index % stride === 0);
+  const centerIndex = indexes[Math.floor(indexes.length / 2)];
+  if (centerIndex != null && !animationIndexes.includes(centerIndex)) animationIndexes.push(centerIndex);
+  animationIndexes.forEach((index, order) => {
     const row = Math.floor(index / BOARD_SIZE);
     const col = index % BOARD_SIZE;
     const point = worldPoint(row, col);
@@ -1616,20 +1744,27 @@ function triggerDeviceAnimation(kind, plotId, centerIndex = indexesForPlot(plotI
 
 function useSelection(plotId) {
   if (!selection || pendingActionPlotId !== plotId || !state.ownedPlots.includes(plotId)) {
-    showToast(isRangeSelection() ? "請先選取設備中心格" : "請先選取要施作的 3×3 土地");
+    showToast(isRangeSelection() || isFootprintPlantSelection() ? "請先選取設備或樹木的中心格" : "請先選取要施作的 3×3 土地");
     return;
   }
   let feedbackSound = "place";
   if (selection.kind === "seed") {
     const plantId = selection.id;
-    if (!consumeInventory("seed", plantId)) return;
-    sowPlot(state, plotId, plantId);
-    triggerPlantingAnimation(plotId, plantId);
-    showToast(`${getPlant(plantId).name}已種滿 3×3 土地`);
+    const centerIndex = selectionUsesCenter() ? selectedAutomationCenterIndex(plotId) : indexesForPlot(plotId)[4];
+    const plantingIndexes = getPlant(plantId)?.type === "tree"
+      ? getPlantPlacementIndexes(centerIndex, plantId)
+      : indexesForPlot(plotId);
+    if (inventoryCount(`seed_${plantId}`) <= 0 || !sowPlantAt(state, centerIndex, plantId)) return;
+    consumeInventory("seed", plantId);
+    triggerPlantingAnimation(plantingIndexes, plantId);
+    const plant = getPlant(plantId);
+    showToast(plant.type === "tree"
+      ? `${plant.name}已種植 1 棵，占用 ${getPlantFootprint(plant)}×${getPlantFootprint(plant)} 格`
+      : `${plant.name}已種滿 3×3 土地`);
     selection = null;
     feedbackSound = "plant";
   } else if (selection.kind === "fertilizer") {
-    if (!isValidSelectionPlot(plotId)) { closeActionConfirm(); showToast("含有雜草的地塊不能施肥"); return; }
+    if (!isValidSelectionPlot(plotId)) { closeActionConfirm(); showToast("這塊土地沒有可施作的作物"); return; }
     const fertilizerId = selection.id;
     if (!consumeInventory("fertilizer", fertilizerId)) return;
     fertilizePlot(state, plotId, fertilizerId);
@@ -1706,8 +1841,11 @@ function purchaseSelectedLand() {
 function addHarvestEffects(result) {
   const now = performance.now();
   for (const hit of result.results) {
-    const row = Math.floor(hit.index / BOARD_SIZE);
-    const col = hit.index % BOARD_SIZE;
+    const effectIndex = Number.isInteger(state.cells[hit.index]?.plantAnchorIndex)
+      ? state.cells[hit.index].plantAnchorIndex
+      : hit.index;
+    const row = Math.floor(effectIndex / BOARD_SIZE);
+    const col = effectIndex % BOARD_SIZE;
     const point = worldPoint(row, col);
     effects.push({
       x: point.x,
@@ -1722,13 +1860,17 @@ function addHarvestEffects(result) {
 function triggerHarvestSwing(result) {
   const now = performance.now();
   toolCursor.swingStartedAt = now;
-  const targets = state.settings.reducedMotion && result.targets.length
-    ? [result.targets[Math.floor(result.targets.length / 2)]]
-    : result.targets;
+  const uniqueTargets = [...new Set(result.targets.map((index) => Number.isInteger(state.cells[index]?.plantRootIndex) ? state.cells[index].plantRootIndex : index))];
+  const targets = state.settings.reducedMotion && uniqueTargets.length
+    ? [uniqueTargets[Math.floor(uniqueTargets.length / 2)]]
+    : uniqueTargets;
   const hitByIndex = new Map(result.results.map((hit) => [hit.index, hit]));
   for (const index of targets) {
-    const row = Math.floor(index / BOARD_SIZE);
-    const col = index % BOARD_SIZE;
+    const effectIndex = Number.isInteger(state.cells[index]?.plantAnchorIndex)
+      ? state.cells[index].plantAnchorIndex
+      : index;
+    const row = Math.floor(effectIndex / BOARD_SIZE);
+    const col = effectIndex % BOARD_SIZE;
     const point = worldPoint(row, col);
     const plant = getPlant(state.cells[index].plantId);
     swingMarks.push({
@@ -2065,6 +2207,7 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("pagehide", () => { simulateTo(state, Date.now()); saveNow(true); });
 
 preloadAssets();
+const cloudSyncGate = window.PuzzleFirebase?.createSyncGate("正在同步農場進度…");
 loadState();
 renderAll();
 resizeCanvas();
@@ -2080,6 +2223,7 @@ window.setInterval(() => {
   }
 }, 500);
 window.setInterval(() => { if (!passiveBecauseOtherTab) saveNow(); }, 10000);
+syncCloudState(cloudSyncGate);
 
 globalThis.__harvestGame = {
   getState: () => state,
