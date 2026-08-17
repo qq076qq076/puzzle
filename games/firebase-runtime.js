@@ -290,6 +290,47 @@
     });
   }
 
+  function createSocialProvider(providerName) {
+    if (providerName === "google") return new authSdk.GoogleAuthProvider();
+    if (providerName === "facebook") return new authSdk.FacebookAuthProvider();
+    throw new Error("不支援的社群登入方式。");
+  }
+
+  function isCredentialConflict(error) {
+    return error && [
+      "auth/credential-already-in-use",
+      "auth/provider-already-linked",
+      "auth/account-exists-with-different-credential"
+    ].includes(error.code);
+  }
+
+  function signInSocialAccount(providerName) {
+    return ready.then(function () {
+      if (!authApi || !authSdk || !currentUser) throw new Error("Firebase 尚未準備完成，請稍候再試。");
+      const previousUser = currentUser;
+      const provider = createSocialProvider(providerName);
+      return flushPendingSaves().then(function () {
+        return previousUser.isAnonymous ? readAllSavesForUser(previousUser) : [];
+      }).then(function (saves) {
+        if (!previousUser.isAnonymous) {
+          return authSdk.signInWithPopup(authApi, provider).then(function (result) { return result.user; });
+        }
+        return authSdk.linkWithPopup(previousUser, provider).then(function (result) {
+          return result.user;
+        }).catch(function (error) {
+          if (!isCredentialConflict(error)) throw error;
+          return authSdk.signInWithPopup(authApi, provider).then(function (result) {
+            return mergeSavesIntoUser(saves, result.user).then(function () { return result.user; });
+          });
+        });
+      }).then(function (user) {
+        currentUser = user;
+        notify("online", "Firebase 已連線 · 已登入 " + accountLabel(user));
+        return user;
+      });
+    });
+  }
+
   function signOutAccount() {
     return ready.then(function () {
       if (!authApi || !authSdk) return null;
@@ -315,7 +356,13 @@
       "auth/wrong-password": "Email 或密碼不正確。",
       "auth/password-does-not-meet-requirements": "密碼未符合 Firebase 的安全要求。",
       "auth/too-many-requests": "嘗試次數過多，請稍後再試。",
-      "auth/network-request-failed": "目前無法連線 Firebase，請確認網路後再試。"
+      "auth/network-request-failed": "目前無法連線 Firebase，請確認網路後再試。",
+      "auth/operation-not-allowed": "此登入方式尚未在 Firebase Console 啟用。",
+      "auth/popup-closed-by-user": "登入視窗已關閉。",
+      "auth/popup-blocked": "登入視窗被瀏覽器封鎖，請允許彈出視窗後再試。",
+      "auth/cancelled-popup-request": "已有另一個登入視窗正在開啟。",
+      "auth/account-exists-with-different-credential": "此 Email 已使用其他登入方式，請改用原本的登入方式。",
+      "auth/unauthorized-domain": "目前網域尚未加入 Firebase Authorized domains。"
     };
     return messages[error.code] || "操作失敗，請稍後再試。";
   }
@@ -327,17 +374,22 @@
       const style = document.createElement("style");
       style.id = styleId;
       style.textContent = ".puzzle-account{position:fixed;top:16px;right:16px;z-index:12000;color:#e5e7eb;font:500 14px/1.5 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif}.puzzle-account__trigger{border:1px solid rgba(255,255,255,.24);border-radius:999px;padding:9px 14px;color:#f8fafc;background:rgba(15,23,42,.88);box-shadow:0 8px 24px rgba(15,23,42,.2);font:700 13px/1 inherit;cursor:pointer}.puzzle-account__panel{box-sizing:border-box;width:min(calc(100vw - 32px),330px);margin-top:10px;padding:18px;border:1px solid rgba(255,255,255,.16);border-radius:18px;background:#111827;box-shadow:0 20px 50px rgba(0,0,0,.3)}.puzzle-account__panel[hidden],.puzzle-account__form[hidden],.puzzle-account__logout[hidden]{display:none}.puzzle-account__panel h2{margin:0 0 6px;color:#f8fafc;font-size:18px}.puzzle-account__status,.puzzle-account__hint{margin:0 0 14px;color:#cbd5e1;font-size:12px}.puzzle-account__hint{margin-top:12px;margin-bottom:0;color:#94a3b8}.puzzle-account__form{display:grid;gap:9px}.puzzle-account__form input{box-sizing:border-box;width:100%;border:1px solid #475569;border-radius:9px;padding:10px 11px;color:#f8fafc;background:#1e293b;font:inherit}.puzzle-account__actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.puzzle-account__actions button,.puzzle-account__logout{border:0;border-radius:9px;padding:10px 8px;color:#0f172a;background:#93c5fd;font:700 12px/1.2 inherit;cursor:pointer}.puzzle-account__actions button[data-mode=register]{color:#e2e8f0;background:#334155}.puzzle-account__logout{width:100%;color:#fecaca;background:#451a1a}.puzzle-account__error{min-height:18px;margin:9px 0 0;color:#fca5a5;font-size:12px}.puzzle-account__busy{opacity:.65;pointer-events:none}@media(max-width:500px){.puzzle-account{top:10px;right:10px}}";
+      style.textContent += ".puzzle-account__social{display:grid;gap:8px;margin:14px 0 12px}.puzzle-account__social button,.puzzle-account__email-toggle,.puzzle-account__email-back{width:100%;border:0;border-radius:9px;padding:11px 10px;color:#fff;background:#334155;font:700 13px/1.2 inherit;cursor:pointer}.puzzle-account__social button[data-provider=google]{color:#172033;background:#fff}.puzzle-account__social button[data-provider=facebook]{background:#1877f2}.puzzle-account__email-toggle,.puzzle-account__email-back{padding:8px;color:#bfdbfe;background:transparent;font-size:12px}.puzzle-account__email-section[hidden],.puzzle-account__email-toggle[hidden],.puzzle-account__email-back[hidden]{display:none}.puzzle-account__divider{display:flex;align-items:center;gap:8px;color:#64748b;font-size:11px}.puzzle-account__divider::before,.puzzle-account__divider::after{content:\"\";height:1px;flex:1;background:#334155}";
       document.head.appendChild(style);
     }
 
     const root = document.createElement("div");
     root.id = "puzzle-account-root";
     root.className = "puzzle-account";
-    root.innerHTML = "<button class=\"puzzle-account__trigger\" type=\"button\">登入雲端</button><section class=\"puzzle-account__panel\" hidden aria-label=\"雲端帳號\"><h2>雲端存檔</h2><p class=\"puzzle-account__status\" data-role=\"status\">正在連線 Firebase…</p><form class=\"puzzle-account__form\"><input data-role=\"email\" type=\"email\" autocomplete=\"email\" placeholder=\"Email\" required><input data-role=\"password\" type=\"password\" autocomplete=\"current-password\" placeholder=\"密碼（至少 6 個字元）\" minlength=\"6\" required><div class=\"puzzle-account__actions\"><button type=\"submit\" data-mode=\"login\">登入</button><button type=\"submit\" data-mode=\"register\">建立帳號</button></div></form><button class=\"puzzle-account__logout\" type=\"button\" hidden>登出帳號</button><p class=\"puzzle-account__hint\">登入後可在其他裝置恢復遊戲進度。</p><p class=\"puzzle-account__error\" data-role=\"error\" aria-live=\"polite\"></p></section></div>";
+    root.innerHTML = "<button class=\"puzzle-account__trigger\" type=\"button\">登入雲端</button><section class=\"puzzle-account__panel\" hidden aria-label=\"雲端帳號\"><h2>雲端存檔</h2><p class=\"puzzle-account__status\" data-role=\"status\">正在連線 Firebase…</p><div class=\"puzzle-account__social\"><button type=\"button\" data-provider=\"google\">使用 Google 登入</button><button type=\"button\" data-provider=\"facebook\">使用 Facebook 登入</button></div><div class=\"puzzle-account__divider\">或</div><button class=\"puzzle-account__email-toggle\" type=\"button\">使用 Email 登入</button><div class=\"puzzle-account__email-section\" hidden><form class=\"puzzle-account__form\"><input data-role=\"email\" type=\"email\" autocomplete=\"email\" placeholder=\"Email\" required><input data-role=\"password\" type=\"password\" autocomplete=\"current-password\" placeholder=\"密碼（至少 6 個字元）\" minlength=\"6\" required><div class=\"puzzle-account__actions\"><button type=\"submit\" data-mode=\"login\">登入</button><button type=\"submit\" data-mode=\"register\">建立帳號</button></div></form><button class=\"puzzle-account__email-back\" type=\"button\">返回社群登入</button></div><button class=\"puzzle-account__logout\" type=\"button\" hidden>登出帳號</button><p class=\"puzzle-account__hint\">登入後可在其他裝置恢復遊戲進度。</p><p class=\"puzzle-account__error\" data-role=\"error\" aria-live=\"polite\"></p></section></div>";
     document.body.appendChild(root);
 
     const trigger = root.querySelector(".puzzle-account__trigger");
     const panel = root.querySelector(".puzzle-account__panel");
+    const socialSection = root.querySelector(".puzzle-account__social");
+    const emailToggle = root.querySelector(".puzzle-account__email-toggle");
+    const emailSection = root.querySelector(".puzzle-account__email-section");
+    const emailBack = root.querySelector(".puzzle-account__email-back");
     const form = root.querySelector(".puzzle-account__form");
     const emailInput = root.querySelector('[data-role="email"]');
     const passwordInput = root.querySelector('[data-role="password"]');
@@ -358,12 +410,41 @@
       } else {
         statusElement.textContent = "目前是匿名存檔；登入後可跨裝置恢復。";
       }
-      form.hidden = signedIn;
+      socialSection.hidden = signedIn;
+      emailToggle.hidden = signedIn;
+      if (signedIn) emailSection.hidden = true;
       logoutButton.hidden = !signedIn;
     }
 
     trigger.addEventListener("click", function () {
       panel.hidden = !panel.hidden;
+    });
+
+    emailToggle.addEventListener("click", function () {
+      emailSection.hidden = false;
+      emailToggle.hidden = true;
+      emailInput.focus();
+    });
+
+    emailBack.addEventListener("click", function () {
+      emailSection.hidden = true;
+      emailToggle.hidden = false;
+      errorElement.textContent = "";
+    });
+
+    root.querySelectorAll("[data-provider]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        errorElement.textContent = "";
+        root.classList.add("puzzle-account__busy");
+        signInSocialAccount(button.dataset.provider).then(function () {
+          statusElement.textContent = "登入成功，正在載入雲端進度…";
+          window.setTimeout(function () { window.location.reload(); }, 350);
+        }).catch(function (error) {
+          errorElement.textContent = formatAuthError(error);
+        }).finally(function () {
+          root.classList.remove("puzzle-account__busy");
+        });
+      });
     });
 
     form.addEventListener("submit", function (event) {
@@ -406,6 +487,7 @@
     clear: clear,
     registerAccount: registerAccount,
     signInAccount: signInAccount,
+    signInSocialAccount: signInSocialAccount,
     signOutAccount: signOutAccount,
     createSyncGate: createSyncGate,
     onStatus: function (listener) {
