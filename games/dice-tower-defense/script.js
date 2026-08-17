@@ -26,6 +26,9 @@ import {
   ENEMY_GOLD_MULTIPLIER, SHIELDED_WAVE_START, WAVES
 } from "./config/wave-config.js";
 
+const CLOUD_SAVE_KEY = "dice-tower-defense";
+const LOCAL_SYNC_META_KEY = "puzzle.diceTowerDefense.sync.v1";
+
 (function () {
   "use strict";
 
@@ -94,6 +97,13 @@ import {
   let trayDragState = null;
   let uiDirty = true;
   let profile = loadProfile();
+  let localCloudSavedAt = readLocalCloudSavedAt();
+  const initialLocalCloudSavedAt = localCloudSavedAt;
+  let cloudReady = !window.PuzzleFirebase?.enabled;
+  let cloudSyncing = Boolean(window.PuzzleFirebase?.enabled);
+  let cloudSaveTimer = null;
+  let cloudSavePending = null;
+  let cloudSaveInFlight = Promise.resolve();
   let startupCheckpoint = null;
   let tutorialVisible = false;
 
@@ -108,24 +118,138 @@ import {
   });
   roadTexture.src = ROAD_TEXTURE_PATH;
 
-  function loadProfile() {
-    const fallback = {
+  function getDefaultProfile() {
+    return {
       version: 1,
       bestScore: 0,
       bestWave: 0,
       settings: { sound: true, reducedEffects: false, vibration: true, tutorialCompleted: false, hints: true }
     };
+  }
+
+  function normalizeProfile(candidate) {
+    const fallback = getDefaultProfile();
+    if (!candidate || candidate.version !== 1) return fallback;
+    return {
+      ...fallback,
+      ...candidate,
+      settings: { ...fallback.settings, ...(candidate.settings || {}) }
+    };
+  }
+
+  function readLocalCloudSavedAt() {
+    try {
+      const stored = Number(window.localStorage.getItem(LOCAL_SYNC_META_KEY));
+      if (Number.isFinite(stored) && stored > 0) return stored;
+      const rawRun = window.localStorage.getItem(RUN_STORAGE_KEY);
+      const parsedRun = rawRun ? JSON.parse(rawRun) : null;
+      const parsedRunTime = parsedRun?.savedAt ? Date.parse(parsedRun.savedAt) : 0;
+      return Number.isFinite(parsedRunTime) ? parsedRunTime : 0;
+    } catch (error) {
+      return 0;
+    }
+  }
+
+  function markLocalCloudSaved() {
+    localCloudSavedAt = Date.now();
+    try { window.localStorage.setItem(LOCAL_SYNC_META_KEY, String(localCloudSavedAt)); } catch (error) { /* Storage may be unavailable. */ }
+  }
+
+  function readRunCheckpointRaw() {
+    try {
+      const stored = window.localStorage.getItem(RUN_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function getCloudPayload() {
+    return {
+      profile: profile,
+      run: readRunCheckpointRaw()
+    };
+  }
+
+  function queueCloudSave(immediate = false) {
+    if (!window.PuzzleFirebase?.enabled || !cloudReady) return;
+    cloudSavePending = JSON.parse(JSON.stringify(getCloudPayload()));
+    if (immediate) {
+      flushCloudSave();
+    } else if (!cloudSaveTimer) {
+      cloudSaveTimer = window.setTimeout(flushCloudSave, 5000);
+    }
+  }
+
+  function flushCloudSave() {
+    cloudSaveTimer = null;
+    if (!window.PuzzleFirebase?.enabled || !cloudReady || !cloudSavePending) return;
+    const snapshot = cloudSavePending;
+    cloudSavePending = null;
+    cloudSaveInFlight = cloudSaveInFlight.then(() => window.PuzzleFirebase.save(CLOUD_SAVE_KEY, snapshot)).then(() => {
+      if (cloudSavePending && !cloudSaveTimer) cloudSaveTimer = window.setTimeout(flushCloudSave, 5000);
+    });
+  }
+
+  function normalizeCloudPayload(remote) {
+    if (!remote || !remote.data || typeof remote.data !== "object") return null;
+    if (!remote.data.profile || remote.data.profile.version !== 1) return null;
+    const normalized = {
+      profile: normalizeProfile(remote.data.profile),
+      run: remote.data.run || null,
+      savedAt: Number(remote.clientSavedAt) || 0
+    };
+    if (normalized.run) {
+      try {
+        normalized.run = validateRunCheckpoint(normalized.run);
+      } catch (error) {
+        return null;
+      }
+    }
+    return normalized;
+  }
+
+  function applyCloudPayload(payload) {
+    profile = payload.profile;
+    try { window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile)); } catch (error) { /* Storage may be unavailable. */ }
+    if (payload.run) {
+      try { window.localStorage.setItem(RUN_STORAGE_KEY, JSON.stringify(payload.run)); } catch (error) { /* Storage may be unavailable. */ }
+    } else {
+      try { window.localStorage.removeItem(RUN_STORAGE_KEY); } catch (error) { /* Storage may be unavailable. */ }
+    }
+    localCloudSavedAt = payload.savedAt;
+    try { window.localStorage.setItem(LOCAL_SYNC_META_KEY, String(localCloudSavedAt)); } catch (error) { /* Storage may be unavailable. */ }
+    initializeGame();
+  }
+
+  async function syncCloudState(gate) {
+    if (!window.PuzzleFirebase?.enabled) {
+      cloudReady = true;
+      cloudSyncing = false;
+      gate?.close();
+      return;
+    }
+    let remote = null;
+    try { remote = await window.PuzzleFirebase.load(CLOUD_SAVE_KEY); } catch (error) { /* Local save remains available. */ }
+    const payload = normalizeCloudPayload(remote);
+    const shouldUseRemote = Boolean(payload && payload.savedAt >= initialLocalCloudSavedAt);
+    if (shouldUseRemote) {
+      applyCloudPayload(payload);
+    }
+    cloudReady = true;
+    cloudSyncing = false;
+    if (!shouldUseRemote || (shouldUseRemote && !payload?.run)) queueCloudSave(true);
+    gate?.close();
+    render();
+  }
+
+  function loadProfile() {
+    const fallback = getDefaultProfile();
 
     try {
       const stored = window.localStorage.getItem(PROFILE_STORAGE_KEY);
       if (!stored) return fallback;
-      const parsed = JSON.parse(stored);
-      if (!parsed || parsed.version !== 1) return fallback;
-      return {
-        ...fallback,
-        ...parsed,
-        settings: { ...fallback.settings, ...(parsed.settings || {}) }
-      };
+      return normalizeProfile(JSON.parse(stored));
     } catch (error) {
       return fallback;
     }
@@ -134,6 +258,8 @@ import {
   function saveProfile() {
     try {
       window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+      markLocalCloudSaved();
+      queueCloudSave();
     } catch (error) {
       // The game remains playable when browser storage is unavailable.
     }
@@ -142,6 +268,8 @@ import {
   function clearRunCheckpoint() {
     try {
       window.localStorage.removeItem(RUN_STORAGE_KEY);
+      markLocalCloudSaved();
+      queueCloudSave();
     } catch (error) {
       // The game remains playable when browser storage is unavailable.
     }
@@ -157,31 +285,34 @@ import {
       isFiniteNumber(die.totalInvested) && die.totalInvested >= 0);
   }
 
+  function validateRunCheckpoint(parsed) {
+    const expectedCoreMaxHp = parsed && Number.isInteger(parsed.clearedWaves)
+      ? INITIAL_CORE_HP + parsed.clearedWaves
+      : INITIAL_CORE_HP;
+    const validHeader = parsed && parsed.version === 1 &&
+      Number.isInteger(parsed.wave) && parsed.wave >= 1 && parsed.wave <= WAVES.length &&
+      Number.isInteger(parsed.clearedWaves) && parsed.clearedWaves === parsed.wave - 1 &&
+      Number.isInteger(parsed.gold) && parsed.gold >= 0 &&
+      Number.isInteger(parsed.coreHp) && parsed.coreHp > 0 && parsed.coreHp <= expectedCoreMaxHp &&
+      (parsed.coreMaxHp === undefined || parsed.coreMaxHp === expectedCoreMaxHp) &&
+      Array.isArray(parsed.towers) && Array.isArray(parsed.diceBag);
+    if (!validHeader || !parsed.towers.every(isValidSavedDie) || !parsed.diceBag.every(isValidSavedDie)) throw new Error("Invalid checkpoint");
+    parsed.coreMaxHp = expectedCoreMaxHp;
+
+    const occupied = new Set();
+    for (const tower of parsed.towers) {
+      const key = tower.x + "," + tower.y;
+      if (!Number.isInteger(tower.x) || !Number.isInteger(tower.y) || getSlotIndex(tower.x, tower.y) < 0 || occupied.has(key)) throw new Error("Invalid tower position");
+      occupied.add(key);
+    }
+    return parsed;
+  }
+
   function loadRunCheckpoint() {
     try {
       const stored = window.localStorage.getItem(RUN_STORAGE_KEY);
       if (!stored) return null;
-      const parsed = JSON.parse(stored);
-      const expectedCoreMaxHp = parsed && Number.isInteger(parsed.clearedWaves)
-        ? INITIAL_CORE_HP + parsed.clearedWaves
-        : INITIAL_CORE_HP;
-      const validHeader = parsed && parsed.version === 1 &&
-        Number.isInteger(parsed.wave) && parsed.wave >= 1 && parsed.wave <= WAVES.length &&
-        Number.isInteger(parsed.clearedWaves) && parsed.clearedWaves === parsed.wave - 1 &&
-        Number.isInteger(parsed.gold) && parsed.gold >= 0 &&
-        Number.isInteger(parsed.coreHp) && parsed.coreHp > 0 && parsed.coreHp <= expectedCoreMaxHp &&
-        (parsed.coreMaxHp === undefined || parsed.coreMaxHp === expectedCoreMaxHp) &&
-        Array.isArray(parsed.towers) && Array.isArray(parsed.diceBag);
-      if (!validHeader || !parsed.towers.every(isValidSavedDie) || !parsed.diceBag.every(isValidSavedDie)) throw new Error("Invalid checkpoint");
-      parsed.coreMaxHp = expectedCoreMaxHp;
-
-      const occupied = new Set();
-      for (const tower of parsed.towers) {
-        const key = tower.x + "," + tower.y;
-        if (!Number.isInteger(tower.x) || !Number.isInteger(tower.y) || getSlotIndex(tower.x, tower.y) < 0 || occupied.has(key)) throw new Error("Invalid tower position");
-        occupied.add(key);
-      }
-      return parsed;
+      return validateRunCheckpoint(JSON.parse(stored));
     } catch (error) {
       clearRunCheckpoint();
       return null;
@@ -211,6 +342,8 @@ import {
     };
     try {
       window.localStorage.setItem(RUN_STORAGE_KEY, JSON.stringify(checkpoint));
+      markLocalCloudSaved();
+      queueCloudSave();
     } catch (error) {
       // The game remains playable when browser storage is unavailable.
     }
@@ -239,6 +372,8 @@ import {
     };
     try {
       window.localStorage.setItem(RUN_STORAGE_KEY, JSON.stringify(checkpoint));
+      markLocalCloudSaved();
+      queueCloudSave();
     } catch (error) {
       // The game remains playable when browser storage is unavailable.
     }
@@ -3231,7 +3366,7 @@ import {
   }
 
   function togglePause() {
-    if (startupCheckpoint || tutorialVisible) return;
+    if (cloudSyncing || startupCheckpoint || tutorialVisible) return;
     if (state.phase === "victory" || state.phase === "defeat") return;
     state.paused = !state.paused;
     elements.pauseCover.hidden = !state.paused;
@@ -3240,6 +3375,7 @@ import {
   }
 
   function handleKeyDown(event) {
+    if (cloudSyncing) return;
     if (event.key === "Escape" && (state.phase === "victory" || state.phase === "defeat")) {
       closeResultCover();
       return;
@@ -3259,7 +3395,7 @@ import {
     if (lastFrameTime === null) lastFrameTime = timestamp;
     const deltaTime = Math.min((timestamp - lastFrameTime) / 1000, 0.1);
     lastFrameTime = timestamp;
-    if (!state.paused) {
+    if (!cloudSyncing && !state.paused) {
       if (state.phase === "preparation") updatePreparation(deltaTime);
       else if (state.phase === "combat") updateCombat(deltaTime);
       else if (state.phase === "waveResult") updateWaveResult(deltaTime);
@@ -3403,10 +3539,16 @@ import {
     if (document.visibilityState === "hidden") savePreparationCheckpoint();
     if (document.visibilityState === "hidden" && !state.paused && state.phase !== "victory" && state.phase !== "defeat") togglePause();
   });
+  window.addEventListener("pagehide", function () {
+    savePreparationCheckpoint();
+    flushCloudSave();
+  });
   window.addEventListener("resize", resizeCanvas);
 
+  const cloudSyncGate = window.PuzzleFirebase?.createSyncGate("正在同步骰塔守境進度…");
   initializeGame();
   resizeCanvas();
   render();
   animationFrame = window.requestAnimationFrame(loop);
+  syncCloudState(cloudSyncGate);
 })();

@@ -1,0 +1,34 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    function isPuzzleGame(gameId) {
+      return gameId in [
+        '2048',
+        '1a2b',
+        'gomoku',
+        'knife-throw',
+        'subaracity',
+        'petri-dish',
+        'microorganism',
+        'duquan',
+        'gravity-planet',
+        'dice-tower-defense',
+        'harvest-clicker'
+      ];
+    }
+
+    match /users/{userId}/saves/{gameId} {
+      allow read, delete: if isOwner(userId) && isPuzzleGame(gameId);
+      allow create, update: if isOwner(userId)
+        && isPuzzleGame(gameId)
+        && request.resource.data.version == 1
+        && request.resource.data.data is map
+        && request.resource.data.clientSavedAt is int;
+    }
+  }
+}

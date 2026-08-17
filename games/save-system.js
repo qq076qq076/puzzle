@@ -23,7 +23,7 @@
     document.head.appendChild(style);
   }
 
-  function read(key) {
+  function readLocal(key) {
     try {
       const value = window.localStorage.getItem(key);
       if (!value) return null;
@@ -36,20 +36,69 @@
 
   function create(options) {
     const storageKey = "puzzle-club-save:" + options.key + ":v1";
+    const firebase = window.PuzzleFirebase && window.PuzzleFirebase.enabled ? window.PuzzleFirebase : null;
     let active = false;
     let intervalId = null;
+    let cloudReady = !firebase;
+    let cloudTimer = null;
+    let cloudPending = null;
+    let cloudOperations = Promise.resolve();
+    let eventsInstalled = false;
 
-    function clear() {
+    function readCheckpoint() {
+      const checkpoint = readLocal(storageKey);
+      if (checkpoint && options.validate && !options.validate(checkpoint.data)) {
+        clearLocal();
+        return null;
+      }
+      return checkpoint;
+    }
+
+    function clearLocal() {
       try { window.localStorage.removeItem(storageKey); } catch (error) { /* Storage may be unavailable. */ }
     }
 
-    function saveNow() {
+    function clear() {
+      clearLocal();
+      cloudPending = null;
+      if (firebase) {
+        cloudOperations = cloudOperations.then(function () { return firebase.clear(options.key); });
+      }
+    }
+
+    function writeLocal(data) {
+      const checkpoint = { version: 1, savedAt: Date.now(), data: data };
+      try { window.localStorage.setItem(storageKey, JSON.stringify(checkpoint)); } catch (error) { /* Storage may be unavailable. */ }
+      return checkpoint;
+    }
+
+    function flushCloud() {
+      cloudTimer = null;
+      if (!firebase || !cloudReady || !cloudPending) return;
+      const checkpoint = cloudPending;
+      cloudPending = null;
+      cloudOperations = cloudOperations.then(function () {
+        return firebase.save(options.key, checkpoint.data);
+      }).then(function () {
+        if (cloudPending && !cloudTimer) cloudTimer = window.setTimeout(flushCloud, options.cloudInterval || 5000);
+      });
+    }
+
+    function queueCloudSave(checkpoint, immediate) {
+      if (!firebase || !cloudReady) return;
+      cloudPending = checkpoint;
+      if (immediate) {
+        flushCloud();
+      } else if (!cloudTimer) {
+        cloudTimer = window.setTimeout(flushCloud, options.cloudInterval || 5000);
+      }
+    }
+
+    function saveNow(immediate) {
       if (!active) return;
       try {
         const data = options.getState();
-        if (data) {
-          window.localStorage.setItem(storageKey, JSON.stringify({ version: 1, savedAt: Date.now(), data: data }));
-        }
+        if (data) queueCloudSave(writeLocal(data), Boolean(immediate));
       } catch (error) {
         // A blocked or full localStorage must never stop the game.
       }
@@ -58,37 +107,22 @@
     function beginAutosave() {
       active = true;
       window.clearInterval(intervalId);
-      intervalId = window.setInterval(saveNow, options.interval || 2000);
-      window.addEventListener("pagehide", saveNow);
-      document.addEventListener("visibilitychange", function () {
-        if (document.visibilityState === "hidden") saveNow();
-      });
-      saveNow();
+      intervalId = window.setInterval(function () { saveNow(false); }, options.interval || 2000);
+      if (!eventsInstalled) {
+        eventsInstalled = true;
+        window.addEventListener("pagehide", function () {
+          saveNow(true);
+          flushCloud();
+        });
+        document.addEventListener("visibilitychange", function () {
+          if (document.visibilityState === "hidden") {
+            saveNow(true);
+            flushCloud();
+          }
+        });
+      }
+      saveNow(false);
     }
-
-    function startFresh() {
-      clear();
-      options.fresh();
-      beginAutosave();
-    }
-
-    const checkpoint = read(storageKey);
-    if (!checkpoint || (options.validate && !options.validate(checkpoint.data))) {
-      if (checkpoint) clear();
-      startFresh();
-      return { save: saveNow, clear: clear };
-    }
-
-    installStyles();
-    const cover = document.createElement("div");
-    cover.className = "puzzle-save-cover";
-    cover.setAttribute("role", "dialog");
-    cover.setAttribute("aria-modal", "true");
-    cover.setAttribute("aria-labelledby", "puzzle-save-title");
-    cover.innerHTML = '<div class="puzzle-save-dialog"><div class="puzzle-save-kicker">SAVED GAME</div><h2 id="puzzle-save-title">繼續上次的遊戲？</h2><p>' +
-      (options.description || "找到上次離開時的進度。你可以接著玩，或清除進度重新開始。") +
-      '</p><div class="puzzle-save-actions"><button type="button" data-action="restart">重新開始</button><button type="button" data-action="continue">繼續遊戲</button></div></div>';
-    document.body.appendChild(cover);
 
     function blockGameKeys(event) {
       if (event.key !== "Tab") {
@@ -96,32 +130,105 @@
         event.stopImmediatePropagation();
       }
     }
-    document.addEventListener("keydown", blockGameKeys, true);
 
-    function close() {
-      document.removeEventListener("keydown", blockGameKeys, true);
-      cover.remove();
-      beginAutosave();
+    function createCover(content) {
+      installStyles();
+      const cover = document.createElement("div");
+      cover.className = "puzzle-save-cover";
+      cover.setAttribute("role", "dialog");
+      cover.setAttribute("aria-modal", "true");
+      cover.setAttribute("aria-labelledby", "puzzle-save-title");
+      cover.innerHTML = content;
+      document.body.appendChild(cover);
+      document.addEventListener("keydown", blockGameKeys, true);
+      return {
+        element: cover,
+        close: function () {
+          document.removeEventListener("keydown", blockGameKeys, true);
+          cover.remove();
+        }
+      };
     }
 
-    cover.addEventListener("click", function (event) {
-      const button = event.target.closest("button[data-action]");
-      if (!button) return;
-      if (button.dataset.action === "continue") {
+    function showChoice(checkpoint, source) {
+      const cover = createCover('<div class="puzzle-save-dialog"><div class="puzzle-save-kicker">SAVED GAME</div><h2 id="puzzle-save-title">繼續上次的遊戲？</h2><p>' +
+        (source ? source + "。" : (options.description || "找到上次離開時的進度。你可以接著玩，或清除進度重新開始。")) +
+        '</p><div class="puzzle-save-actions"><button type="button" data-action="restart">重新開始</button><button type="button" data-action="continue">繼續遊戲</button></div></div>');
+
+      function startFresh() {
+        clear();
+        try { options.fresh(); } catch (error) { console.error("[PuzzleSave] Cannot start fresh game", error); }
+        cover.close();
+        beginAutosave();
+      }
+
+      cover.element.addEventListener("click", function (event) {
+        const button = event.target.closest("button[data-action]");
+        if (!button) return;
+        if (button.dataset.action === "continue") {
+          cover.close();
+          beginAutosave();
+          return;
+        }
+        startFresh();
+      });
+      cover.element.querySelector('[data-action="continue"]').focus();
+    }
+
+    function normalizeRemote(remote) {
+      if (!remote || remote.version !== 1 || !remote.data) return null;
+      if (options.validate && !options.validate(remote.data)) return null;
+      return { version: 1, savedAt: Number(remote.clientSavedAt) || 0, data: remote.data };
+    }
+
+    function applyCheckpoint(checkpoint, fallbackFresh) {
+      if (checkpoint) {
         try {
           options.restore(checkpoint.data);
+          return true;
         } catch (error) {
-          clear();
-          options.fresh();
+          console.warn("[PuzzleSave] Cannot restore checkpoint", options.key, error);
         }
-      } else {
-        clear();
-        options.fresh();
       }
-      close();
-    });
-    cover.querySelector('[data-action="continue"]').focus();
-    return { save: saveNow, clear: clear };
+      if (fallbackFresh) {
+        try { options.fresh(); } catch (error) { console.error("[PuzzleSave] Cannot create initial game", error); }
+      }
+      return false;
+    }
+
+    const localCheckpoint = readCheckpoint();
+    let selectedCheckpoint = localCheckpoint;
+    let selectedSource = localCheckpoint ? "已載入本機存檔" : "";
+    applyCheckpoint(localCheckpoint, !localCheckpoint);
+
+    const syncCover = firebase ? createCover('<div class="puzzle-save-dialog"><div class="puzzle-save-kicker">FIREBASE SYNC</div><h2 id="puzzle-save-title">正在同步進度…</h2><p>正在確認雲端與本機的最新存檔，請稍候。</p></div>') : null;
+
+    function finishInitialization(remote) {
+      const remoteCheckpoint = normalizeRemote(remote);
+      if (remoteCheckpoint && (!selectedCheckpoint || remoteCheckpoint.savedAt >= selectedCheckpoint.savedAt)) {
+        selectedCheckpoint = remoteCheckpoint;
+        selectedSource = "已載入 Firebase 雲端存檔";
+        applyCheckpoint(remoteCheckpoint, false);
+      } else if (selectedCheckpoint) {
+        selectedSource = firebase && remoteCheckpoint ? "本機存檔較新，已保留本機進度" : selectedSource;
+      }
+
+      cloudReady = true;
+      if (syncCover) syncCover.close();
+      if (selectedCheckpoint) {
+        showChoice(selectedCheckpoint, selectedSource);
+      } else {
+        beginAutosave();
+      }
+    }
+
+    if (firebase) {
+      firebase.load(options.key).then(finishInitialization).catch(function () { finishInitialization(null); });
+    } else {
+      finishInitialization(null);
+    }
+
+    return { save: saveNow, clear: clear, ready: window.PuzzleFirebaseReady || Promise.resolve(null) };
   }
 
   window.PuzzleSave = { create: create };

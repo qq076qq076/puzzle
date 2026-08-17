@@ -32,6 +32,27 @@ python3 -m http.server 8000
 
 接著開啟 `http://localhost:8000`。
 
+## Firebase 雲端存檔
+
+除了剪刀石頭布以外，其餘 11 款遊戲已接上共用 Firebase 存檔層。未設定 Firebase 時，遊戲會自動退回原本的 `localStorage`；設定完成後會使用匿名 Authentication，並將存檔寫入：
+
+```text
+users/{uid}/saves/{gameId}
+```
+
+啟用方式：
+
+1. 在 Firebase Console 建立 Web App 與 Cloud Firestore database；Authentication 的 Anonymous provider 已寫入 `firebase.json`，可由 CLI 部署。
+2. 將 Web app config 填入 [`games/firebase-config.js`](games/firebase-config.js)。這些 Web config 可以放在前端，資料存取由 Authentication 與 [`firestore.rules`](firestore.rules) 保護。
+3. 將 `localhost` 與正式網域（例如 `qq076qq076.github.io`）加入 Firebase Authentication 的 Authorized domains。
+4. 使用 Firebase CLI 登入並部署 Authentication 與 Firestore 規則：
+
+```bash
+firebase deploy --only auth,firestore:rules
+```
+
+Firebase SDK 會從瀏覽器 module CDN 載入；使用本機 `file://` 開啟時請改用上面的 `python3 -m http.server 8000`。雲端寫入採延遲同步，`localStorage` 仍會保留作為離線與連線失敗時的 fallback。
+
 P2P 剪刀石頭布在正式部署時需使用 HTTPS；本機開發可使用 `localhost`。遊戲先嘗試直連與 STUN，失敗時使用第三方 TURN 中繼，以改善受限網路的連線成功率。正式上線建議替換為自己管理的 TURN 與限時憑證；可在載入 `script.js` 前設定 `window.RPS_ICE_SERVERS` 覆寫預設清單。
 
 ```html
