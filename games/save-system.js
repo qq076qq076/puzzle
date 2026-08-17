@@ -28,7 +28,12 @@
       const value = window.localStorage.getItem(key);
       if (!value) return null;
       const parsed = JSON.parse(value);
-      return parsed && parsed.version === 1 && parsed.data ? parsed : null;
+      if (!parsed || parsed.version !== 1 || !parsed.data) return null;
+      const savedAt = Number(parsed.savedAt) || 0;
+      return Object.assign({}, parsed, {
+        createdAt: Number(parsed.createdAt) || savedAt,
+        savedAt: savedAt
+      });
     } catch (error) {
       return null;
     }
@@ -44,6 +49,7 @@
     let cloudPending = null;
     let cloudOperations = Promise.resolve();
     let eventsInstalled = false;
+    let localCreatedAt = 0;
 
     function readCheckpoint() {
       const checkpoint = readLocal(storageKey);
@@ -60,14 +66,18 @@
 
     function clear() {
       clearLocal();
+      localCreatedAt = 0;
       cloudPending = null;
       if (firebase) {
         cloudOperations = cloudOperations.then(function () { return firebase.clear(options.key); });
       }
     }
 
-    function writeLocal(data) {
-      const checkpoint = { version: 1, savedAt: Date.now(), data: data };
+    function writeLocal(data, metadata) {
+      const savedAt = Number(metadata?.savedAt) || Date.now();
+      const createdAt = Number(metadata?.createdAt) || localCreatedAt || savedAt;
+      localCreatedAt = createdAt;
+      const checkpoint = { version: 1, createdAt: createdAt, savedAt: savedAt, data: data };
       try { window.localStorage.setItem(storageKey, JSON.stringify(checkpoint)); } catch (error) { /* Storage may be unavailable. */ }
       return checkpoint;
     }
@@ -78,7 +88,7 @@
       const checkpoint = cloudPending;
       cloudPending = null;
       cloudOperations = cloudOperations.then(function () {
-        return firebase.save(options.key, checkpoint.data);
+        return firebase.save(options.key, checkpoint.data, checkpoint);
       }).then(function () {
         if (cloudPending && !cloudTimer) cloudTimer = window.setTimeout(flushCloud, options.cloudInterval || 5000);
       });
@@ -186,7 +196,20 @@
     function normalizeRemote(remote) {
       if (!remote || remote.version !== 1 || !remote.data) return null;
       if (options.validate && !options.validate(remote.data)) return null;
-      return { version: 1, savedAt: Number(remote.clientSavedAt) || 0, data: remote.data };
+      const savedAt = Number(remote.clientSavedAt) || 0;
+      return {
+        version: 1,
+        createdAt: Number(remote.clientCreatedAt) || 0,
+        savedAt: savedAt,
+        data: remote.data
+      };
+    }
+
+    function shouldUseRemote(remoteCheckpoint, localCheckpoint) {
+      if (!remoteCheckpoint) return false;
+      if (!localCheckpoint) return true;
+      if (remoteCheckpoint.createdAt > 0 && localCheckpoint.createdAt > 0 && remoteCheckpoint.createdAt > localCheckpoint.createdAt) return false;
+      return remoteCheckpoint.savedAt >= localCheckpoint.savedAt;
     }
 
     function applyCheckpoint(checkpoint, fallbackFresh) {
@@ -207,21 +230,21 @@
     const localCheckpoint = readCheckpoint();
     let selectedCheckpoint = localCheckpoint;
     let selectedSource = localCheckpoint ? "已載入本機存檔" : "";
+    localCreatedAt = localCheckpoint ? localCheckpoint.createdAt : 0;
     applyCheckpoint(localCheckpoint, !localCheckpoint);
 
     const syncCover = firebase ? createCover('<div class="puzzle-save-dialog"><div class="puzzle-save-kicker">FIREBASE SYNC</div><h2 id="puzzle-save-title">正在同步進度…</h2><p>正在確認雲端與本機的最新存檔，請稍候。</p></div>') : null;
 
     function finishInitialization(remote) {
       const remoteCheckpoint = normalizeRemote(remote);
-      const signedIn = Boolean(firebase && typeof firebase.isAuthenticated === "function" && firebase.isAuthenticated());
-      const remoteWins = remoteCheckpoint && (signedIn || !selectedCheckpoint || remoteCheckpoint.savedAt >= selectedCheckpoint.savedAt);
+      const remoteWins = shouldUseRemote(remoteCheckpoint, selectedCheckpoint);
       if (remoteWins) {
         selectedCheckpoint = remoteCheckpoint;
         selectedSource = "已載入 Firebase 雲端存檔";
         applyCheckpoint(remoteCheckpoint, false);
-        if (signedIn) writeLocal(remoteCheckpoint.data);
+        writeLocal(remoteCheckpoint.data, remoteCheckpoint);
       } else if (selectedCheckpoint) {
-        selectedSource = firebase && remoteCheckpoint ? "本機存檔較新，已保留本機進度" : selectedSource;
+        selectedSource = firebase && remoteCheckpoint ? "已檢查雲端存檔，本機進度較適用，已保留本機進度" : selectedSource;
       }
 
       cloudReady = true;

@@ -54,7 +54,7 @@ firebase deploy --only auth,firestore:rules
 
 Firebase SDK 會從瀏覽器 module CDN 載入；使用本機 `file://` 開啟時請改用上面的 `python3 -m http.server 8000`。雲端寫入採延遲同步，`localStorage` 仍會保留作為離線與連線失敗時的 fallback。
 
-登入與跨裝置測試：在裝置 A 開啟遊戲右上角的「登入雲端」，優先選 Google 或 Facebook；第一次登入會將目前匿名存檔連結到社群帳號。在裝置 B 開啟同一網站並登入相同帳號，頁面重新載入後會以 `users/{uid}/saves/{gameId}` 的遠端存檔覆蓋本地進度，右上角會顯示帳號名稱並可點開登出。登入後每次本地 autosave 都會同步到雲端；未登入時才依 checkpoint 時間比較本地與雲端。Email 登入可按「使用 Email 登入」展開。
+登入與跨裝置測試：在裝置 A 開啟遊戲右上角的「登入雲端」，優先選 Google 或 Facebook；第一次登入會將目前匿名存檔連結到社群帳號。在裝置 B 開啟同一網站並登入相同帳號，頁面重新載入後會先確認 `users/{uid}/saves/{gameId}` 是否有遠端存檔，再比較建立時間與最後更新時間：遠端建立時間較晚，或遠端最後更新時間早於本機時，保留本機進度；只有遠端不較舊時才恢復到本機。右上角會顯示帳號名稱並可點開登出。登入後每次本地 autosave 都會同步到雲端。Email 登入可按「使用 Email 登入」展開。
 
 P2P 剪刀石頭布在正式部署時需使用 HTTPS；本機開發可使用 `localhost`。遊戲先嘗試直連與 STUN，失敗時使用第三方 TURN 中繼，以改善受限網路的連線成功率。正式上線建議替換為自己管理的 TURN 與限時憑證；可在載入 `script.js` 前設定 `window.RPS_ICE_SERVERS` 覆寫預設清單。
 

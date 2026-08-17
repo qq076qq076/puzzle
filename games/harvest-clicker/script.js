@@ -89,7 +89,9 @@ let cameraFocusAnimation = null;
 let focusedPlotId = null;
 let focusedPlotStartedAt = -Infinity;
 let lastFarmFrameAt = -Infinity;
+let localCreatedAt = 0;
 let localSavedAt = 0;
+let initialLocalCreatedAt = 0;
 let initialLocalSavedAt = 0;
 let cloudReady = !window.PuzzleFirebase?.enabled;
 let cloudSaveTimer = null;
@@ -164,7 +166,11 @@ function applyLoadedState(candidate, showSummary = true) {
 
 function queueCloudSave(immediate = false) {
   if (!window.PuzzleFirebase?.enabled || !cloudReady || !state) return;
-  cloudSavePending = JSON.parse(JSON.stringify(state));
+  cloudSavePending = {
+    data: JSON.parse(JSON.stringify(state)),
+    createdAt: localCreatedAt,
+    savedAt: localSavedAt
+  };
   if (immediate) {
     flushCloudSave();
   } else if (!cloudSaveTimer) {
@@ -177,7 +183,7 @@ function flushCloudSave() {
   if (!window.PuzzleFirebase?.enabled || !cloudReady || !cloudSavePending) return;
   const snapshot = cloudSavePending;
   cloudSavePending = null;
-  cloudSaveInFlight = cloudSaveInFlight.then(() => window.PuzzleFirebase.save(CLOUD_SAVE_KEY, snapshot)).then(() => {
+  cloudSaveInFlight = cloudSaveInFlight.then(() => window.PuzzleFirebase.save(CLOUD_SAVE_KEY, snapshot.data, snapshot)).then(() => {
     if (cloudSavePending && !cloudSaveTimer) cloudSaveTimer = window.setTimeout(flushCloudSave, 5000);
   });
 }
@@ -192,12 +198,17 @@ async function syncCloudState(gate) {
   let remote = null;
   try { remote = await window.PuzzleFirebase.load(CLOUD_SAVE_KEY); } catch (error) { /* Local save remains available. */ }
   const remoteState = remote ? normalizeLoadedState(remote.data) : null;
+  const remoteCreatedAt = Number(remote?.clientCreatedAt) || 0;
   const remoteSavedAt = Number(remote?.clientSavedAt) || 0;
-  const signedIn = Boolean(window.PuzzleFirebase?.isAuthenticated?.());
-  const shouldUseRemote = Boolean(remoteState && (signedIn || remoteSavedAt >= initialLocalSavedAt));
+  const shouldUseRemote = Boolean(
+    remoteState &&
+    (!(remoteCreatedAt > 0 && initialLocalCreatedAt > 0 && remoteCreatedAt > initialLocalCreatedAt)) &&
+    remoteSavedAt >= initialLocalSavedAt
+  );
 
   if (shouldUseRemote) {
     applyLoadedState(remoteState, true);
+    localCreatedAt = remoteCreatedAt || localCreatedAt || Date.now();
     localSavedAt = remoteSavedAt;
     saveNow(false);
   }
@@ -215,7 +226,9 @@ function loadState() {
       const stored = JSON.parse(raw);
       const candidate = stored && stored.version === 1 && stored.data ? stored.data : stored;
       if (applyLoadedState(candidate)) {
+        localCreatedAt = Number(stored?.createdAt) || Number(stored?.savedAt) || Number(state.lastSimulatedAt) || 0;
         localSavedAt = Number(stored?.savedAt) || Number(state.lastSimulatedAt) || 0;
+        initialLocalCreatedAt = localCreatedAt;
         initialLocalSavedAt = localSavedAt;
         saveNow(false);
         return;
@@ -225,7 +238,9 @@ function loadState() {
     console.warn("無法讀取農場存檔", error);
   }
   state = createInitialState(Date.now());
+  localCreatedAt = Date.now();
   localSavedAt = 0;
+  initialLocalCreatedAt = localCreatedAt;
   initialLocalSavedAt = 0;
   saveNow(true);
 }
@@ -233,8 +248,9 @@ function loadState() {
 function saveNow(forceCloud = false) {
   if (!state) return;
   try {
+    localCreatedAt ||= Date.now();
     localSavedAt = Date.now();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, savedAt: localSavedAt, data: state }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, createdAt: localCreatedAt, savedAt: localSavedAt, data: state }));
     queueCloudSave(forceCloud);
   } catch (error) {
     console.warn("無法儲存農場進度", error);
@@ -2505,6 +2521,7 @@ elements.importInput.addEventListener("change", async () => {
 $("#reset-button").addEventListener("click", () => {
   if (!window.confirm("確定清除所有金幣、土地、工具與植物，重新建立農場嗎？")) return;
   state = createInitialState(Date.now());
+  localCreatedAt = Date.now();
   selection = null;
   closeActionConfirm();
   closeLandPopover();

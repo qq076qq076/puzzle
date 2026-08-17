@@ -157,6 +157,7 @@
     return {
       version: 1,
       data: cloneData(value.data),
+      clientCreatedAt: Number(value.clientCreatedAt) || 0,
       clientSavedAt: Number(value.clientSavedAt) || 0,
       updatedAt: value.updatedAt || null
     };
@@ -170,13 +171,15 @@
     });
   }
 
-  function writeSaveForUser(user, gameKey, data, clientSavedAt) {
+  function writeSaveForUser(user, gameKey, data, clientSavedAt, clientCreatedAt) {
     const reference = getSaveDocumentForUser(user, gameKey);
     if (!reference) return Promise.resolve(false);
+    const savedAt = Number(clientSavedAt) || Date.now();
     return setDocument(reference, {
       version: 1,
       data: cloneData(data),
-      clientSavedAt: Number(clientSavedAt) || Date.now(),
+      clientCreatedAt: Number(clientCreatedAt) || savedAt,
+      clientSavedAt: savedAt,
       updatedAt: serverTimestamp()
     }, { merge: true }).then(function () { return true; });
   }
@@ -197,7 +200,7 @@
       if (!entry.checkpoint) return null;
       return readSaveForUser(targetUser, entry.gameKey).then(function (targetCheckpoint) {
         if (targetCheckpoint && targetCheckpoint.clientSavedAt >= entry.checkpoint.clientSavedAt) return false;
-        return writeSaveForUser(targetUser, entry.gameKey, entry.checkpoint.data, entry.checkpoint.clientSavedAt);
+        return writeSaveForUser(targetUser, entry.gameKey, entry.checkpoint.data, entry.checkpoint.clientSavedAt, entry.checkpoint.clientCreatedAt);
       });
     }));
   }
@@ -224,10 +227,12 @@
     });
   }
 
-  function save(gameKey, data) {
+  function save(gameKey, data, metadata) {
     return ready.then(function (user) {
       if (!user) return false;
-      return writeSaveForUser(user, gameKey, data, Date.now()).then(function (saved) {
+      const savedAt = Number(metadata?.savedAt) || Date.now();
+      const createdAt = Number(metadata?.createdAt) || savedAt;
+      return writeSaveForUser(user, gameKey, data, savedAt, createdAt).then(function (saved) {
         if (saved) notify("online", "Firebase 已同步");
         return saved;
       }).catch(function (error) {

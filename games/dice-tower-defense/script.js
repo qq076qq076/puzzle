@@ -28,6 +28,7 @@ import {
 
 const CLOUD_SAVE_KEY = "dice-tower-defense";
 const LOCAL_SYNC_META_KEY = "puzzle.diceTowerDefense.sync.v1";
+const LOCAL_CREATED_META_KEY = "puzzle.diceTowerDefense.created.v1";
 
 (function () {
   "use strict";
@@ -97,7 +98,10 @@ const LOCAL_SYNC_META_KEY = "puzzle.diceTowerDefense.sync.v1";
   let trayDragState = null;
   let uiDirty = true;
   let profile = loadProfile();
+  let localCloudCreatedAt = readLocalCloudCreatedAt();
   let localCloudSavedAt = readLocalCloudSavedAt();
+  localCloudCreatedAt ||= localCloudSavedAt;
+  const initialLocalCloudCreatedAt = localCloudCreatedAt;
   const initialLocalCloudSavedAt = localCloudSavedAt;
   let cloudReady = !window.PuzzleFirebase?.enabled;
   let cloudSyncing = Boolean(window.PuzzleFirebase?.enabled);
@@ -150,9 +154,26 @@ const LOCAL_SYNC_META_KEY = "puzzle.diceTowerDefense.sync.v1";
     }
   }
 
+  function readLocalCloudCreatedAt() {
+    try {
+      const stored = Number(window.localStorage.getItem(LOCAL_CREATED_META_KEY));
+      if (Number.isFinite(stored) && stored > 0) return stored;
+      const rawRun = window.localStorage.getItem(RUN_STORAGE_KEY);
+      const parsedRun = rawRun ? JSON.parse(rawRun) : null;
+      const parsedRunTime = parsedRun?.savedAt ? Date.parse(parsedRun.savedAt) : 0;
+      return Number.isFinite(parsedRunTime) ? parsedRunTime : 0;
+    } catch (error) {
+      return 0;
+    }
+  }
+
   function markLocalCloudSaved() {
+    localCloudCreatedAt ||= Date.now();
     localCloudSavedAt = Date.now();
-    try { window.localStorage.setItem(LOCAL_SYNC_META_KEY, String(localCloudSavedAt)); } catch (error) { /* Storage may be unavailable. */ }
+    try {
+      window.localStorage.setItem(LOCAL_CREATED_META_KEY, String(localCloudCreatedAt));
+      window.localStorage.setItem(LOCAL_SYNC_META_KEY, String(localCloudSavedAt));
+    } catch (error) { /* Storage may be unavailable. */ }
   }
 
   function readRunCheckpointRaw() {
@@ -173,7 +194,11 @@ const LOCAL_SYNC_META_KEY = "puzzle.diceTowerDefense.sync.v1";
 
   function queueCloudSave(immediate = false) {
     if (!window.PuzzleFirebase?.enabled || !cloudReady) return;
-    cloudSavePending = JSON.parse(JSON.stringify(getCloudPayload()));
+    cloudSavePending = {
+      data: JSON.parse(JSON.stringify(getCloudPayload())),
+      createdAt: localCloudCreatedAt,
+      savedAt: localCloudSavedAt
+    };
     if (immediate) {
       flushCloudSave();
     } else if (!cloudSaveTimer) {
@@ -186,7 +211,7 @@ const LOCAL_SYNC_META_KEY = "puzzle.diceTowerDefense.sync.v1";
     if (!window.PuzzleFirebase?.enabled || !cloudReady || !cloudSavePending) return;
     const snapshot = cloudSavePending;
     cloudSavePending = null;
-    cloudSaveInFlight = cloudSaveInFlight.then(() => window.PuzzleFirebase.save(CLOUD_SAVE_KEY, snapshot)).then(() => {
+    cloudSaveInFlight = cloudSaveInFlight.then(() => window.PuzzleFirebase.save(CLOUD_SAVE_KEY, snapshot.data, snapshot)).then(() => {
       if (cloudSavePending && !cloudSaveTimer) cloudSaveTimer = window.setTimeout(flushCloudSave, 5000);
     });
   }
@@ -197,6 +222,7 @@ const LOCAL_SYNC_META_KEY = "puzzle.diceTowerDefense.sync.v1";
     const normalized = {
       profile: normalizeProfile(remote.data.profile),
       run: remote.data.run || null,
+      createdAt: Number(remote.clientCreatedAt) || 0,
       savedAt: Number(remote.clientSavedAt) || 0
     };
     if (normalized.run) {
@@ -217,8 +243,12 @@ const LOCAL_SYNC_META_KEY = "puzzle.diceTowerDefense.sync.v1";
     } else {
       try { window.localStorage.removeItem(RUN_STORAGE_KEY); } catch (error) { /* Storage may be unavailable. */ }
     }
+    localCloudCreatedAt = payload.createdAt || payload.savedAt;
     localCloudSavedAt = payload.savedAt;
-    try { window.localStorage.setItem(LOCAL_SYNC_META_KEY, String(localCloudSavedAt)); } catch (error) { /* Storage may be unavailable. */ }
+    try {
+      window.localStorage.setItem(LOCAL_CREATED_META_KEY, String(localCloudCreatedAt));
+      window.localStorage.setItem(LOCAL_SYNC_META_KEY, String(localCloudSavedAt));
+    } catch (error) { /* Storage may be unavailable. */ }
     initializeGame();
   }
 
@@ -232,8 +262,11 @@ const LOCAL_SYNC_META_KEY = "puzzle.diceTowerDefense.sync.v1";
     let remote = null;
     try { remote = await window.PuzzleFirebase.load(CLOUD_SAVE_KEY); } catch (error) { /* Local save remains available. */ }
     const payload = normalizeCloudPayload(remote);
-    const signedIn = Boolean(window.PuzzleFirebase?.isAuthenticated?.());
-    const shouldUseRemote = Boolean(payload && (signedIn || payload.savedAt >= initialLocalCloudSavedAt));
+    const shouldUseRemote = Boolean(
+      payload &&
+      (!(payload.createdAt > 0 && initialLocalCloudCreatedAt > 0 && payload.createdAt > initialLocalCloudCreatedAt)) &&
+      payload.savedAt >= initialLocalCloudSavedAt
+    );
     if (shouldUseRemote) {
       applyCloudPayload(payload);
     }
