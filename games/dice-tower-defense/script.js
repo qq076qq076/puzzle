@@ -232,7 +232,8 @@ const LOCAL_SYNC_META_KEY = "puzzle.diceTowerDefense.sync.v1";
     let remote = null;
     try { remote = await window.PuzzleFirebase.load(CLOUD_SAVE_KEY); } catch (error) { /* Local save remains available. */ }
     const payload = normalizeCloudPayload(remote);
-    const shouldUseRemote = Boolean(payload && payload.savedAt >= initialLocalCloudSavedAt);
+    const signedIn = Boolean(window.PuzzleFirebase?.isAuthenticated?.());
+    const shouldUseRemote = Boolean(payload && (signedIn || payload.savedAt >= initialLocalCloudSavedAt));
     if (shouldUseRemote) {
       applyCloudPayload(payload);
     }

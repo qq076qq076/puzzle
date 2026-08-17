@@ -213,10 +213,13 @@
 
     function finishInitialization(remote) {
       const remoteCheckpoint = normalizeRemote(remote);
-      if (remoteCheckpoint && (!selectedCheckpoint || remoteCheckpoint.savedAt >= selectedCheckpoint.savedAt)) {
+      const signedIn = Boolean(firebase && typeof firebase.isAuthenticated === "function" && firebase.isAuthenticated());
+      const remoteWins = remoteCheckpoint && (signedIn || !selectedCheckpoint || remoteCheckpoint.savedAt >= selectedCheckpoint.savedAt);
+      if (remoteWins) {
         selectedCheckpoint = remoteCheckpoint;
         selectedSource = "已載入 Firebase 雲端存檔";
         applyCheckpoint(remoteCheckpoint, false);
+        if (signedIn) writeLocal(remoteCheckpoint.data);
       } else if (selectedCheckpoint) {
         selectedSource = firebase && remoteCheckpoint ? "本機存檔較新，已保留本機進度" : selectedSource;
       }

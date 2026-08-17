@@ -193,7 +193,8 @@ async function syncCloudState(gate) {
   try { remote = await window.PuzzleFirebase.load(CLOUD_SAVE_KEY); } catch (error) { /* Local save remains available. */ }
   const remoteState = remote ? normalizeLoadedState(remote.data) : null;
   const remoteSavedAt = Number(remote?.clientSavedAt) || 0;
-  const shouldUseRemote = Boolean(remoteState && remoteSavedAt >= initialLocalSavedAt);
+  const signedIn = Boolean(window.PuzzleFirebase?.isAuthenticated?.());
+  const shouldUseRemote = Boolean(remoteState && (signedIn || remoteSavedAt >= initialLocalSavedAt));
 
   if (shouldUseRemote) {
     applyLoadedState(remoteState, true);
