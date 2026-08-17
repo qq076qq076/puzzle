@@ -1,11 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+await import("./game-config.js");
+await import("./data/plants.js");
+await import("./data/tools.js");
+await import("./data/automation.js");
+await import("./data/fertilizers.js");
+await import("./data/decorations.js");
 await import("./game-core.js");
 const {
   createInitialState, manualHarvest, simulateTo, sowPlot, sowPlantAt, fertilizePlot,
   getToolTargetIndexes, automationTargetIndexes, indexesForPlot, buyPlot, validateState,
   INITIAL_PLOT_ID, INITIAL_PLOT_IDS, BOARD_SIZE, PLOTS,
-  PLANTS, TOOLS, HARVESTERS, SPRINKLERS, FERTILIZERS, getProductPrice,
+  PLANTS, TOOLS, HARVESTERS, SPRINKLERS, FERTILIZERS, DECORATIONS, getDecoration, getProductPrice,
   getLandPrice, getPlantFootprint, getPlantPlacementIndexes, normalizeStateData, isFertilizerUnlocked
 } = globalThis.HarvestCore;
 
@@ -73,6 +79,13 @@ test("所有商品售價與規格書一致且為有效金額", () => {
   ]) {
     for (const item of items) assert.equal(getProductPrice(kind, item), item.cost, `${item.name} 購買流程使用商品價格`);
   }
+});
+
+test("裝飾靜態設定由核心載入且使用田埂槽位", () => {
+  assert.equal(DECORATIONS.length, 10);
+  assert.equal(getDecoration("stone_ridge").slotType, "edge");
+  assert.equal(getDecoration("farm_sign").slotType, "corner");
+  assert.ok(DECORATIONS.every((item) => item.effect === null && item.cost >= 0));
 });
 
 test("所有作物收割時都發放各自設定的單格金幣", () => {

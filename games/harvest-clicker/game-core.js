@@ -1,12 +1,18 @@
 (function (globalThis) {
 "use strict";
 
-const BOARD_SIZE = 27;
-const PLOT_GRID_SIZE = BOARD_SIZE / 3;
-const INITIAL_PLOT_ID = 40;
-const INITIAL_PLOT_IDS = [40, 31, 41, 49, 39, 30, 32, 50, 48];
-const SAVE_VERSION = 4;
+const STATIC_CONFIG = globalThis.HarvestStaticConfig;
+const STATIC_DATA = globalThis.HarvestStaticData;
+if (!STATIC_CONFIG || !STATIC_DATA) throw new Error("Harvest Clicker static settings are not loaded");
+const {
+  BOARD_SIZE, PLOT_GRID_SIZE, INITIAL_PLOT_ID, INITIAL_PLOT_IDS, SAVE_VERSION,
+  LAND_PRICE_BASE, LAND_PRICE_GROWTH, LAND_SIZE, LOWEST_GROWTH_MULTIPLIER
+} = STATIC_CONFIG;
+const { PLANTS, TOOLS, HARVESTERS, SPRINKLERS, FERTILIZERS, DECORATIONS = [] } = STATIC_DATA;
 
+/*
+ * The old inline tables are intentionally kept in this commented migration
+ * snapshot for easy diff review. Runtime data now comes from data/*.js.
 const PLANTS = [
   { id: "weed", name: "雜草", emoji: "🌿", image: null, seedCost: 0, hp: 1, coins: 1, growSeconds: 30, color: "#81985b", unlock: { type: "initial", value: 0 } },
   { id: "clover", name: "白花苜蓿", emoji: "☘️", image: "lettuce-head.png", seedCost: 18, hp: 2, coins: 4, growSeconds: 60, color: "#77a65c", unlock: { type: "lifetimeGold", value: 15 } },
@@ -41,6 +47,9 @@ const PLANTS = [
   { id: "cypress_tree", name: "千年檜木", emoji: "🌲", image: "cypress-tree.png", type: "tree", footprint: 19, seedCost: 1800000000000, hp: 39000, coins: 300000000000, growSeconds: 5529600, color: "#3f7351", unlock: { type: "tool", value: "power_saw" } }
 ];
 
+*/
+
+/*
 const TOOLS = [
   { id: "small_knife", name: "小刀", emoji: "🔪", image: "vegetable-peeler.png", cost: 0, damage: 1, shape: "single", cells: 1, regrowth: 1, unlock: { type: "initial", value: 0 } },
   { id: "garden_shears", name: "園藝剪", emoji: "✂️", image: "pruning-shears.png", cost: 45, damage: 2, shape: "single", cells: 1, regrowth: 1, unlock: { type: "harvested", value: 20 } },
@@ -60,6 +69,8 @@ const TOOLS = [
   { id: "double_bit_axe", name: "重型雙刃斧", emoji: "🪓", image: "double-bit-war-axe.png", cost: 4000000000, damage: 1000, shape: "square3", cells: 9, regrowth: 0.34, unlock: { type: "harvested", value: 140000 } },
   { id: "power_saw", name: "動力圓鋸", emoji: "🪚", image: "circular-saw-mini.png", cost: 15000000000, damage: 1800, shape: "square5", cells: 25, regrowth: 0.28, unlock: { type: "harvested", value: 200000 } }
 ];
+
+*/
 
 function roundLandPrice(value) {
   const unit = 10 ** Math.max(0, Math.floor(Math.log10(value)) - 1);
@@ -87,9 +98,10 @@ function getLandPrice(ownedPlotCount) {
   const count = Math.max(0, Math.floor(Number(ownedPlotCount) || 0));
   if (count < INITIAL_PLOT_IDS.length) return 0;
   if (count >= PLOTS.length) return null;
-  return roundLandPrice(1200 * (1.45 ** (count - INITIAL_PLOT_IDS.length)));
+  return roundLandPrice(LAND_PRICE_BASE * (LAND_PRICE_GROWTH ** (count - INITIAL_PLOT_IDS.length)));
 }
 
+/*
 const HARVESTERS = [
   { id: "micro", name: "單點採收器", emoji: "🦾", image: "combine-harvester.png", cost: 25000, damage: 3, intervalSeconds: 45, regrowth: 1, range: 1, tier: 1 },
   { id: "clockwork", name: "發條割草機", emoji: "🦾", image: "combine-harvester.png", cost: 120000, damage: 6, intervalSeconds: 30, regrowth: 1, range: 3, tier: 2 },
@@ -121,32 +133,36 @@ const FERTILIZERS = [
   { id: "eternal", name: "永恆沃土精華", emoji: "🌟", cost: 30000000, growthMultiplier: 0.24, coinMultiplier: 4, rounds: 12, purpose: "終局長效肥料，最大化高階自動農場的每輪收益。", unlock: { type: "plots", value: 49 } }
 ];
 
+*/
+
 const plantById = new Map(PLANTS.map((item) => [item.id, item]));
 const toolById = new Map(TOOLS.map((item) => [item.id, item]));
 const harvesterById = new Map(HARVESTERS.map((item) => [item.id, item]));
 const sprinklerById = new Map(SPRINKLERS.map((item) => [item.id, item]));
 const fertilizerById = new Map(FERTILIZERS.map((item) => [item.id, item]));
+const decorationById = new Map(DECORATIONS.map((item) => [item.id, item]));
 
 function getPlant(id) { return plantById.get(id); }
 function getTool(id) { return toolById.get(id); }
 function getHarvester(id) { return harvesterById.get(id); }
 function getSprinkler(id) { return sprinklerById.get(id); }
 function getFertilizer(id) { return fertilizerById.get(id); }
+function getDecoration(id) { return decorationById.get(id); }
 function getProductPrice(kind, item) { return kind === "seed" ? item?.seedCost : item?.cost; }
 
 function plotIdForIndex(index) {
   const row = Math.floor(index / BOARD_SIZE);
   const col = index % BOARD_SIZE;
-  return Math.floor(row / 3) * PLOT_GRID_SIZE + Math.floor(col / 3);
+  return Math.floor(row / LAND_SIZE) * PLOT_GRID_SIZE + Math.floor(col / LAND_SIZE);
 }
 
 function indexesForPlot(plotId) {
   const plotRow = Math.floor(plotId / PLOT_GRID_SIZE);
   const plotCol = plotId % PLOT_GRID_SIZE;
   const indexes = [];
-  for (let y = 0; y < 3; y += 1) {
-    for (let x = 0; x < 3; x += 1) {
-      indexes.push((plotRow * 3 + y) * BOARD_SIZE + plotCol * 3 + x);
+  for (let y = 0; y < LAND_SIZE; y += 1) {
+    for (let x = 0; x < LAND_SIZE; x += 1) {
+      indexes.push((plotRow * LAND_SIZE + y) * BOARD_SIZE + plotCol * LAND_SIZE + x);
     }
   }
   return indexes;
@@ -384,7 +400,7 @@ function growthDurationSeconds(state, cell, plotId, index = indexesForPlot(plotI
   const sprinkler = getSprinklerForIndex(state, index, cell);
   const fertilizer = cell.fertilizerId && cell.plantId !== "weed" ? getFertilizer(cell.fertilizerId) : null;
   const multiplier = (cell.nextGrowthMultiplier || 1) * (sprinkler?.growthMultiplier || 1) * (fertilizer?.growthMultiplier || 1);
-  return plant.growSeconds * Math.max(0.2, multiplier);
+  return plant.growSeconds * Math.max(LOWEST_GROWTH_MULTIPLIER, multiplier);
 }
 
 function advanceCellGrowth(state, cell, plotId, seconds, index = indexesForPlot(plotId)[4]) {
@@ -728,8 +744,8 @@ function validateState(state) {
 
 globalThis.HarvestCore = Object.freeze({
   BOARD_SIZE, PLOT_GRID_SIZE, INITIAL_PLOT_ID, INITIAL_PLOT_IDS, SAVE_VERSION, PLANTS, TOOLS, PLOTS,
-  HARVESTERS, SPRINKLERS, FERTILIZERS, getPlant, getTool,
-  getHarvester, getSprinkler, getFertilizer, getProductPrice, plotIdForIndex,
+  HARVESTERS, SPRINKLERS, FERTILIZERS, DECORATIONS, getPlant, getTool,
+  getHarvester, getSprinkler, getFertilizer, getDecoration, getProductPrice, plotIdForIndex,
   indexesForPlot, getLandPrice, getPlantFootprint, getPlantPlacementIndexes, createInitialState, isAutomationUnlocked,
   isToolUnlocked, isPlantUnlocked, isFertilizerUnlocked,
   getToolTargetIndexes, automationTargetIndexes, manualHarvest, growthDurationSeconds,
