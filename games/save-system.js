@@ -74,7 +74,7 @@
 
     function flushCloud() {
       cloudTimer = null;
-      if (!firebase || !cloudReady || !cloudPending) return;
+      if (!firebase || !cloudReady || !cloudPending) return cloudOperations;
       const checkpoint = cloudPending;
       cloudPending = null;
       cloudOperations = cloudOperations.then(function () {
@@ -82,6 +82,7 @@
       }).then(function () {
         if (cloudPending && !cloudTimer) cloudTimer = window.setTimeout(flushCloud, options.cloudInterval || 5000);
       });
+      return cloudOperations;
     }
 
     function queueCloudSave(checkpoint, immediate) {
@@ -122,6 +123,13 @@
         });
       }
       saveNow(false);
+    }
+
+    if (window.PuzzleSave && Array.isArray(window.PuzzleSave._flushers)) {
+      window.PuzzleSave._flushers.push(function () {
+        saveNow(true);
+        return flushCloud();
+      });
     }
 
     function blockGameKeys(event) {
@@ -231,5 +239,11 @@
     return { save: saveNow, clear: clear, ready: window.PuzzleFirebaseReady || Promise.resolve(null) };
   }
 
-  window.PuzzleSave = { create: create };
+  window.PuzzleSave = {
+    create: create,
+    _flushers: [],
+    flushAll: function () {
+      return Promise.all(this._flushers.map(function (flush) { return flush(); }));
+    }
+  };
 }());
