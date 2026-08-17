@@ -193,6 +193,7 @@ function createInitialState(now = Date.now()) {
     }),
     harvesters: [],
     sprinklers: [],
+    decorations: [],
     settings: { sound: true, reducedMotion: false },
     tutorialStep: 0,
     stats: { manualClicks: 0, offlineGold: 0 }
@@ -702,6 +703,7 @@ function normalizeStateData(state) {
   migrateLegacyCropIds(state);
   migrateLegacyTreeFootprints(state);
   if (!state || !Array.isArray(state.cells)) return state;
+  if (!Array.isArray(state.decorations)) state.decorations = [];
   for (const cell of state.cells) {
     if (!cell) continue;
     if (cell.fertilizerId && getFertilizer(cell.fertilizerId)) {
@@ -739,6 +741,15 @@ function validateState(state) {
   if (!Array.isArray(state.ownedPlots) || !state.ownedPlots.includes(INITIAL_PLOT_ID)) return false;
   if (!Array.isArray(state.ownedToolIds) || !state.ownedToolIds.includes("small_knife")) return false;
   if (!getTool(state.equippedToolId)) return false;
+  if (!Array.isArray(state.decorations)) return false;
+  if (!state.decorations.every((placed) => {
+    const decoration = getDecoration(placed?.id);
+    return Boolean(decoration)
+      && placed.slotType === decoration.slotType
+      && Number.isInteger(placed.row)
+      && Number.isInteger(placed.col)
+      && (placed.slotType === "corner" || placed.direction === "horizontal" || placed.direction === "vertical");
+  })) return false;
   return state.cells.every((cell) => cell && getPlant(cell.plantId) && ["growing", "mature"].includes(cell.phase) && Number.isFinite(cell.growthProgress) && Number.isInteger(cell.fertilizerRounds) && cell.fertilizerRounds >= 0);
 }
 

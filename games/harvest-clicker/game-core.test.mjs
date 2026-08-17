@@ -88,6 +88,15 @@ test("裝飾靜態設定由核心載入且使用田埂槽位", () => {
   assert.ok(DECORATIONS.every((item) => item.effect === null && item.cost >= 0));
 });
 
+test("舊存檔會建立獨立的裝飾陣列", () => {
+  const state = createInitialState(0);
+  delete state.decorations;
+  normalizeStateData(state);
+  assert.deepEqual(state.decorations, []);
+  state.decorations.push({ id: "stone_ridge", slotType: "edge", row: 13, col: 13, direction: "horizontal" });
+  assert.ok(validateState(state));
+});
+
 test("所有作物收割時都發放各自設定的單格金幣", () => {
   const index = indexesForPlot(INITIAL_PLOT_ID)[4];
   for (const plant of PLANTS) {
@@ -191,6 +200,7 @@ test("新遊戲從中央 9×9 成熟雜草與小刀開始", () => {
   assert.equal(PLOTS.length, 81);
   assert.equal(state.ownedPlots.length, 9);
   assert.equal(state.equippedToolId, "small_knife");
+  assert.deepEqual(state.decorations, []);
   assert.equal(initialIndexes.length, 81);
   assert.ok(initialIndexes.every((index) => state.cells[index].phase === "mature"));
   assert.ok(validateState(state));

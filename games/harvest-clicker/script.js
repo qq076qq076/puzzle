@@ -1,10 +1,10 @@
 "use strict";
 
 const {
-  BOARD_SIZE, PLOT_GRID_SIZE, INITIAL_PLOT_ID, PLANTS, TOOLS, PLOTS, HARVESTERS, SPRINKLERS, FERTILIZERS,
+  BOARD_SIZE, PLOT_GRID_SIZE, INITIAL_PLOT_ID, PLANTS, TOOLS, PLOTS, HARVESTERS, SPRINKLERS, FERTILIZERS, DECORATIONS,
   createInitialState, validateState, simulateTo, manualHarvest, sowPlantAt,
   fertilizePlot, buyPlot, formatNumber, formatTime, getPlant, getTool,
-  getHarvester, getSprinkler, getFertilizer, getProductPrice, getLandPrice, plotIdForIndex, indexesForPlot,
+  getHarvester, getSprinkler, getFertilizer, getDecoration, getProductPrice, getLandPrice, plotIdForIndex, indexesForPlot,
   automationTargetIndexes, getPlantFootprint, getPlantPlacementIndexes,
   isToolUnlocked, isPlantUnlocked, isFertilizerUnlocked, isAutomationUnlocked,
   growthDurationSeconds, normalizeStateData
@@ -40,6 +40,7 @@ const elements = {
   landTitle: $("#land-title"), landCondition: $("#land-condition"),
   landPrice: $("#land-price"), landBuy: $("#land-buy-button"),
   actionConfirm: $("#action-confirm-popover"), actionConfirmArt: $("#action-confirm-art"),
+  actionConfirmKicker: $("#action-confirm-kicker"),
   actionConfirmTitle: $("#action-confirm-title"), actionConfirmText: $("#action-confirm-text"),
   actionConfirmButton: $("#action-confirm-button")
 };
@@ -66,6 +67,7 @@ let selection = null;
 let selectedLandPlot = null;
 let pendingActionPlotId = null;
 let pendingActionIndex = null;
+let pendingDecorationSlot = null;
 let selectedShopProduct = null;
 let keyboardIndex = indexesForPlot(INITIAL_PLOT_ID)[4];
 let toastTimer = 0;
@@ -78,6 +80,7 @@ let singleGesture = null;
 let pinchGesture = null;
 let didInitialFocus = false;
 let hoverIndex = -1;
+let hoverDecorationSlot = null;
 let plotPaintOrder = null;
 let fullFarmBounds = null;
 let cameraFocusAnimation = null;
@@ -123,7 +126,7 @@ function assetMarkup(fileName, fallback, className = "shop-art") {
 
 function preloadAssets() {
   const files = new Set();
-  for (const item of [...PLANTS, ...TOOLS, ...HARVESTERS, ...SPRINKLERS]) {
+  for (const item of [...PLANTS, ...TOOLS, ...HARVESTERS, ...SPRINKLERS, ...DECORATIONS]) {
     if (item.image) files.add(item.image);
   }
   for (const file of files) {
@@ -330,6 +333,155 @@ function playTone(kind = "hit") {
 
 function worldPoint(row, col) {
   return { x: (col - row) * TILE_W / 2, y: (col + row) * TILE_H / 2 };
+}
+
+function worldPointFromScreen(x, y) {
+  return { x: (x - camera.x) / camera.scale, y: (y - camera.y) / camera.scale };
+}
+
+function decorationSlotWorldPoint(slot) {
+  if (!slot) return null;
+  if (slot.slotType === "corner") return worldPoint(slot.row + .5, slot.col + .5);
+  if (slot.direction === "vertical") return worldPoint(slot.row, slot.col + .5);
+  return worldPoint(slot.row + .5, slot.col);
+}
+
+function decorationSlotAdjacentIndexes(slot) {
+  if (!slot) return [];
+  const indexes = [];
+  if (slot.slotType === "corner") {
+    for (const row of [slot.row, slot.row + 1]) {
+      for (const col of [slot.col, slot.col + 1]) indexes.push(row * BOARD_SIZE + col);
+    }
+  } else if (slot.direction === "vertical") {
+    indexes.push(slot.row * BOARD_SIZE + slot.col, slot.row * BOARD_SIZE + slot.col + 1);
+  } else {
+    indexes.push(slot.row * BOARD_SIZE + slot.col, (slot.row + 1) * BOARD_SIZE + slot.col);
+  }
+  return indexes.filter((index) => {
+    const row = Math.floor(index / BOARD_SIZE);
+    const col = index % BOARD_SIZE;
+    return row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE;
+  });
+}
+
+function decorationSlotKey(slot) {
+  return slot ? [slot.slotType, slot.row, slot.col, slot.direction || ""].join(":") : "";
+}
+
+function placedDecorationSlotKey(placed) {
+  return decorationSlotKey(placed);
+}
+
+function decorationSlotPlotId(slot) {
+  return plotIdForIndex(decorationSlotAdjacentIndexes(slot)[0] ?? -1);
+}
+
+function isDecorationSlotAvailable(slot, decorationId = selection?.id) {
+  const item = getDecoration(decorationId);
+  if (!slot || !item || item.slotType !== slot.slotType) return false;
+  const adjacent = decorationSlotAdjacentIndexes(slot);
+  if (adjacent.length !== (slot.slotType === "corner" ? 4 : 2)) return false;
+  if (!adjacent.every((index) => state.ownedPlots.includes(plotIdForIndex(index)))) return false;
+  if (adjacent.some((index) => getPlant(state.cells[index]?.plantId)?.type === "tree")) return false;
+  return !state.decorations.some((placed) => placedDecorationSlotKey(placed) === decorationSlotKey(slot));
+}
+
+function decorationSlotAtScreen(x, y) {
+  const world = worldPointFromScreen(x, y);
+  const rowFloat = world.y / TILE_H - world.x / TILE_W;
+  const colFloat = world.x / TILE_W + world.y / TILE_H;
+  const rowBase = Math.floor(rowFloat);
+  const colBase = Math.floor(colFloat);
+  const candidates = [];
+  const addCandidate = (slot) => {
+    const point = decorationSlotWorldPoint(slot);
+    if (!point) return;
+    const distance = Math.hypot(world.x - point.x, world.y - point.y);
+    candidates.push({ slot, distance });
+  };
+  for (let row = rowBase - 1; row <= rowBase + 1; row += 1) {
+    for (let col = colBase - 1; col <= colBase + 1; col += 1) {
+      if (row >= 0 && row < BOARD_SIZE - 1 && col >= 0 && col < BOARD_SIZE) {
+        addCandidate({ slotType: "edge", direction: "horizontal", row, col });
+      }
+      if (row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE - 1) {
+        addCandidate({ slotType: "edge", direction: "vertical", row, col });
+      }
+      if (row >= 0 && row < BOARD_SIZE - 1 && col >= 0 && col < BOARD_SIZE - 1) {
+        addCandidate({ slotType: "corner", row, col });
+      }
+    }
+  }
+  const best = candidates.sort((a, b) => a.distance - b.distance)[0];
+  return best && best.distance <= 25 / camera.scale ? best.slot : null;
+}
+
+function drawDecorationItem(item, x, y, direction = "horizontal", alpha = 1) {
+  if (!item) return;
+  const colors = {
+    dirt_ridge: ["#9a633e", "#e2ab6b"],
+    stone_ridge: ["#69767a", "#c5d1cd"],
+    wood_ridge: ["#8b5a36", "#d69a5e"],
+    wood_fence: ["#815332", "#d09a5c"],
+    water_channel: ["#368e9d", "#8ce0dc"]
+  };
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  if (item.slotType === "edge") {
+    const angle = direction === "vertical" ? -Math.atan2(TILE_H, TILE_W) : Math.atan2(TILE_H, TILE_W);
+    const [base, highlight] = colors[item.id] || ["#795337", "#c58d5a"];
+    ctx.translate(x, y + 3);
+    ctx.rotate(angle);
+    ctx.fillStyle = "rgba(35,29,22,.26)";
+    ctx.beginPath();
+    ctx.ellipse(0, 5, item.id === "water_channel" ? 26 : 22, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = base;
+    ctx.strokeStyle = "rgba(56,36,24,.75)";
+    ctx.lineWidth = 1.4 / camera.scale;
+    ctx.beginPath();
+    ctx.roundRect(-22, -4, item.id === "water_channel" ? 44 : 38, 8, 3);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = highlight;
+    ctx.globalAlpha = alpha * .75;
+    ctx.fillRect(-17, -2.5, item.id === "water_channel" ? 34 : 28, 2);
+  } else {
+    ctx.translate(x, y - 5);
+    ctx.fillStyle = "rgba(35,29,22,.24)";
+    ctx.beginPath();
+    ctx.ellipse(4, 18, 13, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "24px 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif";
+    ctx.fillText(item.emoji, 0, 0);
+  }
+  ctx.restore();
+}
+
+function drawDecorationSlotPreview(slot, item, valid) {
+  const point = decorationSlotWorldPoint(slot);
+  if (!point || !item) return;
+  ctx.save();
+  ctx.globalAlpha = .94;
+  ctx.strokeStyle = valid ? "#fff0a3" : "#ff9a7a";
+  ctx.lineWidth = 3 / camera.scale;
+  ctx.setLineDash([6 / camera.scale, 5 / camera.scale]);
+  if (item.slotType === "edge") {
+    const angle = slot.direction === "vertical" ? -Math.atan2(TILE_H, TILE_W) : Math.atan2(TILE_H, TILE_W);
+    ctx.translate(point.x, point.y);
+    ctx.rotate(angle);
+    ctx.strokeRect(-27, -8, 54, 16);
+  } else {
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, 18, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  ctx.restore();
+  drawDecorationItem(item, point.x, point.y, slot.direction, valid ? .92 : .45);
 }
 
 function resizeCanvas() {
@@ -994,6 +1146,12 @@ function drawLockedPlots() {
 }
 
 function drawPlacementSelectionPreview() {
+  if (selection?.kind === "decoration" && (pendingDecorationSlot || hoverDecorationSlot)) {
+    const item = getDecoration(selection.id);
+    const slot = pendingDecorationSlot || hoverDecorationSlot;
+    drawDecorationSlotPreview(slot, item, isDecorationSlotAvailable(slot, selection.id));
+    return;
+  }
   if (!selectionUsesCenter() || pendingActionPlotId == null || pendingActionIndex == null) return;
   const isAutomation = isRangeSelection();
   const item = isAutomation
@@ -1027,6 +1185,19 @@ function drawPlacementSelectionPreview() {
   ctx.lineWidth = 4 / camera.scale;
   ctx.stroke();
   ctx.restore();
+}
+
+function drawPlacedDecorations() {
+  const placed = [...state.decorations].sort((a, b) => {
+    const aPoint = decorationSlotWorldPoint(a);
+    const bPoint = decorationSlotWorldPoint(b);
+    return (aPoint?.y || 0) - (bPoint?.y || 0);
+  });
+  for (const decoration of placed) {
+    const item = getDecoration(decoration.id);
+    const point = decorationSlotWorldPoint(decoration);
+    if (item && point) drawDecorationItem(item, point.x, point.y, decoration.direction, 1);
+  }
 }
 
 function cellPaintOrder() {
@@ -1254,6 +1425,7 @@ function drawFarm(now = performance.now()) {
       ctx.fillText(`✦${cell.fertilizerRounds}`, point.x - 31, point.y - 15);
     }
   }
+  drawPlacedDecorations();
 
   for (const plotId of state.ownedPlots) {
     const center = plotGeometry(plotId).center;
@@ -1361,6 +1533,22 @@ function selectionActionPreview(plotId) {
   if (!plot) return null;
   const indexes = indexesForPlot(plotId);
 
+  if (selection.kind === "decoration") {
+    const item = getDecoration(selection.id);
+    const slot = pendingDecorationSlot;
+    const valid = isDecorationSlotAvailable(slot, selection.id);
+    if (!item || !slot) return null;
+    return {
+      icon: item.emoji,
+      title: valid ? "在" + plot.name + "的格縫放置" + item.name + "？" : "這個裝飾槽位目前不可用",
+      text: valid
+        ? item.name + "會吸附在種植格之間的" + (item.slotType === "edge" ? "田埂邊線" : "交叉點") + "，不會覆蓋作物。確認後消耗 1 件裝飾。"
+        : "請選擇兩側（或四側）都是已購土地、且沒有樹木占用的格縫。",
+      button: valid ? "確認放置" : "槽位不可用",
+      disabled: !valid
+    };
+  }
+
   if (selection.kind === "seed") {
     const plant = getPlant(selection.id);
     if (!plant) return null;
@@ -1438,6 +1626,7 @@ function selectionActionPreview(plotId) {
 function closeActionConfirm() {
   pendingActionPlotId = null;
   pendingActionIndex = null;
+  pendingDecorationSlot = null;
   elements.actionConfirm.hidden = true;
 }
 
@@ -1448,6 +1637,7 @@ function renderActionConfirm() {
     return;
   }
   elements.actionConfirmArt.innerHTML = assetMarkup(preview.image, preview.icon);
+  elements.actionConfirmKicker.textContent = selection?.kind === "decoration" ? "已選取田埂槽位" : "已選取 3×3 土地";
   elements.actionConfirmTitle.textContent = preview.title;
   elements.actionConfirmText.textContent = preview.text;
   elements.actionConfirmButton.textContent = preview.button;
@@ -1467,6 +1657,20 @@ function stageSelection(plotId, index = indexesForPlot(plotId)[4]) {
   }
   pendingActionPlotId = plotId;
   pendingActionIndex = selectionUsesCenter() ? index : null;
+  closeLandPopover();
+  renderActionConfirm();
+}
+
+function stageDecorationSelection(slot) {
+  if (!selection || selection.kind !== "decoration" || !slot) return;
+  const plotId = decorationSlotPlotId(slot);
+  if (!state.ownedPlots.includes(plotId)) {
+    showToast("裝飾只能放在已購土地之間的格縫");
+    return;
+  }
+  pendingDecorationSlot = slot;
+  pendingActionPlotId = plotId;
+  pendingActionIndex = null;
   closeLandPopover();
   renderActionConfirm();
 }
@@ -1532,12 +1736,24 @@ function renderFertilizerShop() {
   }).join("");
 }
 
+function renderDecorationsShop() {
+  return DECORATIONS.map((item) => shopCard({
+    icon: item.emoji,
+    title: item.name,
+    price: item.cost,
+    locked: false,
+    kind: "decoration",
+    id: item.id
+  })).join("");
+}
+
 function getShopProduct(kind, id) {
   if (kind === "tool") return getTool(id);
   if (kind === "seed") return getPlant(id);
   if (kind === "harvester") return getHarvester(id);
   if (kind === "sprinkler") return getSprinkler(id);
   if (kind === "fertilizer") return getFertilizer(id);
+  if (kind === "decoration") return getDecoration(id);
   return null;
 }
 
@@ -1545,6 +1761,7 @@ function isShopProductUnlocked(kind, item) {
   if (kind === "tool") return isToolUnlocked(item, state);
   if (kind === "seed") return isPlantUnlocked(item, state);
   if (kind === "fertilizer") return isFertilizerUnlocked(item, state);
+  if (kind === "decoration") return true;
   return isAutomationUnlocked(state);
 }
 
@@ -1553,6 +1770,7 @@ function isShopProductOwned(kind, item) {
 }
 
 function shopProductDescription(kind, item) {
+  if (kind === "decoration") return shopDecorationDescription(item);
   if (kind === "tool") return `用途：裝備後點擊土地進行手動收割。每格 ${item.damage} 傷害，命中 ${item.cells} 格${item.regrowth < 1 ? `，收割後下輪生長時間 ×${item.regrowth}` : ""}。`;
   if (kind === "seed") {
     if (item.type === "tree") return `用途：選取後點擊已購土地內的中心格，一份種子種植 1 棵，占用 ${getPlantFootprint(item)}×${getPlantFootprint(item)} 格。HP ${item.hp}，每棵收成 ${formatMoney(item.coins)}，生長 ${formatTime(item.growSeconds)}。`;
@@ -1561,6 +1779,10 @@ function shopProductDescription(kind, item) {
   if (kind === "harvester") return `用途：配置到已購土地內任一中心格後，自動攻擊範圍內的成熟${item.targetType === "tree" ? "樹木，不會處理一般作物" : "作物"}，離線也會工作。範圍 ${item.range}×${item.range}（最多 ${item.range ** 2} 格），每 ${item.intervalSeconds} 秒造成 ${item.damage} 傷害。`;
   if (kind === "sprinkler") return `用途：配置到已購土地內任一中心格後，持續加速範圍內作物，離線生長同樣有效。範圍 ${item.range}×${item.range}（最多 ${item.range ** 2} 格），生長時間 ×${item.growthMultiplier}。`;
   return `用途：${item.purpose} 選取後施用於一塊 3×3 作物；若區塊內有樹木則套用整棵樹，當下立即生效。生長 ×${item.growthMultiplier}、金幣 ×${item.coinMultiplier}，持續 ${item.rounds} 輪。`;
+}
+
+function shopDecorationDescription(item) {
+  return "用途：放在種植格之間的" + (item.slotType === "edge" ? "田埂邊線" : "交叉點") + "，不會覆蓋或占用作物格。第一次點擊會預覽吸附位置，第二次點擊確認放置。";
 }
 
 function openShopProduct(kind, id) {
@@ -1582,7 +1804,7 @@ function openShopProduct(kind, id) {
 }
 
 function renderShop() {
-  const renderers = { tools: renderToolsShop, seeds: renderSeedsShop, automation: renderAutomationShop, fertilizer: renderFertilizerShop };
+  const renderers = { tools: renderToolsShop, seeds: renderSeedsShop, automation: renderAutomationShop, fertilizer: renderFertilizerShop, decorations: renderDecorationsShop };
   if (!renderers[activeTab]) activeTab = "tools";
   elements.shopList.innerHTML = renderers[activeTab]();
   elements.tabs.querySelectorAll("button").forEach((button) => button.classList.toggle("is-active", button.dataset.tab === activeTab));
@@ -1602,6 +1824,16 @@ function renderQuickbar() {
     image: tool.image, emoji: tool.emoji, title: `${tool.name}｜${tool.damage} 傷害`, attributes: `data-tool-id="${tool.id}"`, equipped: tool.id === state.equippedToolId
   }));
   const items = [];
+  for (const decoration of DECORATIONS) {
+    const count = inventoryCount("decoration_" + decoration.id);
+    if (count) items.push(quickButton({
+      emoji: decoration.emoji,
+      title: decoration.name + " ×" + count,
+      attributes: 'data-inventory-kind="decoration" data-inventory-id="' + decoration.id + '"',
+      count,
+      selected: selection?.kind === "decoration" && selection.id === decoration.id
+    }));
+  }
   for (const plant of PLANTS.filter((item) => item.id !== "weed")) {
     const count = inventoryCount(`seed_${plant.id}`);
     if (count) items.push(quickButton({ image: plant.image, emoji: plant.emoji, title: `${plant.name}種子 ×${count}`, attributes: `data-inventory-kind="seed" data-inventory-id="${plant.id}"`, count, selected: selection?.kind === "seed" && selection.id === plant.id }));
@@ -1658,6 +1890,7 @@ function buyItem(kind, id) {
   if (kind === "harvester") item = getHarvester(id);
   if (kind === "sprinkler") item = getSprinkler(id);
   if (kind === "fertilizer") item = getFertilizer(id);
+  if (kind === "decoration") item = getDecoration(id);
   if (!item || !isShopProductUnlocked(kind, item)) return;
   const price = getProductPrice(kind, item);
   if (state.gold < price) { showToast("金幣還不夠"); return; }
@@ -1748,7 +1981,30 @@ function useSelection(plotId) {
     return;
   }
   let feedbackSound = "place";
-  if (selection.kind === "seed") {
+  if (selection.kind === "decoration") {
+    const item = getDecoration(selection.id);
+    const slot = pendingDecorationSlot;
+    if (!item || !slot || !isDecorationSlotAvailable(slot, item.id)) {
+      closeActionConfirm();
+      showToast("這個裝飾槽位目前不可用");
+      return;
+    }
+    if (!consumeInventory("decoration", item.id)) {
+      closeActionConfirm();
+      showToast("工具列中已沒有這件裝飾");
+      return;
+    }
+    state.decorations.push({
+      id: item.id,
+      slotType: item.slotType,
+      row: slot.row,
+      col: slot.col,
+      direction: slot.direction || null,
+      placedAt: Date.now()
+    });
+    showToast(item.name + "已放置在種植格之間");
+    selection = null;
+  } else if (selection.kind === "seed") {
     const plantId = selection.id;
     const centerIndex = selectionUsesCenter() ? selectedAutomationCenterIndex(plotId) : indexesForPlot(plotId)[4];
     const plantingIndexes = getPlant(plantId)?.type === "tree"
@@ -1883,7 +2139,49 @@ function triggerHarvestSwing(result) {
   }
 }
 
+function removeDecorationAtSlot(slot) {
+  const index = state.decorations.findIndex((placed) => placedDecorationSlotKey(placed) === decorationSlotKey(slot));
+  if (index < 0) return false;
+  const placed = state.decorations[index];
+  const item = getDecoration(placed.id);
+  if (!window.confirm("要拆除「" + (item?.name || "裝飾") + "」並放回工具列嗎？")) return false;
+  state.decorations.splice(index, 1);
+  state.inventory["decoration_" + placed.id] = inventoryCount("decoration_" + placed.id) + 1;
+  playTone("place");
+  showToast((item?.name || "裝飾") + "已拆回工具列");
+  saveNow();
+  renderAll();
+  return true;
+}
+
+function handleDecorationBoardClick(x, y) {
+  const slot = decorationSlotAtScreen(x, y);
+  if (!slot) {
+    showToast("請點擊種植格之間的格縫或交叉點");
+    return;
+  }
+  const existing = state.decorations.find((placed) => placedDecorationSlotKey(placed) === decorationSlotKey(slot));
+  if (!selection) {
+    if (existing) removeDecorationAtSlot(slot);
+    else showToast("選取裝飾後，再點擊格縫放置");
+    return;
+  }
+  if (selection.kind !== "decoration") return;
+  if (!isDecorationSlotAvailable(slot, selection.id)) {
+    showToast("這個槽位需要已購土地，且不能與樹木或其他裝飾重疊");
+    return;
+  }
+  stageDecorationSelection(slot);
+}
+
 function handleBoardClick(index) {
+  if (selection?.kind === "decoration") {
+    const row = Math.floor(index / BOARD_SIZE);
+    const col = index % BOARD_SIZE;
+    const point = worldPoint(row, col);
+    handleDecorationBoardClick(point.x, point.y);
+    return;
+  }
   const plotId = plotIdForIndex(index);
   keyboardIndex = index;
   if (!state.ownedPlots.includes(plotId)) {
@@ -1983,6 +2281,7 @@ elements.canvas.addEventListener("pointermove", (event) => {
     toolCursor.y = point.y;
     toolCursor.visible = true;
     hoverIndex = tileIndexAtScreen(point.x, point.y);
+    hoverDecorationSlot = selection?.kind === "decoration" ? decorationSlotAtScreen(point.x, point.y) : null;
   }
   if (!activePointers.has(event.pointerId)) return;
   activePointers.set(event.pointerId, point);
@@ -2017,11 +2316,13 @@ elements.canvas.addEventListener("pointerenter", (event) => {
   toolCursor.y = point.y;
   toolCursor.visible = true;
   hoverIndex = tileIndexAtScreen(point.x, point.y);
+  hoverDecorationSlot = selection?.kind === "decoration" ? decorationSlotAtScreen(point.x, point.y) : null;
 });
 elements.canvas.addEventListener("pointerleave", () => {
   if (activePointers.size) return;
   toolCursor.visible = false;
   hoverIndex = -1;
+  hoverDecorationSlot = null;
 });
 
 function endPointer(event) {
@@ -2029,8 +2330,11 @@ function endPointer(event) {
   const wasTap = event.type !== "pointercancel" && singleGesture?.id === event.pointerId && !singleGesture.moved;
   activePointers.delete(event.pointerId);
   if (wasTap) {
-    const index = actionIndexAtScreen(point.x, point.y);
-    if (index >= 0) handleBoardClick(index);
+    if (selection?.kind === "decoration") handleDecorationBoardClick(point.x, point.y);
+    else {
+      const index = actionIndexAtScreen(point.x, point.y);
+      if (index >= 0) handleBoardClick(index);
+    }
   }
   if (activePointers.size === 1) {
     const [id, remaining] = [...activePointers.entries()][0];
