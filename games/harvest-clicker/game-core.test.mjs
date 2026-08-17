@@ -68,6 +68,7 @@ test("所有商品售價與規格書一致且為有效金額", () => {
     ...HARVESTERS.map((item) => [item.name, item.cost]),
     ...SPRINKLERS.map((item) => [item.name, item.cost]),
     ...FERTILIZERS.map((item) => [item.name, item.cost]),
+    ...DECORATIONS.map((item) => [item.name, item.cost]),
     ...landPrices.map((price, index) => [`第 ${INITIAL_PLOT_IDS.length + index + 1} 塊土地`, price])
   ];
   for (const [name, price] of pricedItems) {
@@ -75,7 +76,7 @@ test("所有商品售價與規格書一致且為有效金額", () => {
   }
   for (const plant of PLANTS) assert.equal(getProductPrice("seed", plant), plant.seedCost, `${plant.name} 購買流程使用種子包價格`);
   for (const [kind, items] of [
-    ["tool", TOOLS], ["harvester", HARVESTERS], ["sprinkler", SPRINKLERS], ["fertilizer", FERTILIZERS]
+    ["tool", TOOLS], ["harvester", HARVESTERS], ["sprinkler", SPRINKLERS], ["fertilizer", FERTILIZERS], ["decoration", DECORATIONS]
   ]) {
     for (const item of items) assert.equal(getProductPrice(kind, item), item.cost, `${item.name} 購買流程使用商品價格`);
   }
@@ -86,6 +87,8 @@ test("裝飾靜態設定由核心載入且使用田埂槽位", () => {
   assert.equal(getDecoration("stone_ridge").slotType, "edge");
   assert.equal(getDecoration("farm_sign").slotType, "corner");
   assert.ok(DECORATIONS.every((item) => item.effect === null && item.cost >= 0));
+  assert.ok(DECORATIONS.every((item) => item.image?.startsWith("decorations/")));
+  assert.ok(DECORATIONS.every((item) => item.layer === "ground" || item.layer === "object"));
 });
 
 test("舊存檔會建立獨立的裝飾陣列", () => {

@@ -21,3 +21,16 @@
 - 林業設備：`sawmill.webp`、`lumber-mill.webp`
 
 植物 PNG 只裁除透明留白，讓根部能貼齊土面；Canvas 在執行時縮放、加上接觸陰影，並依等角座標排序，以形成 2.5D 呈現。土壤與山、水、樹、野花、農舍景觀皆由 Canvas 程式繪製。
+
+## Isometric Miniature Farm
+
+- 來源：[Kenney — Isometric Miniature Farm](https://kenney-assets.itch.io/isometric-miniature-farm)
+- 備援頁：[OpenGameArt — Isometric Miniature Farm](https://opengameart.org/content/isometric-miniature-farm)
+- 授權：[Creative Commons Zero 1.0 Universal（CC0）](https://creativecommons.org/publicdomain/zero/1.0/)，可用於個人、教育與商業專案，無須強制署名。
+- 用途：第一階段農場景觀佈置的高低籬笆、農場門、乾草、補給箱、木梯與木棧小徑。
+
+### 使用與處理方式
+
+- 原始檔：`Isometric/fenceLow*`、`fenceLowBroken*`、`fenceHigh*`、`fenceHighBroken*`、`woodWallGateOpen_N.png`、`hayBales_N.png`、`hayBalesStacked_N.png`、`sacksCrate_N.png`、`ladderStand_N.png`、`planksOld*`。
+- 專案檔位於 `assets/decorations/`；只裁除透明留白並重新命名，未改動畫風與內容。
+- 原始授權文字另存於 `assets/decorations/LICENSE.txt`。

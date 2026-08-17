@@ -17,6 +17,8 @@ const ASSET_ROOT = "assets/";
 const TILE_W = 96;
 const TILE_H = 48;
 const TILE_DEPTH = 13;
+const CELL_SURFACE_W = 76;
+const CELL_SURFACE_H = 38;
 const MIN_ZOOM = 0.35;
 const MAX_ZOOM = 2.4;
 const $ = (selector) => document.querySelector(selector);
@@ -128,6 +130,8 @@ function preloadAssets() {
   const files = new Set();
   for (const item of [...PLANTS, ...TOOLS, ...HARVESTERS, ...SPRINKLERS, ...DECORATIONS]) {
     if (item.image) files.add(item.image);
+    if (item.imageHorizontal) files.add(item.imageHorizontal);
+    if (item.imageVertical) files.add(item.imageVertical);
   }
   for (const file of files) {
     const image = new Image();
@@ -419,44 +423,37 @@ function decorationSlotAtScreen(x, y) {
 
 function drawDecorationItem(item, x, y, direction = "horizontal", alpha = 1) {
   if (!item) return;
-  const colors = {
-    dirt_ridge: ["#9a633e", "#e2ab6b"],
-    stone_ridge: ["#69767a", "#c5d1cd"],
-    wood_ridge: ["#8b5a36", "#d69a5e"],
-    wood_fence: ["#815332", "#d09a5c"],
-    water_channel: ["#368e9d", "#8ce0dc"]
-  };
+  const file = direction === "vertical"
+    ? item.imageVertical || item.image
+    : item.imageHorizontal || item.image;
+  const image = file ? images.get(file) : null;
+  const contactY = y + (item.contactOffsetY || 8);
   ctx.save();
   ctx.globalAlpha = alpha;
-  if (item.slotType === "edge") {
-    const angle = direction === "vertical" ? -Math.atan2(TILE_H, TILE_W) : Math.atan2(TILE_H, TILE_W);
-    const [base, highlight] = colors[item.id] || ["#795337", "#c58d5a"];
-    ctx.translate(x, y + 3);
-    ctx.rotate(angle);
-    ctx.fillStyle = "rgba(35,29,22,.26)";
-    ctx.beginPath();
-    ctx.ellipse(0, 5, item.id === "water_channel" ? 26 : 22, 5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = base;
-    ctx.strokeStyle = "rgba(56,36,24,.75)";
-    ctx.lineWidth = 1.4 / camera.scale;
-    ctx.beginPath();
-    ctx.roundRect(-22, -4, item.id === "water_channel" ? 44 : 38, 8, 3);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = highlight;
-    ctx.globalAlpha = alpha * .75;
-    ctx.fillRect(-17, -2.5, item.id === "water_channel" ? 34 : 28, 2);
+  if (image) {
+    const width = item.renderWidth || (item.slotType === "edge" ? 62 : 48);
+    const height = width * image.naturalHeight / Math.max(1, image.naturalWidth);
+    if (item.layer !== "ground") {
+      ctx.fillStyle = "rgba(33,28,20,.2)";
+      ctx.beginPath();
+      ctx.ellipse(x + 2, contactY - 1, Math.max(12, width * .32), Math.max(3, width * .09), 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (!LOW_POWER_RENDER) {
+      ctx.shadowColor = "rgba(39,28,19,.2)";
+      ctx.shadowBlur = 4;
+      ctx.shadowOffsetY = 2;
+    }
+    ctx.drawImage(image, x - width / 2, contactY - height, width, height);
   } else {
-    ctx.translate(x, y - 5);
-    ctx.fillStyle = "rgba(35,29,22,.24)";
     ctx.beginPath();
-    ctx.ellipse(4, 18, 13, 5, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(35,29,22,.24)";
+    ctx.ellipse(x + 3, contactY, 13, 5, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
+    ctx.textBaseline = "bottom";
     ctx.font = "24px 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif";
-    ctx.fillText(item.emoji, 0, 0);
+    ctx.fillText(item.emoji, x, contactY);
   }
   ctx.restore();
 }
@@ -602,6 +599,15 @@ function pathDiamond(context, x, y) {
   context.closePath();
 }
 
+function pathCellSurface(context, x, y) {
+  context.beginPath();
+  context.moveTo(x, y - CELL_SURFACE_H / 2);
+  context.lineTo(x + CELL_SURFACE_W / 2, y);
+  context.lineTo(x, y + CELL_SURFACE_H / 2);
+  context.lineTo(x - CELL_SURFACE_W / 2, y);
+  context.closePath();
+}
+
 function plotGeometry(plotId) {
   const plotRow = Math.floor(plotId / PLOT_GRID_SIZE) * 3;
   const plotCol = (plotId % PLOT_GRID_SIZE) * 3;
@@ -657,9 +663,9 @@ function drawPlotBase(plot) {
   pathPlotTop(geometry);
   const gradient = ctx.createLinearGradient(geometry.top.x, geometry.top.y, geometry.bottom.x, geometry.bottom.y);
   if (owned) {
-    gradient.addColorStop(0, "#b97e52");
-    gradient.addColorStop(.52, "#9b623f");
-    gradient.addColorStop(1, "#845036");
+    gradient.addColorStop(0, "#7e6842");
+    gradient.addColorStop(.52, "#6d5437");
+    gradient.addColorStop(1, "#5b422e");
   } else {
     gradient.addColorStop(0, "rgba(104,137,78,.62)");
     gradient.addColorStop(1, "rgba(61,93,59,.68)");
@@ -695,9 +701,17 @@ function drawPlotBase(plot) {
       const row = Math.floor(index / BOARD_SIZE);
       const col = index % BOARD_SIZE;
       const point = worldPoint(row, col);
-      pathDiamond(ctx, point.x, point.y);
-      ctx.strokeStyle = "rgba(255,235,187,.12)";
+      pathCellSurface(ctx, point.x, point.y);
+      ctx.fillStyle = (row + col) % 2 ? "rgba(174,113,72,.92)" : "rgba(166,104,66,.94)";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,235,187,.28)";
       ctx.lineWidth = 1 / camera.scale;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(point.x - CELL_SURFACE_W / 2 + 5, point.y - 1);
+      ctx.lineTo(point.x, point.y - CELL_SURFACE_H / 2 + 2);
+      ctx.lineTo(point.x + CELL_SURFACE_W / 2 - 5, point.y - 1);
+      ctx.strokeStyle = "rgba(255,222,164,.16)";
       ctx.stroke();
     }
   }
@@ -1171,14 +1185,14 @@ function drawPlacementSelectionPreview() {
     const row = Math.floor(index / BOARD_SIZE);
     const col = index % BOARD_SIZE;
     const point = worldPoint(row, col);
-    pathDiamond(ctx, point.x, point.y);
+    pathCellSurface(ctx, point.x, point.y);
     ctx.fill();
     ctx.stroke();
   }
   const centerRow = Math.floor(center / BOARD_SIZE);
   const centerCol = center % BOARD_SIZE;
   const centerPoint = worldPoint(centerRow, centerCol);
-  pathDiamond(ctx, centerPoint.x, centerPoint.y);
+  pathCellSurface(ctx, centerPoint.x, centerPoint.y);
   ctx.fillStyle = "rgba(255,255,255,.12)";
   ctx.fill();
   ctx.strokeStyle = validPlacement ? "#fff4ad" : "#ff9a7a";
@@ -1187,17 +1201,29 @@ function drawPlacementSelectionPreview() {
   ctx.restore();
 }
 
-function drawPlacedDecorations() {
-  const placed = [...state.decorations].sort((a, b) => {
-    const aPoint = decorationSlotWorldPoint(a);
-    const bPoint = decorationSlotWorldPoint(b);
-    return (aPoint?.y || 0) - (bPoint?.y || 0);
-  });
+function drawPlacedGroundDecorations() {
+  const placed = state.decorations.filter((decoration) => getDecoration(decoration.id)?.layer === "ground");
   for (const decoration of placed) {
     const item = getDecoration(decoration.id);
     const point = decorationSlotWorldPoint(decoration);
     if (item && point) drawDecorationItem(item, point.x, point.y, decoration.direction, 1);
   }
+}
+
+function decorationSceneNodes() {
+  return state.decorations.flatMap((decoration) => {
+    const item = getDecoration(decoration.id);
+    const point = decorationSlotWorldPoint(decoration);
+    if (!item || !point || item.layer === "ground") return [];
+    return [{
+      kind: "decoration",
+      depth: point.y + (item.contactOffsetY || 8),
+      x: point.x,
+      item,
+      decoration,
+      point
+    }];
+  });
 }
 
 function cellPaintOrder() {
@@ -1400,8 +1426,11 @@ function drawFarm(now = performance.now()) {
   });
   for (const plot of plotPaintOrder) drawPlotBase(plot);
   drawSideScenery();
+  drawPlacedGroundDecorations();
 
   const order = cellPaintOrder();
+  const sceneNodes = decorationSceneNodes();
+  const plantOverlays = [];
   for (const index of order) {
     const row = Math.floor(index / BOARD_SIZE);
     const col = index % BOARD_SIZE;
@@ -1413,8 +1442,16 @@ function drawFarm(now = performance.now()) {
     const anchorIndex = Number.isInteger(cell.plantAnchorIndex) ? cell.plantAnchorIndex : index;
     const point = worldPoint(Math.floor(anchorIndex / BOARD_SIZE), anchorIndex % BOARD_SIZE);
     const metrics = plantMetrics(cell);
+    sceneNodes.push({ kind: "plant", depth: point.y + metrics.contactY, x: point.x, cell, point });
+    plantOverlays.push({ cell, point, metrics });
+  }
+  sceneNodes.sort((a, b) => a.depth - b.depth || a.x - b.x);
+  for (const node of sceneNodes) {
+    if (node.kind === "plant") drawPlant(node.cell, node.point.x, node.point.y, now);
+    else drawDecorationItem(node.item, node.point.x, node.point.y, node.decoration.direction, 1);
+  }
+  for (const { cell, point, metrics } of plantOverlays) {
     const statusBarY = point.y + metrics.contactY - metrics.height - 10;
-    drawPlant(cell, point.x, point.y, now);
     if (cell.phase === "growing") drawBar(point.x, statusBarY, cell.growthProgress, "#d5ed97");
     else {
       const plant = getPlant(cell.plantId);
@@ -1425,7 +1462,6 @@ function drawFarm(now = performance.now()) {
       ctx.fillText(`✦${cell.fertilizerRounds}`, point.x - 31, point.y - 15);
     }
   }
-  drawPlacedDecorations();
 
   for (const plotId of state.ownedPlots) {
     const center = plotGeometry(plotId).center;
@@ -1449,7 +1485,7 @@ function drawFarm(now = performance.now()) {
     const row = Math.floor(hoverIndex / BOARD_SIZE);
     const col = hoverIndex % BOARD_SIZE;
     const point = worldPoint(row, col);
-    pathDiamond(ctx, point.x, point.y);
+    pathCellSurface(ctx, point.x, point.y);
     ctx.fillStyle = "rgba(255,230,121,.13)";
     ctx.fill();
     ctx.strokeStyle = "rgba(255,239,168,.74)";
@@ -1460,7 +1496,7 @@ function drawFarm(now = performance.now()) {
     const row = Math.floor(keyboardIndex / BOARD_SIZE);
     const col = keyboardIndex % BOARD_SIZE;
     const point = worldPoint(row, col);
-    pathDiamond(ctx, point.x, point.y);
+    pathCellSurface(ctx, point.x, point.y);
     ctx.strokeStyle = "#ffe06d";
     ctx.lineWidth = 3 / camera.scale;
     ctx.stroke();
@@ -1738,6 +1774,7 @@ function renderFertilizerShop() {
 
 function renderDecorationsShop() {
   return DECORATIONS.map((item) => shopCard({
+    image: item.image,
     icon: item.emoji,
     title: item.name,
     price: item.cost,
@@ -1827,6 +1864,7 @@ function renderQuickbar() {
   for (const decoration of DECORATIONS) {
     const count = inventoryCount("decoration_" + decoration.id);
     if (count) items.push(quickButton({
+      image: decoration.image,
       emoji: decoration.emoji,
       title: decoration.name + " ×" + count,
       attributes: 'data-inventory-kind="decoration" data-inventory-id="' + decoration.id + '"',
