@@ -43,6 +43,7 @@
           </nav>
           <div class="shop-list" id="shop-list" aria-live="polite"></div>
           <footer class="shop-footer">
+            <button class="text-button" id="share-button" type="button">分享農場</button>
             <button class="text-button" id="settings-button" type="button">設定與存檔</button>
             <a class="text-button" href="遊戲規格書.md">查看規格</a>
           </footer>
@@ -51,6 +52,10 @@
         <section class="farm-panel">
           <div class="farm-canvas-shell" id="farm-canvas-shell">
             <canvas id="farm-canvas" tabindex="0" aria-label="27乘27等角農田；點擊收割，拖曳移動畫面，兩指縮放"></canvas>
+            <section class="readonly-banner" id="readonly-banner" hidden aria-live="polite">
+              <div><span>READ ONLY</span><strong>正在瀏覽分享農場</strong></div>
+              <a href="./">回到自己的農場</a>
+            </section>
             <section class="land-popover" id="land-popover" aria-live="polite" hidden>
               <button class="land-popover-close" id="land-close" type="button" aria-label="關閉土地資訊">×</button>
               <span class="land-state-icon" id="land-state-icon" aria-hidden="true">🔒</span>
@@ -132,6 +137,35 @@
         <p class="asset-note">植物與農具素材來自 FreeGameSprites Farm &amp; Ranch Pack，採 CC0 授權。</p>
       </form>
     </dialog>
+    <dialog class="game-dialog share-dialog" id="share-dialog">
+      <form method="dialog">
+        <button class="dialog-close" value="close" aria-label="關閉">×</button>
+        <p class="dialog-kicker">SHARE FARM</p>
+        <h2>分享農場景觀</h2>
+        <p id="share-dialog-copy">分享會建立一份唯讀快照；訪客不會讀到你的私人存檔，也不能操作農場。</p>
+        <label class="share-link-field" id="share-link-field" hidden>
+          <span>唯讀分享網址</span>
+          <input id="share-link" type="url" readonly />
+        </label>
+        <p class="share-status" id="share-status" role="status" aria-live="polite"></p>
+        <div class="share-actions">
+          <button id="share-publish-button" class="dialog-primary" type="button">建立分享</button>
+          <button id="share-copy-button" type="button" hidden>複製網址</button>
+          <a id="share-preview-link" href="#" target="_blank" rel="noopener" hidden>開啟唯讀預覽</a>
+          <button id="share-revoke-button" class="danger-button" type="button" hidden>停止分享</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="game-dialog share-error-dialog" id="share-error-dialog">
+      <form method="dialog">
+        <span class="dialog-icon" aria-hidden="true">🌾</span>
+        <p class="dialog-kicker">SHARED FARM</p>
+        <h2>找不到這座農場</h2>
+        <p id="share-error-copy">分享網址可能已失效或停止分享。</p>
+        <a class="dialog-primary dialog-link" href="./">回到自己的農場</a>
+      </form>
+    </dialog>
     <input id="import-input" type="file" accept="application/json,.json" hidden />
 
     <script src="game-config.js"></script>
@@ -141,6 +175,7 @@
     <script src="data/fertilizers.js"></script>
     <script src="data/decorations.js"></script>
     <script src="game-core.js"></script>
+    <script src="../share-utils.js"></script>
     <script src="../firebase-config.js"></script>
     <script src="../firebase-runtime.js"></script>
     <script src="script.js"></script>

@@ -63,7 +63,7 @@ h1, h2, h3, p { margin: 0; }
 .shop-card-title strong { flex: 0 0 auto; color: var(--gold); font-size: .73rem; white-space: nowrap; }
 .shop-lock { position: absolute; top: 8px; right: 8px; font-size: .72rem; }
 .shop-empty { grid-column: 1 / -1; padding: 24px 12px 8px; color: rgba(255,255,255,.55); font-size: .75rem; text-align: center; }
-.shop-footer { position: relative; display: flex; justify-content: space-between; padding: 12px 21px 16px; flex: 0 0 auto; border-top: 1px solid rgba(255,255,255,.08); }
+.shop-footer { position: relative; display: flex; justify-content: space-between; gap: 12px; padding: 12px 17px 16px; flex: 0 0 auto; border-top: 1px solid rgba(255,255,255,.08); }
 .text-button { padding: 0; border: 0; color: rgba(255,255,255,.48); background: none; cursor: pointer; font-size: .66rem; text-decoration: none; }
 .text-button:hover { color: #fff; }
 
@@ -72,6 +72,12 @@ h1, h2, h3, p { margin: 0; }
 #farm-canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; user-select: none; }
 #farm-canvas:focus-visible { outline: 4px solid rgba(239,189,75,.8); outline-offset: -5px; }
 @media (pointer: fine) { #farm-canvas { cursor: none; } }
+.readonly-banner { position: absolute; z-index: 12; top: 14px; left: 50%; display: flex; width: min(440px, calc(100% - 28px)); align-items: center; justify-content: space-between; gap: 16px; padding: 10px 12px 10px 14px; border: 1px solid rgba(255,255,255,.3); border-radius: 16px; color: #fff; background: rgba(17,48,32,.92); box-shadow: 0 12px 34px rgba(12,35,23,.28); backdrop-filter: blur(12px); transform: translateX(-50%); }
+.readonly-banner[hidden] { display: none; }
+.readonly-banner div { display: grid; gap: 1px; }
+.readonly-banner span { color: var(--gold); font-size: .54rem; font-weight: 900; letter-spacing: .16em; }
+.readonly-banner strong { font-size: .76rem; }
+.readonly-banner a { flex: 0 0 auto; padding: 8px 10px; border-radius: 9px; color: var(--forest-950); background: var(--gold); font-size: .64rem; font-weight: 900; text-decoration: none; }
 .land-popover { position: absolute; z-index: 8; right: 14px; bottom: 14px; display: grid; grid-template-columns: 37px 1fr auto; align-items: center; gap: 9px 11px; width: min(370px, calc(100% - 28px)); padding: 14px; border: 1px solid rgba(255,255,255,.25); border-radius: 18px; color: #fff; background: rgba(17,48,32,.94); box-shadow: 0 18px 45px rgba(12,35,23,.34); backdrop-filter: blur(12px); }
 .land-popover[hidden] { display: none; }
 .land-state-icon { display: grid; grid-row: span 2; width: 37px; height: 37px; place-items: center; border-radius: 11px; background: rgba(255,255,255,.1); }
@@ -106,6 +112,7 @@ h1, h2, h3, p { margin: 0; }
 .quick-item .installed-dot { position: absolute; top: 2px; right: 2px; width: 8px; height: 8px; border: 2px solid #f9f6e9; border-radius: 50%; background: #58a66c; }
 .quick-divider { flex: 0 0 1px; align-self: stretch; margin: 2px; background: var(--line); }
 .quick-cancel { color: #a3453c; font-size: 1.15rem; font-weight: 900; }
+.readonly-quickbar { display: flex; width: 100%; align-items: center; justify-content: center; color: var(--forest-700); font-size: .72rem; font-weight: 800; letter-spacing: .02em; text-align: center; }
 .mobile-shop-button { display: none; flex: 0 0 auto; min-width: 68px; border: 1px solid var(--line); border-radius: 16px; color: #fff; background: var(--forest-800); cursor: pointer; font-size: .72rem; font-weight: 850; }
 
 .toast { position: fixed; z-index: 100; bottom: 24px; left: 50%; max-width: min(90vw, 420px); padding: 11px 17px; border-radius: 999px; color: #fff; background: rgba(19,52,35,.94); box-shadow: 0 12px 35px rgba(0,0,0,.2); opacity: 0; pointer-events: none; transform: translate(-50%, 15px); transition: opacity 160ms ease, transform 160ms ease; font-size: .75rem; font-weight: 750; text-align: center; }
@@ -132,11 +139,28 @@ h1, h2, h3, p { margin: 0; }
 .save-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 20px; }
 .save-actions button { min-height: 42px; border: 1px solid var(--line); border-radius: 12px; color: var(--forest-800); background: #f2f1e4; cursor: pointer; font-size: .72rem; font-weight: 800; }
 .save-actions .danger-button { grid-column: 1 / -1; color: #a3453c; background: #fff1ec; }
+.share-link-field { display: grid; gap: 7px; margin-top: 18px; text-align: left; }
+.share-link-field[hidden] { display: none; }
+.share-link-field span { color: var(--muted); font-size: .68rem; font-weight: 800; }
+.share-link-field input { width: 100%; padding: 11px 12px; border: 1px solid var(--line); border-radius: 11px; color: var(--forest-900); background: #f2f1e4; font-size: .72rem; user-select: text; -webkit-user-select: text; }
+.share-status { min-height: 21px; color: var(--forest-700) !important; font-weight: 750; }
+.share-status.is-error { color: #a3453c !important; }
+.share-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.share-actions .dialog-primary { grid-column: 1 / -1; margin-top: 0; }
+.share-actions button, .share-actions a { display: grid; min-height: 42px; place-items: center; border: 1px solid var(--line); border-radius: 12px; color: var(--forest-800); background: #f2f1e4; cursor: pointer; font-size: .72rem; font-weight: 800; text-decoration: none; }
+.share-actions button[hidden], .share-actions a[hidden] { display: none; }
+.share-actions .danger-button { grid-column: 1 / -1; color: #a3453c; background: #fff1ec; }
+.share-dialog.is-busy form { opacity: .72; pointer-events: none; }
+.dialog-link { display: grid; place-items: center; text-decoration: none; }
 .asset-note { margin-bottom: 0; font-size: .66rem !important; }
 .shop-backdrop { position: fixed; z-index: 18; inset: 0; background: rgba(8,27,17,.55); backdrop-filter: blur(4px); }
 .shop-backdrop[hidden] { display: none; }
 .page-footer { display: flex; align-items: center; gap: 16px; margin-top: 22px; color: var(--muted); font-size: .56rem; font-weight: 850; }
 .footer-rule { flex: 1; height: 1px; background: rgba(27,67,43,.13); }
+
+body.is-readonly .game-shell { grid-template-columns: minmax(0, 1fr); }
+body.is-readonly .shop-panel, body.is-readonly .mobile-shop-button, body.is-readonly #puzzle-account-root { display: none !important; }
+body.is-readonly .quickbar { min-height: 55px; }
 
 @media (max-width: 980px) {
   .game-shell { display: block; height: auto; min-height: 0; overflow: visible; }
@@ -157,6 +181,9 @@ h1, h2, h3, p { margin: 0; }
   .farm-panel { grid-template-rows: 66svh auto; min-height: 0; padding: 0; border-radius: 0; }
   .farm-canvas-shell { min-height: 66svh; max-height: 66svh; border-bottom-width: 3px; border-radius: 0; box-shadow: inset 0 -7px 16px rgba(41,30,19,.14); }
   .land-popover, .action-confirm-popover { right: max(8px, env(safe-area-inset-right)); bottom: 8px; left: max(8px, env(safe-area-inset-left)); width: auto; max-width: none; max-height: calc(100% - 16px); min-width: 0; overflow-y: auto; }
+  .readonly-banner { top: 8px; width: calc(100% - 16px); gap: 8px; }
+  .readonly-banner strong { font-size: .69rem; }
+  .readonly-banner a { padding: 7px 8px; font-size: .59rem; }
   .quickbar-wrap { min-width: 0; margin: 0; padding: 9px max(8px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); overflow: hidden; }
   .quickbar { width: 0; max-width: 100%; min-height: 62px; padding: 7px; flex: 1 1 auto; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: none; touch-action: pan-x; -webkit-overflow-scrolling: touch; }
   .quickbar::-webkit-scrollbar { display: none; }

@@ -6,6 +6,11 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == userId;
     }
 
+    function isPermanentOwner(userId) {
+      return isOwner(userId)
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
     function isPuzzleGame(gameId) {
       return gameId in [
         '2048',
@@ -22,6 +27,38 @@ service cloud.firestore {
       ];
     }
 
+    function isValidShareId(shareId) {
+      return shareId is string
+        && shareId.size() >= 20
+        && shareId.size() <= 64
+        && shareId.matches('^[A-Za-z0-9_-]+$');
+    }
+
+    function isValidShareControl(data, gameId) {
+      return data.keys().hasOnly([
+          'version', 'gameId', 'shareId', 'createdAt', 'updatedAt'
+        ])
+        && data.version == 1
+        && data.gameId == gameId
+        && isPuzzleGame(data.gameId)
+        && isValidShareId(data.shareId)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    function isValidPublicShare(data) {
+      return data.keys().hasOnly([
+          'version', 'gameId', 'data', 'createdAt', 'updatedAt'
+        ])
+        && data.version == 1
+        && isPuzzleGame(data.gameId)
+        && data.data is map
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
     match /users/{userId}/saves/{gameId} {
       allow read, delete: if isOwner(userId) && isPuzzleGame(gameId);
       allow create, update: if isOwner(userId)
@@ -31,6 +68,39 @@ service cloud.firestore {
         && request.resource.data.clientSavedAt is int
         && request.resource.data.clientRevision is int
         && request.resource.data.serverRevision is int;
+    }
+
+    match /users/{userId}/shares/{gameId} {
+      allow get: if isOwner(userId) && isPuzzleGame(gameId);
+      allow list: if false;
+      allow create: if isPermanentOwner(userId)
+        && isValidShareControl(request.resource.data, gameId)
+        && !exists(/databases/$(database)/documents/publicShares/$(request.resource.data.shareId))
+        && getAfter(/databases/$(database)/documents/publicShares/$(request.resource.data.shareId)).data.gameId == gameId;
+      allow update: if isPermanentOwner(userId)
+        && isValidShareControl(request.resource.data, gameId)
+        && request.resource.data.shareId == resource.data.shareId
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isPermanentOwner(userId);
+    }
+
+    match /publicShares/{shareId} {
+      allow get: if request.auth != null
+        && isValidShareId(shareId);
+      allow list: if false;
+      allow create: if request.auth != null
+        && isValidShareId(shareId)
+        && isValidPublicShare(request.resource.data)
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/shares/$(request.resource.data.gameId)).data.shareId == shareId;
+      allow update: if request.auth != null
+        && isValidShareId(shareId)
+        && isValidPublicShare(request.resource.data)
+        && request.resource.data.gameId == resource.data.gameId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)/shares/$(resource.data.gameId)).data.shareId == shareId;
+      allow delete: if request.auth != null
+        && isValidShareId(shareId)
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)/shares/$(resource.data.gameId)).data.shareId == shareId;
     }
   }
 }

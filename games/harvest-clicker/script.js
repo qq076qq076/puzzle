@@ -13,6 +13,9 @@ const {
 const STORAGE_KEY = "puzzle-club-save:harvest-clicker:v4";
 const LEGACY_STORAGE_KEYS = ["puzzle-club-save:harvest-clicker:v3"];
 const CLOUD_SAVE_KEY = "harvest-clicker";
+const HAS_SHARE_LINK = new URLSearchParams(window.location.hash.replace(/^#/, "")).has("share");
+const SHARE_ID = window.PuzzleShare?.parseShareId(window.location.hash) || null;
+const READ_ONLY = HAS_SHARE_LINK;
 const ASSET_ROOT = "assets/";
 const TAB_ID = globalThis.crypto?.randomUUID?.() || `harvest-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const TILE_W = 96;
@@ -45,7 +48,13 @@ const elements = {
   actionConfirm: $("#action-confirm-popover"), actionConfirmArt: $("#action-confirm-art"),
   actionConfirmKicker: $("#action-confirm-kicker"),
   actionConfirmTitle: $("#action-confirm-title"), actionConfirmText: $("#action-confirm-text"),
-  actionConfirmButton: $("#action-confirm-button")
+  actionConfirmButton: $("#action-confirm-button"),
+  readonlyBanner: $("#readonly-banner"), shareDialog: $("#share-dialog"),
+  shareDialogCopy: $("#share-dialog-copy"), shareLinkField: $("#share-link-field"),
+  shareLink: $("#share-link"), shareStatus: $("#share-status"),
+  sharePublish: $("#share-publish-button"), shareCopy: $("#share-copy-button"),
+  sharePreview: $("#share-preview-link"), shareRevoke: $("#share-revoke-button"),
+  shareErrorDialog: $("#share-error-dialog"), shareErrorCopy: $("#share-error-copy")
 };
 
 const ctx = elements.canvas.getContext("2d", { alpha: true });
@@ -215,7 +224,7 @@ function readLocalCheckpoint() {
 }
 
 function queueCloudSave(immediate = false) {
-  if (!window.PuzzleFirebase?.enabled || !cloudReady || !state || !isActiveTab()) return;
+  if (READ_ONLY || !window.PuzzleFirebase?.enabled || !cloudReady || !state || !isActiveTab()) return;
   cloudSavePending = {
     data: JSON.parse(JSON.stringify(state)),
     createdAt: localCreatedAt,
@@ -236,7 +245,7 @@ function queueCloudSave(immediate = false) {
 
 function flushCloudSave() {
   cloudSaveTimer = null;
-  if (!window.PuzzleFirebase?.enabled || !cloudReady || !cloudSavePending || !isActiveTab()) return cloudSaveInFlight;
+  if (READ_ONLY || !window.PuzzleFirebase?.enabled || !cloudReady || !cloudSavePending || !isActiveTab()) return cloudSaveInFlight;
   const snapshot = cloudSavePending;
   cloudSavePending = null;
   cloudSaveInFlight = cloudSaveInFlight.then(() => window.PuzzleFirebase.save(CLOUD_SAVE_KEY, snapshot.data, snapshot)).then((result) => {
@@ -262,6 +271,10 @@ function flushCloudSave() {
 }
 
 async function syncCloudState(gate) {
+  if (READ_ONLY) {
+    gate?.close();
+    return;
+  }
   if (!window.PuzzleFirebase?.enabled) {
     cloudReady = true;
     gate?.close();
@@ -330,7 +343,7 @@ function loadState() {
 }
 
 function saveNow(forceCloud = false, { allowInactive = false, forceOverwrite = false } = {}) {
-  if (!state || (!allowInactive && !isActiveTab())) return false;
+  if (READ_ONLY || !state || (!allowInactive && !isActiveTab())) return false;
   try {
     const currentCheckpoint = readLocalCheckpoint();
     const currentIsNewer = currentCheckpoint && (
@@ -427,6 +440,159 @@ function showToast(message) {
   elements.toast.classList.add("is-visible");
   window.clearTimeout(toastTimer);
   toastTimer = window.setTimeout(() => elements.toast.classList.remove("is-visible"), 2100);
+}
+
+function setShareBusy(busy) {
+  elements.shareDialog.classList.toggle("is-busy", busy);
+  elements.sharePublish.disabled = busy;
+  elements.shareCopy.disabled = busy;
+  elements.shareRevoke.disabled = busy;
+}
+
+function setShareStatus(message, isError = false) {
+  elements.shareStatus.textContent = message || "";
+  elements.shareStatus.classList.toggle("is-error", isError);
+}
+
+function showShareLink(shareId) {
+  const url = window.PuzzleShare.buildShareUrl(shareId, window.location);
+  elements.shareLink.value = url;
+  elements.shareLinkField.hidden = false;
+  elements.shareCopy.hidden = false;
+  elements.sharePreview.hidden = false;
+  elements.sharePreview.href = url;
+  elements.shareRevoke.hidden = false;
+  elements.sharePublish.textContent = "更新分享快照";
+  return url;
+}
+
+function clearShareLink() {
+  elements.shareLink.value = "";
+  elements.shareLinkField.hidden = true;
+  elements.shareCopy.hidden = true;
+  elements.sharePreview.hidden = true;
+  elements.sharePreview.href = "#";
+  elements.shareRevoke.hidden = true;
+  elements.sharePublish.textContent = "建立分享";
+}
+
+function shareErrorMessage(error) {
+  if (error?.code === "permission-denied") return "分享服務尚未啟用或目前沒有權限，請稍後再試。";
+  if (error?.code === "unavailable") return "目前無法連線分享服務，請確認網路後再試。";
+  return error?.message || "分享操作失敗，請稍後再試。";
+}
+
+async function refreshShareDialog() {
+  clearShareLink();
+  if (!window.PuzzleFirebase?.enabled) {
+    elements.sharePublish.disabled = true;
+    setShareStatus("尚未設定 Firebase，無法建立公開分享。", true);
+    return;
+  }
+  if (!window.PuzzleFirebase.isAuthenticated()) {
+    elements.sharePublish.disabled = false;
+    elements.sharePublish.textContent = "登入後分享";
+    setShareStatus("請先使用雲端帳號登入；匿名存檔不會公開。", true);
+    return;
+  }
+  setShareBusy(true);
+  setShareStatus("正在確認目前的分享狀態…");
+  try {
+    const share = await window.PuzzleFirebase.getOwnedShare(CLOUD_SAVE_KEY);
+    if (share) {
+      showShareLink(share.shareId);
+      setShareStatus("網址會保持不變；按更新即可發布目前農場快照。");
+    } else {
+      setShareStatus("尚未分享。建立後只有拿到網址的人能開啟唯讀快照。");
+    }
+  } catch (error) {
+    setShareStatus(shareErrorMessage(error), true);
+  } finally {
+    setShareBusy(false);
+  }
+}
+
+async function publishFarmShare() {
+  if (!window.PuzzleFirebase?.isAuthenticated()) {
+    elements.shareDialog.close();
+    window.PuzzleFirebase?.openAccount?.();
+    showToast("請先登入雲端帳號再分享");
+    return;
+  }
+  setShareBusy(true);
+  setShareStatus("正在建立唯讀快照…");
+  try {
+    simulateTo(state, Date.now());
+    saveNow(true);
+    const result = await window.PuzzleFirebase.publishShare(CLOUD_SAVE_KEY, JSON.parse(JSON.stringify(state)));
+    const url = showShareLink(result.shareId);
+    setShareStatus("分享已更新。之後農場變動不會自動改變這份快照。");
+    try { await navigator.clipboard.writeText(url); showToast("分享網址已複製"); } catch (error) { showToast("分享已建立"); }
+  } catch (error) {
+    setShareStatus(shareErrorMessage(error), true);
+  } finally {
+    setShareBusy(false);
+  }
+}
+
+async function copyShareUrl() {
+  const url = elements.shareLink.value;
+  if (!url) return;
+  try {
+    await navigator.clipboard.writeText(url);
+  } catch (error) {
+    elements.shareLink.focus();
+    elements.shareLink.select();
+    document.execCommand("copy");
+  }
+  setShareStatus("分享網址已複製。");
+  showToast("分享網址已複製");
+}
+
+async function revokeFarmShare() {
+  if (!window.confirm("確定停止分享嗎？原網址會立即失效。")) return;
+  setShareBusy(true);
+  setShareStatus("正在停止分享…");
+  try {
+    await window.PuzzleFirebase.revokeShare(CLOUD_SAVE_KEY);
+    clearShareLink();
+    setShareStatus("已停止分享，原網址不再能開啟農場。");
+    showToast("已停止分享");
+  } catch (error) {
+    setShareStatus(shareErrorMessage(error), true);
+  } finally {
+    setShareBusy(false);
+  }
+}
+
+async function loadSharedFarm(gate) {
+  document.body.classList.add("is-readonly");
+  elements.readonlyBanner.hidden = true;
+  try {
+    if (!SHARE_ID) throw new Error("分享網址格式不正確。");
+    if (!window.PuzzleFirebase?.enabled || !window.PuzzleFirebase?.loadShare) throw new Error("分享服務目前無法使用。");
+    const record = await window.PuzzleFirebase.loadShare(SHARE_ID);
+    const shared = window.PuzzleShare.normalizeShareRecord(
+      record,
+      CLOUD_SAVE_KEY,
+      (data) => Boolean(normalizeLoadedState(data))
+    );
+    const parsed = shared ? normalizeLoadedState(shared.data) : null;
+    if (!parsed) throw new Error("分享網址可能已失效或停止分享。");
+    state = parsed;
+    document.title = "唯讀農場 · 格田收割記";
+    elements.readonlyBanner.hidden = false;
+    return true;
+  } catch (error) {
+    state = createInitialState(Date.now());
+    elements.shareErrorCopy.textContent = shareErrorMessage(error);
+    window.setTimeout(() => {
+      if (!elements.shareErrorDialog.open) elements.shareErrorDialog.showModal();
+    }, 0);
+    return false;
+  } finally {
+    gate?.close();
+  }
 }
 
 function scheduleNote(startAt, frequency, duration, volume, type = "sine", endFrequency = frequency) {
@@ -2030,6 +2196,10 @@ function quickButton({ image, emoji, title, attributes, count, equipped, selecte
 }
 
 function renderQuickbar() {
+  if (READ_ONLY) {
+    elements.quickbar.innerHTML = '<div class="readonly-quickbar">拖曳移動 · 滾輪或雙指縮放 · 點擊作物查看分享時狀態</div>';
+    return;
+  }
   const tools = TOOLS.filter((tool) => state.ownedToolIds.includes(tool.id)).map((tool) => quickButton({
     image: tool.image, emoji: tool.emoji, title: `${tool.name}｜${tool.damage} 傷害`, attributes: `data-tool-id="${tool.id}"`, equipped: tool.id === state.equippedToolId
   }));
@@ -2075,8 +2245,13 @@ function renderQuickbar() {
 
 function renderAll() {
   renderHeader();
-  renderShop();
+  if (!READ_ONLY) renderShop();
   renderQuickbar();
+  if (READ_ONLY) {
+    closeLandPopover();
+    closeActionConfirm();
+    return;
+  }
   if (selectedLandPlot != null) showLandPopover(selectedLandPlot);
   if (pendingActionPlotId != null && selection) renderActionConfirm();
   else elements.actionConfirm.hidden = true;
@@ -2094,6 +2269,7 @@ function closeMobileShop() {
 }
 
 function buyItem(kind, id) {
+  if (READ_ONLY) return;
   simulateTo(state, Date.now());
   let item;
   if (kind === "tool") item = getTool(id);
@@ -2187,6 +2363,7 @@ function triggerDeviceAnimation(kind, plotId, centerIndex = indexesForPlot(plotI
 }
 
 function useSelection(plotId) {
+  if (READ_ONLY) return;
   if (!selection || pendingActionPlotId !== plotId || !state.ownedPlots.includes(plotId)) {
     showToast(isRangeSelection() || isFootprintPlantSelection() ? "請先選取設備或樹木的中心格" : "請先選取要施作的 3×3 土地");
     return;
@@ -2257,6 +2434,10 @@ function useSelection(plotId) {
 }
 
 function showLandPopover(plotId) {
+  if (READ_ONLY) {
+    showToast("唯讀農場不能購買土地");
+    return;
+  }
   const plot = PLOTS.find((item) => item.id === plotId);
   if (!plot || state.ownedPlots.includes(plotId)) {
     closeLandPopover();
@@ -2291,6 +2472,7 @@ function closeLandPopover() {
 }
 
 function purchaseSelectedLand() {
+  if (READ_ONLY) return;
   if (selectedLandPlot == null) return;
   const plot = PLOTS.find((item) => item.id === selectedLandPlot);
   const price = getLandPrice(state.ownedPlots.length);
@@ -2366,6 +2548,10 @@ function removeDecorationAtSlot(slot) {
 }
 
 function handleDecorationBoardClick(x, y) {
+  if (READ_ONLY) {
+    showToast("唯讀農場不能變更佈置");
+    return;
+  }
   const slot = decorationSlotAtScreen(x, y);
   if (!slot) {
     showToast("請點擊種植格之間的格縫或交叉點");
@@ -2386,6 +2572,24 @@ function handleDecorationBoardClick(x, y) {
 }
 
 function handleBoardClick(index) {
+  if (READ_ONLY) {
+    keyboardIndex = index;
+    const plotId = plotIdForIndex(index);
+    if (!state.ownedPlots.includes(plotId)) {
+      showToast("分享時這塊土地尚未購買");
+      return;
+    }
+    const cell = state.cells[index];
+    const plant = getPlant(cell?.plantId);
+    if (!plant) {
+      showToast("分享時這格土地沒有作物");
+    } else if (cell.phase === "growing") {
+      showToast(`分享時：${plant.name}還需 ${formatGrowthCountdown(remainingGrowthTime(index))} 成熟`);
+    } else {
+      showToast(`分享時：${plant.name}已成熟 · 收成 ${formatMoney(plant.coins)}`);
+    }
+    return;
+  }
   if (selection?.kind === "decoration") {
     const row = Math.floor(index / BOARD_SIZE);
     const col = index % BOARD_SIZE;
@@ -2456,16 +2660,19 @@ function beginPinch() {
 }
 
 elements.tabs.addEventListener("click", (event) => {
+  if (READ_ONLY) return;
   const button = event.target.closest("button[data-tab]");
   if (button) setActiveTab(button.dataset.tab);
 });
 
 elements.shopList.addEventListener("click", (event) => {
+  if (READ_ONLY) return;
   const button = event.target.closest("button[data-product-kind]");
   if (button) openShopProduct(button.dataset.productKind, button.dataset.productId);
 });
 
 elements.shopDialogBuy.addEventListener("click", () => {
+  if (READ_ONLY) return;
   if (!selectedShopProduct || elements.shopDialogBuy.disabled) return;
   buyItem(selectedShopProduct.kind, selectedShopProduct.id);
 });
@@ -2490,7 +2697,7 @@ elements.canvas.addEventListener("pointermove", (event) => {
   if (event.pointerType === "mouse") {
     toolCursor.x = point.x;
     toolCursor.y = point.y;
-    toolCursor.visible = true;
+    toolCursor.visible = !READ_ONLY;
     hoverIndex = tileIndexAtScreen(point.x, point.y);
     hoverDecorationSlot = selection?.kind === "decoration" ? decorationSlotAtScreen(point.x, point.y) : null;
   }
@@ -2525,7 +2732,7 @@ elements.canvas.addEventListener("pointerenter", (event) => {
   const point = canvasPosition(event);
   toolCursor.x = point.x;
   toolCursor.y = point.y;
-  toolCursor.visible = true;
+  toolCursor.visible = !READ_ONLY;
   hoverIndex = tileIndexAtScreen(point.x, point.y);
   hoverDecorationSlot = selection?.kind === "decoration" ? decorationSlotAtScreen(point.x, point.y) : null;
 });
@@ -2585,11 +2792,13 @@ elements.landBuy.addEventListener("click", purchaseSelectedLand);
 $("#action-confirm-close").addEventListener("click", () => { closeActionConfirm(); renderAll(); });
 $("#action-confirm-cancel").addEventListener("click", () => { closeActionConfirm(); renderAll(); });
 elements.actionConfirmButton.addEventListener("click", () => {
+  if (READ_ONLY) return;
   if (pendingActionPlotId == null || elements.actionConfirmButton.disabled) return;
   useSelection(pendingActionPlotId);
 });
 
 elements.quickbar.addEventListener("click", (event) => {
+  if (READ_ONLY) return;
   if (event.target.closest("[data-cancel-selection]")) {
     selection = null;
     closeActionConfirm();
@@ -2624,6 +2833,7 @@ elements.quickbar.addEventListener("click", (event) => {
 });
 
 elements.mobileShop.addEventListener("click", () => {
+  if (READ_ONLY) return;
   const open = !elements.shop.classList.contains("is-open");
   elements.shop.classList.toggle("is-open", open);
   elements.backdrop.hidden = !open;
@@ -2632,6 +2842,7 @@ elements.mobileShop.addEventListener("click", () => {
 elements.backdrop.addEventListener("click", closeMobileShop);
 
 $("#settings-button").addEventListener("click", () => {
+  if (READ_ONLY) return;
   elements.settingSound.checked = state.settings.sound;
   elements.settingMotion.checked = state.settings.reducedMotion;
   elements.settingsDialog.showModal();
@@ -2639,7 +2850,17 @@ $("#settings-button").addEventListener("click", () => {
 elements.settingSound.addEventListener("change", () => { state.settings.sound = elements.settingSound.checked; saveNow(); renderHeader(); });
 elements.settingMotion.addEventListener("change", () => { state.settings.reducedMotion = elements.settingMotion.checked; saveNow(); renderHeader(); });
 
+$("#share-button").addEventListener("click", () => {
+  if (READ_ONLY) return;
+  if (!elements.shareDialog.open) elements.shareDialog.showModal();
+  refreshShareDialog();
+});
+elements.sharePublish.addEventListener("click", publishFarmShare);
+elements.shareCopy.addEventListener("click", copyShareUrl);
+elements.shareRevoke.addEventListener("click", revokeFarmShare);
+
 $("#export-button").addEventListener("click", () => {
+  if (READ_ONLY) return;
   simulateTo(state, Date.now());
   saveNow(true);
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
@@ -2653,6 +2874,7 @@ $("#export-button").addEventListener("click", () => {
 });
 $("#import-button").addEventListener("click", () => elements.importInput.click());
 elements.importInput.addEventListener("change", async () => {
+  if (READ_ONLY) return;
   const file = elements.importInput.files?.[0];
   if (!file) return;
   try {
@@ -2675,6 +2897,7 @@ elements.importInput.addEventListener("change", async () => {
 });
 
 $("#reset-button").addEventListener("click", () => {
+  if (READ_ONLY) return;
   if (!window.confirm("確定清除所有金幣、土地、工具與植物，重新建立農場嗎？")) return;
   state = createInitialState(Date.now());
   localCreatedAt = Date.now();
@@ -2692,7 +2915,7 @@ window.addEventListener("keydown", (event) => {
     else closeLandPopover();
   }
   const number = Number(event.key);
-  if (number >= 1 && number <= 8 && !event.metaKey && !event.ctrlKey && !event.altKey && document.activeElement !== elements.canvas) {
+  if (!READ_ONLY && number >= 1 && number <= 8 && !event.metaKey && !event.ctrlKey && !event.altKey && document.activeElement !== elements.canvas) {
     const owned = TOOLS.filter((tool) => state.ownedToolIds.includes(tool.id));
     if (owned[number - 1]) {
       state.equippedToolId = owned[number - 1].id;
@@ -2704,11 +2927,13 @@ window.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("storage", (event) => {
+  if (READ_ONLY) return;
   if (event.key !== STORAGE_KEY || !event.newValue) return;
   handleIncomingCheckpoint(parseLocalCheckpoint(event.newValue));
 });
 
 document.addEventListener("visibilitychange", () => {
+  if (READ_ONLY) return;
   if (document.visibilityState === "hidden") {
     simulateTo(state, Date.now());
     saveNow(true, { allowInactive: true });
@@ -2721,39 +2946,52 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 window.addEventListener("focus", () => {
+  if (READ_ONLY) return;
   syncNewestLocalCheckpoint();
   if (cloudSavePending) flushCloudSave();
 });
 window.addEventListener("pagehide", () => {
+  if (READ_ONLY) return;
   simulateTo(state, Date.now());
   if (hasUnsavedChanges()) saveNow(true, { allowInactive: true });
 });
 
 preloadAssets();
-const cloudSyncGate = window.PuzzleFirebase?.createSyncGate("正在同步農場進度…");
-loadState();
-renderAll();
-resizeCanvas();
+document.body.classList.toggle("is-readonly", READ_ONLY);
+const cloudSyncGate = window.PuzzleFirebase?.createSyncGate(READ_ONLY ? "正在載入分享農場…" : "正在同步農場進度…");
 new ResizeObserver(resizeCanvas).observe(elements.canvasShell);
-window.requestAnimationFrame(drawFarm);
+let cloudSyncPromise = Promise.resolve();
 
-window.setInterval(() => {
-  if (!isActiveTab()) return;
-  const summary = simulateTo(state, Date.now());
-  renderHeader();
-  if (summary.gold || summary.harvested) {
-    renderShop(); renderQuickbar();
-  }
-}, 500);
-window.setInterval(() => { if (isActiveTab()) saveNow(); }, 10000);
-const cloudSyncPromise = syncCloudState(cloudSyncGate);
-window.PuzzleFirebase?.registerSaveFlusher?.(() => cloudSyncPromise.then(() => {
-  if (state && isActiveTab()) saveNow(true);
-  return flushCloudSave();
-}));
+async function initializeGame() {
+  if (READ_ONLY) await loadSharedFarm(cloudSyncGate);
+  else loadState();
+  renderAll();
+  resizeCanvas();
+  window.requestAnimationFrame(drawFarm);
+
+  if (READ_ONLY) return;
+  window.setInterval(() => {
+    if (!isActiveTab()) return;
+    const summary = simulateTo(state, Date.now());
+    renderHeader();
+    if (summary.gold || summary.harvested) {
+      renderShop(); renderQuickbar();
+    }
+  }, 500);
+  window.setInterval(() => { if (isActiveTab()) saveNow(); }, 10000);
+  cloudSyncPromise = syncCloudState(cloudSyncGate);
+  window.PuzzleFirebase?.registerSaveFlusher?.(() => cloudSyncPromise.then(() => {
+    if (state && isActiveTab()) saveNow(true);
+    return flushCloudSave();
+  }));
+}
+
+const initializationPromise = initializeGame();
 
 globalThis.__harvestGame = {
   getState: () => state,
+  ready: initializationPromise,
+  isReadOnly: () => READ_ONLY,
   focusOwnedFarm,
   showLandPopover,
   handleBoardClick

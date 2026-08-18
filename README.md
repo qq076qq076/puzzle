@@ -32,13 +32,15 @@ python3 -m http.server 8000
 
 接著開啟 `http://localhost:8000`。
 
-## Firebase 雲端存檔
+## Firebase 雲端存檔與分享
 
 除了剪刀石頭布以外，其餘 11 款遊戲已接上共用 Firebase 存檔層。未設定 Firebase 時，遊戲會自動退回原本的 `localStorage`；設定完成後，未登入時使用匿名 Authentication，登入 Google／Facebook 後即可跨裝置恢復進度，Email 登入則可按需展開。存檔寫入：
 
 ```text
 users/{uid}/saves/{gameId}
 ```
+
+格田收割記另支援由已登入帳號發布唯讀農場快照。私人控制文件位於 `users/{uid}/shares/harvest-clicker`，訪客只會依不可列舉的分享代碼讀取 `publicShares/{shareId}`；建立、更新與停止分享都受 Firestore 規則保護。
 
 啟用方式：
 
