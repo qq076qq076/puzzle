@@ -27,6 +27,10 @@ service cloud.firestore {
       ];
     }
 
+    function isShareableGame(gameId) {
+      return gameId == 'harvest-clicker';
+    }
+
     function isValidShareId(shareId) {
       return shareId is string
         && shareId.size() >= 20
@@ -40,7 +44,7 @@ service cloud.firestore {
         ])
         && data.version == 1
         && data.gameId == gameId
-        && isPuzzleGame(data.gameId)
+        && isShareableGame(data.gameId)
         && isValidShareId(data.shareId)
         && data.createdAt is timestamp
         && data.updatedAt is timestamp
@@ -49,11 +53,13 @@ service cloud.firestore {
 
     function isValidPublicShare(data) {
       return data.keys().hasOnly([
-          'version', 'gameId', 'data', 'createdAt', 'updatedAt'
+          'version', 'gameId', 'data', 'sourceRevision', 'createdAt', 'updatedAt'
         ])
         && data.version == 1
-        && isPuzzleGame(data.gameId)
+        && isShareableGame(data.gameId)
         && data.data is map
+        && data.sourceRevision is int
+        && data.sourceRevision >= 0
         && data.createdAt is timestamp
         && data.updatedAt is timestamp
         && data.updatedAt == request.time;
@@ -71,7 +77,7 @@ service cloud.firestore {
     }
 
     match /users/{userId}/shares/{gameId} {
-      allow get: if isOwner(userId) && isPuzzleGame(gameId);
+      allow get: if isOwner(userId) && isShareableGame(gameId);
       allow list: if false;
       allow create: if isPermanentOwner(userId)
         && isValidShareControl(request.resource.data, gameId)
@@ -89,16 +95,21 @@ service cloud.firestore {
         && isValidShareId(shareId);
       allow list: if false;
       allow create: if request.auth != null
+        && isPermanentOwner(request.auth.uid)
         && isValidShareId(shareId)
         && isValidPublicShare(request.resource.data)
         && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/shares/$(request.resource.data.gameId)).data.shareId == shareId;
       allow update: if request.auth != null
+        && isPermanentOwner(request.auth.uid)
         && isValidShareId(shareId)
         && isValidPublicShare(request.resource.data)
         && request.resource.data.gameId == resource.data.gameId
         && request.resource.data.createdAt == resource.data.createdAt
+        && (!resource.data.keys().hasAny(['sourceRevision'])
+          || request.resource.data.sourceRevision >= resource.data.sourceRevision)
         && get(/databases/$(database)/documents/users/$(request.auth.uid)/shares/$(resource.data.gameId)).data.shareId == shareId;
       allow delete: if request.auth != null
+        && isPermanentOwner(request.auth.uid)
         && isValidShareId(shareId)
         && get(/databases/$(database)/documents/users/$(request.auth.uid)/shares/$(resource.data.gameId)).data.shareId == shareId;
     }

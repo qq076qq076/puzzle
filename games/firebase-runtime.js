@@ -17,6 +17,7 @@
     "dice-tower-defense",
     "harvest-clicker"
   ];
+  const SHARE_KEYS = new Set(["harvest-clicker"]);
   const config = window.PUZZLE_FIREBASE_CONFIG || {};
   const configured = REQUIRED_CONFIG_KEYS.every(function (key) {
     return typeof config[key] === "string" && config[key].trim().length > 0;
@@ -36,6 +37,7 @@
   let makeCollection = null;
   let makeWriteBatch = null;
   let runTransaction = null;
+  let listenDocument = null;
   let serverTimestamp = null;
 
   function accountLabel(user) {
@@ -147,6 +149,7 @@
       makeCollection = firestoreMethods.collection;
       makeWriteBatch = firestoreMethods.writeBatch;
       runTransaction = firestoreMethods.runTransaction;
+      listenDocument = firestoreMethods.onSnapshot;
       serverTimestamp = firestoreMethods.serverTimestamp;
       return authSdk.setPersistence(authApi, authSdk.browserLocalPersistence)
         .catch(function () { /* Some restricted browsers only support session persistence. */ })
@@ -324,8 +327,17 @@
     return ready.then(function (user) {
       if (!user) return false;
       return writeSaveForUser(user, gameKey, data, metadata).then(function (result) {
-        if (result && result.accepted) notify("online", "Firebase 已同步");
-        return result;
+        if (!result || !result.accepted) return result;
+        const mirror = user.isAnonymous || !SHARE_KEYS.has(gameKey)
+          ? Promise.resolve(false)
+          : syncOwnedShare(user, gameKey, result.checkpoint);
+        return mirror.catch(function (error) {
+          console.warn("[PuzzleFirebase] Cannot sync account share", gameKey, error);
+          return false;
+        }).then(function () {
+          notify("online", "Firebase 已同步");
+          return result;
+        });
       }).catch(function (error) {
         notify("error", "雲端寫入失敗，保留本機存檔");
         console.warn("[PuzzleFirebase] Cannot save save", gameKey, error);
@@ -350,7 +362,7 @@
   }
 
   function assertShareGame(gameKey) {
-    if (!SAVE_KEYS.includes(gameKey)) throw new Error("不支援這個遊戲的分享。");
+    if (!SHARE_KEYS.has(gameKey)) throw new Error("不支援這個遊戲的分享。");
   }
 
   function isValidShareId(shareId) {
@@ -376,9 +388,55 @@
       shareId: shareId,
       gameId: value.gameId,
       data: cloneData(value.data),
+      sourceRevision: Math.max(0, Number(value.sourceRevision) || 0),
       createdAt: timestampToMillis(value.createdAt),
       updatedAt: timestampToMillis(value.updatedAt)
     };
+  }
+
+  function syncOwnedShare(user, gameKey, checkpoint) {
+    if (!user || user.isAnonymous || !checkpoint?.data) return Promise.resolve(false);
+    const sourceRevision = Math.max(0, Math.floor(Number(checkpoint.serverRevision) || 0));
+    if (!sourceRevision) return Promise.resolve(false);
+    const controlReference = shareControlDocument(user, gameKey);
+    return getDocument(controlReference).then(function (controlSnapshot) {
+      if (!controlSnapshot.exists()) return false;
+      const control = controlSnapshot.data();
+      if (control.version !== 1 || control.gameId !== gameKey || !isValidShareId(control.shareId)) return false;
+      const publicReference = publicShareDocument(control.shareId);
+      const commit = function (transaction) {
+        return transaction.get(publicReference).then(function (publicSnapshot) {
+          const current = publicSnapshot.exists() ? publicSnapshot.data() : null;
+          if (current && (current.gameId !== gameKey || (Number(current.sourceRevision) || 0) >= sourceRevision)) return false;
+          const now = serverTimestamp();
+          const publicValue = {
+            version: 1,
+            gameId: gameKey,
+            data: cloneData(checkpoint.data),
+            sourceRevision: sourceRevision,
+            updatedAt: now
+          };
+          if (!publicSnapshot.exists()) publicValue.createdAt = now;
+          transaction.set(publicReference, publicValue, { merge: true });
+          return true;
+        });
+      };
+      if (runTransaction) return runTransaction(firestore, commit);
+      return getDocument(publicReference).then(function (publicSnapshot) {
+        const current = publicSnapshot.exists() ? publicSnapshot.data() : null;
+        if (current && (current.gameId !== gameKey || (Number(current.sourceRevision) || 0) >= sourceRevision)) return false;
+        const now = serverTimestamp();
+        const publicValue = {
+          version: 1,
+          gameId: gameKey,
+          data: cloneData(checkpoint.data),
+          sourceRevision: sourceRevision,
+          updatedAt: now
+        };
+        if (!publicSnapshot.exists()) publicValue.createdAt = now;
+        return setDocument(publicReference, publicValue, { merge: true }).then(function () { return true; });
+      });
+    });
   }
 
   function getOwnedShare(gameKey) {
@@ -408,33 +466,47 @@
   function publishShare(gameKey, data) {
     assertShareGame(gameKey);
     if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("沒有可分享的遊戲資料。");
-    const serialized = JSON.stringify(data);
-    if (new Blob([serialized]).size > 900 * 1024) throw new Error("農場資料太大，暫時無法建立分享。");
     return ready.then(function (user) {
       requireShareOwner(user);
       if (!firestore || !makeWriteBatch || !makeCollection) throw new Error("Firebase 尚未準備完成，請稍候再試。");
-      const controlReference = shareControlDocument(user, gameKey);
-      return getDocument(controlReference).then(function (controlSnapshot) {
-        const control = controlSnapshot.exists() ? controlSnapshot.data() : null;
-        let shareId = control?.gameId === gameKey && isValidShareId(control?.shareId) ? control.shareId : null;
-        let publicReference;
-        if (shareId) {
-          publicReference = publicShareDocument(shareId);
-        } else {
-          publicReference = makeDocument(makeCollection(firestore, "publicShares"));
-          shareId = publicReference.id;
-        }
-        return getDocument(publicReference).then(function (publicSnapshot) {
-          const batch = makeWriteBatch(firestore);
-          const now = serverTimestamp();
-          const controlValue = { version: 1, gameId: gameKey, shareId: shareId, updatedAt: now };
-          const publicValue = { version: 1, gameId: gameKey, data: cloneData(data), updatedAt: now };
-          if (!controlSnapshot.exists()) controlValue.createdAt = now;
-          if (!publicSnapshot.exists()) publicValue.createdAt = now;
-          batch.set(controlReference, controlValue, { merge: true });
-          batch.set(publicReference, publicValue, { merge: true });
-          return batch.commit().then(function () {
-            return { shareId: shareId, gameId: gameKey, updatedAt: Date.now() };
+      return readSaveForUser(user, gameKey).then(function (checkpoint) {
+        const publicData = checkpoint?.data || data;
+        if (new Blob([JSON.stringify(publicData)]).size > 900 * 1024) throw new Error("農場資料太大，暫時無法建立分享。");
+        const controlReference = shareControlDocument(user, gameKey);
+        return getDocument(controlReference).then(function (controlSnapshot) {
+          const control = controlSnapshot.exists() ? controlSnapshot.data() : null;
+          let shareId = control?.gameId === gameKey && isValidShareId(control?.shareId) ? control.shareId : null;
+          let publicReference;
+          if (shareId) {
+            publicReference = publicShareDocument(shareId);
+          } else {
+            publicReference = makeDocument(makeCollection(firestore, "publicShares"));
+            shareId = publicReference.id;
+          }
+          return getDocument(publicReference).then(function (publicSnapshot) {
+            if (controlSnapshot.exists() && publicSnapshot.exists()) {
+              const sync = checkpoint ? syncOwnedShare(user, gameKey, checkpoint) : Promise.resolve(false);
+              return sync.then(function () {
+                return { shareId: shareId, gameId: gameKey, updatedAt: Date.now() };
+              });
+            }
+            const batch = makeWriteBatch(firestore);
+            const now = serverTimestamp();
+            const controlValue = { version: 1, gameId: gameKey, shareId: shareId, updatedAt: now };
+            const publicValue = {
+              version: 1,
+              gameId: gameKey,
+              data: cloneData(publicData),
+              sourceRevision: Math.max(0, Math.floor(Number(checkpoint?.serverRevision) || 0)),
+              updatedAt: now
+            };
+            if (!controlSnapshot.exists()) controlValue.createdAt = now;
+            if (!publicSnapshot.exists()) publicValue.createdAt = now;
+            if (!controlSnapshot.exists()) batch.set(controlReference, controlValue, { merge: true });
+            if (!publicSnapshot.exists()) batch.set(publicReference, publicValue, { merge: true });
+            return batch.commit().then(function () {
+              return { shareId: shareId, gameId: gameKey, updatedAt: Date.now() };
+            });
           });
         });
       });
@@ -449,6 +521,27 @@
         return snapshot.exists() ? normalizeShareValue(shareId, snapshot.data()) : null;
       });
     });
+  }
+
+  function watchShare(shareId, onValue, onError) {
+    if (!isValidShareId(shareId) || typeof onValue !== "function") return function () {};
+    let stopped = false;
+    let unsubscribe = function () {};
+    ready.then(function (user) {
+      if (stopped || !user || !firestore || !listenDocument) return;
+      unsubscribe = listenDocument(publicShareDocument(shareId), function (snapshot) {
+        if (stopped) return;
+        onValue(snapshot.exists() ? normalizeShareValue(shareId, snapshot.data()) : null);
+      }, function (error) {
+        if (!stopped && typeof onError === "function") onError(error);
+      });
+    }).catch(function (error) {
+      if (!stopped && typeof onError === "function") onError(error);
+    });
+    return function () {
+      stopped = true;
+      unsubscribe();
+    };
   }
 
   function revokeShare(gameKey) {
@@ -819,6 +912,7 @@
     getOwnedShare: getOwnedShare,
     publishShare: publishShare,
     loadShare: loadShare,
+    watchShare: watchShare,
     revokeShare: revokeShare,
     openAccount: openAccount,
     isAuthenticated: function () { return Boolean(currentUser && !currentUser.isAnonymous); },

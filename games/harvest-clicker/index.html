@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#183f2c" />
     <meta name="description" content="格田收割記：點擊收割棋盤上的作物，購買農具、種子與自動化設備，讓農場在離線時繼續生長。" />
     <title>格田收割記 · Harvest Clicker</title>
-    <link rel="stylesheet" href="style.css?v=20260818-1" />
+    <link rel="stylesheet" href="style.css?v=20260818-2" />
   </head>
   <body>
     <main class="harvest-page">
@@ -18,7 +18,7 @@
           <h1>格田收割記<span>.</span></h1>
           <p class="game-tagline">從 9×9 農田開始，讓整座農場慢慢運轉。</p>
         </div>
-        <button class="header-share-button" id="share-button" type="button">
+        <button class="header-share-button" id="share-button" type="button" hidden>
           <span aria-hidden="true">↗</span> 分享農田
         </button>
       </header>
@@ -143,7 +143,7 @@
         <button class="dialog-close" value="close" aria-label="關閉">×</button>
         <p class="dialog-kicker">SHARE FARM</p>
         <h2>分享農場景觀</h2>
-        <p id="share-dialog-copy">分享會建立一份唯讀快照；訪客不會讀到你的私人存檔，也不能操作農場。</p>
+        <p id="share-dialog-copy">這是此帳號固定的唯讀網址；之後每次保存農場，都會自動同步到同一網址。</p>
         <div class="share-link-field" id="share-link-field" hidden>
           <span>唯讀分享網址</span>
           <div class="share-link-row">
@@ -171,16 +171,16 @@
     </dialog>
     <input id="import-input" type="file" accept="application/json,.json" hidden />
 
-    <script src="game-config.js?v=20260818-1"></script>
-    <script src="data/plants.js?v=20260818-1"></script>
-    <script src="data/tools.js?v=20260818-1"></script>
-    <script src="data/automation.js?v=20260818-1"></script>
-    <script src="data/fertilizers.js?v=20260818-1"></script>
-    <script src="data/decorations.js?v=20260818-1"></script>
-    <script src="game-core.js?v=20260818-1"></script>
-    <script src="../share-utils.js?v=20260818-1"></script>
-    <script src="../firebase-config.js?v=20260818-1"></script>
-    <script src="../firebase-runtime.js?v=20260818-1"></script>
-    <script src="script.js?v=20260818-1"></script>
+    <script src="game-config.js?v=20260818-2"></script>
+    <script src="data/plants.js?v=20260818-2"></script>
+    <script src="data/tools.js?v=20260818-2"></script>
+    <script src="data/automation.js?v=20260818-2"></script>
+    <script src="data/fertilizers.js?v=20260818-2"></script>
+    <script src="data/decorations.js?v=20260818-2"></script>
+    <script src="game-core.js?v=20260818-2"></script>
+    <script src="../share-utils.js?v=20260818-2"></script>
+    <script src="../firebase-config.js?v=20260818-2"></script>
+    <script src="../firebase-runtime.js?v=20260818-2"></script>
+    <script src="script.js?v=20260818-2"></script>
   </body>
 </html>

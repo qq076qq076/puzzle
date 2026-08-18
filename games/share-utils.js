@@ -39,6 +39,7 @@
       version: 1,
       gameId: value.gameId,
       data,
+      sourceRevision: Math.max(0, Number(value.sourceRevision) || 0),
       createdAt: Number(value.createdAt) || 0,
       updatedAt: Number(value.updatedAt) || 0
     };

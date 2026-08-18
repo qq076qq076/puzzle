@@ -24,11 +24,12 @@ test("分享網址保留路徑與查詢，只替換 hash", () => {
   assert.equal(url, `https://example.com/games/harvest-clicker/?from=menu#share=${shareId}`);
 });
 
-test("公開快照須符合遊戲並回傳獨立資料", () => {
+test("帳號公開農場須符合遊戲、保留來源版本並回傳獨立資料", () => {
   const source = {
     version: 1,
     gameId: "harvest-clicker",
     data: { gold: 99, cells: [] },
+    sourceRevision: 7,
     createdAt: 100,
     updatedAt: 200
   };
