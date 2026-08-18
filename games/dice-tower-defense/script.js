@@ -9,6 +9,7 @@ import {
   BUY_COST, TIER_ATTACK_RATE_MULTIPLIERS, MAX_TIER, BUILD_TIMES,
   CRIT_CHANCES, FROST_CRIT_CHANCES, POISON_DURATIONS,
   CRIT_DAMAGE_MULTIPLIER, TOWER_DAMAGE_MULTIPLIER, ATTACK_PULSE_DURATION,
+  TOWER_VISUAL_SIZE, MOBILE_TOWER_VISUAL_SIZE, MOBILE_TOWER_BREAKPOINT,
   MERGE_EFFECT_DURATION, TIER_FIVE_MERGE_EFFECT_DURATION,
   TIER_SIX_MERGE_EFFECT_DURATION, TOWER_TYPES
 } from "./config/tower-config.js";
@@ -2327,7 +2328,10 @@ const TAB_ID = globalThis.crypto?.randomUUID?.() || `dice-${Date.now()}-${Math.r
   function drawTower(tower) {
     const type = TOWER_TYPES[tower.type];
     const center = gridCenter(tower.x, tower.y);
-    const size = canvasMetrics.cell * 0.72;
+    const towerSize = window.innerWidth <= MOBILE_TOWER_BREAKPOINT
+      ? MOBILE_TOWER_VISUAL_SIZE
+      : TOWER_VISUAL_SIZE;
+    const size = canvasMetrics.cell * towerSize;
     const selected = state.selectedTowerId === tower.id;
     const constructing = isTowerConstructing(tower);
     const attackPulseProgress = tower.attackPulseRemaining > 0 ? 1 - tower.attackPulseRemaining / ATTACK_PULSE_DURATION : 0;
@@ -3496,11 +3500,6 @@ const TAB_ID = globalThis.crypto?.randomUUID?.() || `dice-${Date.now()}-${Math.r
       return;
     }
     if (startupCheckpoint || tutorialVisible) return;
-    if (event.code === "Space") {
-      event.preventDefault();
-      if (state.phase === "preparation") beginCombat();
-      else togglePause();
-    }
     if (event.key.toLowerCase() === "r" && !event.metaKey && !event.ctrlKey) {
       if (window.confirm("要重新開始這一局嗎？")) resetGame();
     }
