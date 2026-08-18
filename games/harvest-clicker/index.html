@@ -43,7 +43,6 @@
           </nav>
           <div class="shop-list" id="shop-list" aria-live="polite"></div>
           <footer class="shop-footer">
-            <button class="text-button" id="share-button" type="button">分享農場</button>
             <button class="text-button" id="settings-button" type="button">設定與存檔</button>
             <a class="text-button" href="遊戲規格書.md">查看規格</a>
           </footer>
@@ -52,6 +51,9 @@
         <section class="farm-panel">
           <div class="farm-canvas-shell" id="farm-canvas-shell">
             <canvas id="farm-canvas" tabindex="0" aria-label="27乘27等角農田；點擊收割，拖曳移動畫面，兩指縮放"></canvas>
+            <button class="farm-share-button" id="share-button" type="button" aria-label="分享農田">
+              <span aria-hidden="true">↗</span> 分享農田
+            </button>
             <section class="readonly-banner" id="readonly-banner" hidden aria-live="polite">
               <div><span>READ ONLY</span><strong>正在瀏覽分享農場</strong></div>
               <a href="./">回到自己的農場</a>
