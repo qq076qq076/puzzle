@@ -115,6 +115,7 @@ let cloudSaveInFlight = Promise.resolve();
 let shareActive = false;
 let shareOwnerUid = null;
 let shareStateRequestId = 0;
+let lastShareSyncErrorToastAt = -Infinity;
 let sharedFarmUnsubscribe = null;
 let sharedSourceRevision = -1;
 let sharedUpdatedAt = -1;
@@ -271,6 +272,10 @@ function flushCloudSave() {
           serverRevision: localServerRevision
         }));
       } catch (error) { /* Local storage is optional. */ }
+    }
+    if (result?.shareSyncFailed && shareActive && Date.now() - lastShareSyncErrorToastAt > 30000) {
+      lastShareSyncErrorToastAt = Date.now();
+      showToast("存檔成功，但分享農場同步失敗");
     }
     if (cloudSavePending && !cloudSaveTimer) cloudSaveTimer = window.setTimeout(flushCloudSave, 5000);
     return result;

@@ -53,13 +53,13 @@ service cloud.firestore {
 
     function isValidPublicShare(data) {
       return data.keys().hasOnly([
-          'version', 'gameId', 'data', 'sourceRevision', 'createdAt', 'updatedAt'
+          'version', 'gameId', 'data', 'createdAt', 'updatedAt'
         ])
         && data.version == 1
         && isShareableGame(data.gameId)
         && data.data is map
-        && data.sourceRevision is int
-        && data.sourceRevision >= 0
+        && data.data.__shareSourceRevision is int
+        && data.data.__shareSourceRevision >= 0
         && data.createdAt is timestamp
         && data.updatedAt is timestamp
         && data.updatedAt == request.time;
@@ -105,8 +105,8 @@ service cloud.firestore {
         && isValidPublicShare(request.resource.data)
         && request.resource.data.gameId == resource.data.gameId
         && request.resource.data.createdAt == resource.data.createdAt
-        && (!resource.data.keys().hasAny(['sourceRevision'])
-          || request.resource.data.sourceRevision >= resource.data.sourceRevision)
+        && (!resource.data.data.keys().hasAny(['__shareSourceRevision'])
+          || request.resource.data.data.__shareSourceRevision >= resource.data.data.__shareSourceRevision)
         && get(/databases/$(database)/documents/users/$(request.auth.uid)/shares/$(resource.data.gameId)).data.shareId == shareId;
       allow delete: if request.auth != null
         && isPermanentOwner(request.auth.uid)

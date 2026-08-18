@@ -18,6 +18,7 @@
     "harvest-clicker"
   ];
   const SHARE_KEYS = new Set(["harvest-clicker"]);
+  const SHARE_REVISION_FIELD = "__shareSourceRevision";
   const config = window.PUZZLE_FIREBASE_CONFIG || {};
   const configured = REQUIRED_CONFIG_KEYS.every(function (key) {
     return typeof config[key] === "string" && config[key].trim().length > 0;
@@ -331,12 +332,13 @@
         const mirror = user.isAnonymous || !SHARE_KEYS.has(gameKey)
           ? Promise.resolve(false)
           : syncOwnedShare(user, gameKey, result.checkpoint);
-        return mirror.catch(function (error) {
-          console.warn("[PuzzleFirebase] Cannot sync account share", gameKey, error);
-          return false;
-        }).then(function () {
+        return mirror.then(function (shareSynced) {
           notify("online", "Firebase 已同步");
-          return result;
+          return Object.assign({}, result, { shareSynced: Boolean(shareSynced) });
+        }).catch(function (error) {
+          console.warn("[PuzzleFirebase] Cannot sync account share", gameKey, error);
+          notify("error", "雲端存檔已同步，但公開農場更新失敗");
+          return Object.assign({}, result, { shareSyncFailed: true });
         });
       }).catch(function (error) {
         notify("error", "雲端寫入失敗，保留本機存檔");
@@ -383,15 +385,24 @@
 
   function normalizeShareValue(shareId, value) {
     if (!isValidShareId(shareId) || !value || value.version !== 1 || !SAVE_KEYS.includes(value.gameId) || !value.data) return null;
+    const data = cloneData(value.data);
+    const sourceRevision = Math.max(0, Number(data[SHARE_REVISION_FIELD]) || Number(value.sourceRevision) || 0);
+    delete data[SHARE_REVISION_FIELD];
     return {
       version: 1,
       shareId: shareId,
       gameId: value.gameId,
-      data: cloneData(value.data),
-      sourceRevision: Math.max(0, Number(value.sourceRevision) || 0),
+      data: data,
+      sourceRevision: sourceRevision,
       createdAt: timestampToMillis(value.createdAt),
       updatedAt: timestampToMillis(value.updatedAt)
     };
+  }
+
+  function createPublicShareData(data, sourceRevision) {
+    const publicData = cloneData(data);
+    publicData[SHARE_REVISION_FIELD] = Math.max(0, Math.floor(Number(sourceRevision) || 0));
+    return publicData;
   }
 
   function syncOwnedShare(user, gameKey, checkpoint) {
@@ -407,34 +418,34 @@
       const commit = function (transaction) {
         return transaction.get(publicReference).then(function (publicSnapshot) {
           const current = publicSnapshot.exists() ? publicSnapshot.data() : null;
-          if (current && (current.gameId !== gameKey || (Number(current.sourceRevision) || 0) >= sourceRevision)) return false;
+          const currentRevision = Number(current?.data?.[SHARE_REVISION_FIELD]) || Number(current?.sourceRevision) || 0;
+          if (current && (current.gameId !== gameKey || currentRevision >= sourceRevision)) return false;
           const now = serverTimestamp();
           const publicValue = {
             version: 1,
             gameId: gameKey,
-            data: cloneData(checkpoint.data),
-            sourceRevision: sourceRevision,
+            data: createPublicShareData(checkpoint.data, sourceRevision),
             updatedAt: now
           };
-          if (!publicSnapshot.exists()) publicValue.createdAt = now;
-          transaction.set(publicReference, publicValue, { merge: true });
+          publicValue.createdAt = publicSnapshot.exists() ? current.createdAt : now;
+          transaction.set(publicReference, publicValue);
           return true;
         });
       };
       if (runTransaction) return runTransaction(firestore, commit);
       return getDocument(publicReference).then(function (publicSnapshot) {
         const current = publicSnapshot.exists() ? publicSnapshot.data() : null;
-        if (current && (current.gameId !== gameKey || (Number(current.sourceRevision) || 0) >= sourceRevision)) return false;
+        const currentRevision = Number(current?.data?.[SHARE_REVISION_FIELD]) || Number(current?.sourceRevision) || 0;
+        if (current && (current.gameId !== gameKey || currentRevision >= sourceRevision)) return false;
         const now = serverTimestamp();
         const publicValue = {
           version: 1,
           gameId: gameKey,
-          data: cloneData(checkpoint.data),
-          sourceRevision: sourceRevision,
+          data: createPublicShareData(checkpoint.data, sourceRevision),
           updatedAt: now
         };
-        if (!publicSnapshot.exists()) publicValue.createdAt = now;
-        return setDocument(publicReference, publicValue, { merge: true }).then(function () { return true; });
+        publicValue.createdAt = publicSnapshot.exists() ? current.createdAt : now;
+        return setDocument(publicReference, publicValue).then(function () { return true; });
       });
     });
   }
@@ -496,8 +507,7 @@
             const publicValue = {
               version: 1,
               gameId: gameKey,
-              data: cloneData(publicData),
-              sourceRevision: Math.max(0, Math.floor(Number(checkpoint?.serverRevision) || 0)),
+              data: createPublicShareData(publicData, checkpoint?.serverRevision),
               updatedAt: now
             };
             if (!controlSnapshot.exists()) controlValue.createdAt = now;
