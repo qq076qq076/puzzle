@@ -52,8 +52,7 @@ const elements = {
   readonlyBanner: $("#readonly-banner"), shareDialog: $("#share-dialog"),
   shareDialogCopy: $("#share-dialog-copy"), shareLinkField: $("#share-link-field"),
   shareLink: $("#share-link"), shareStatus: $("#share-status"),
-  sharePublish: $("#share-publish-button"), shareCopy: $("#share-copy-button"),
-  sharePreview: $("#share-preview-link"), shareRevoke: $("#share-revoke-button"),
+  shareCopy: $("#share-copy-button"), shareRevoke: $("#share-revoke-button"),
   shareErrorDialog: $("#share-error-dialog"), shareErrorCopy: $("#share-error-copy")
 };
 
@@ -444,7 +443,6 @@ function showToast(message) {
 
 function setShareBusy(busy) {
   elements.shareDialog.classList.toggle("is-busy", busy);
-  elements.sharePublish.disabled = busy;
   elements.shareCopy.disabled = busy;
   elements.shareRevoke.disabled = busy;
 }
@@ -459,10 +457,7 @@ function showShareLink(shareId) {
   elements.shareLink.value = url;
   elements.shareLinkField.hidden = false;
   elements.shareCopy.hidden = false;
-  elements.sharePreview.hidden = false;
-  elements.sharePreview.href = url;
   elements.shareRevoke.hidden = false;
-  elements.sharePublish.textContent = "更新分享快照";
   return url;
 }
 
@@ -470,10 +465,7 @@ function clearShareLink() {
   elements.shareLink.value = "";
   elements.shareLinkField.hidden = true;
   elements.shareCopy.hidden = true;
-  elements.sharePreview.hidden = true;
-  elements.sharePreview.href = "#";
   elements.shareRevoke.hidden = true;
-  elements.sharePublish.textContent = "建立分享";
 }
 
 function shareErrorMessage(error) {
@@ -482,52 +474,30 @@ function shareErrorMessage(error) {
   return error?.message || "分享操作失敗，請稍後再試。";
 }
 
-async function refreshShareDialog() {
-  clearShareLink();
-  if (!window.PuzzleFirebase?.enabled) {
-    elements.sharePublish.disabled = true;
+async function publishFarmShare() {
+  if (!window.PuzzleFirebase?.enabled || !window.PuzzleFirebase?.publishShare) {
+    clearShareLink();
+    if (!elements.shareDialog.open) elements.shareDialog.showModal();
     setShareStatus("尚未設定 Firebase，無法建立公開分享。", true);
     return;
   }
-  if (!window.PuzzleFirebase.isAuthenticated()) {
-    elements.sharePublish.disabled = false;
-    elements.sharePublish.textContent = "登入後分享";
-    setShareStatus("請先使用雲端帳號登入；匿名存檔不會公開。", true);
-    return;
-  }
-  setShareBusy(true);
-  setShareStatus("正在確認目前的分享狀態…");
-  try {
-    const share = await window.PuzzleFirebase.getOwnedShare(CLOUD_SAVE_KEY);
-    if (share) {
-      showShareLink(share.shareId);
-      setShareStatus("網址會保持不變；按更新即可發布目前農場快照。");
-    } else {
-      setShareStatus("尚未分享。建立後只有拿到網址的人能開啟唯讀快照。");
-    }
-  } catch (error) {
-    setShareStatus(shareErrorMessage(error), true);
-  } finally {
-    setShareBusy(false);
-  }
-}
-
-async function publishFarmShare() {
   if (!window.PuzzleFirebase?.isAuthenticated()) {
-    elements.shareDialog.close();
+    if (elements.shareDialog.open) elements.shareDialog.close();
     window.PuzzleFirebase?.openAccount?.();
     showToast("請先登入雲端帳號再分享");
     return;
   }
+  clearShareLink();
+  if (!elements.shareDialog.open) elements.shareDialog.showModal();
   setShareBusy(true);
-  setShareStatus("正在建立唯讀快照…");
+  setShareStatus("正在產生唯讀分享網址…");
   try {
     simulateTo(state, Date.now());
     saveNow(true);
     const result = await window.PuzzleFirebase.publishShare(CLOUD_SAVE_KEY, JSON.parse(JSON.stringify(state)));
-    const url = showShareLink(result.shareId);
-    setShareStatus("分享已更新。之後農場變動不會自動改變這份快照。");
-    try { await navigator.clipboard.writeText(url); showToast("分享網址已複製"); } catch (error) { showToast("分享已建立"); }
+    showShareLink(result.shareId);
+    setShareStatus("分享網址已產生；再次點擊分享農田會更新這份快照。");
+    showToast("分享網址已產生");
   } catch (error) {
     setShareStatus(shareErrorMessage(error), true);
   } finally {
@@ -2852,10 +2822,8 @@ elements.settingMotion.addEventListener("change", () => { state.settings.reduced
 
 $("#share-button").addEventListener("click", () => {
   if (READ_ONLY) return;
-  if (!elements.shareDialog.open) elements.shareDialog.showModal();
-  refreshShareDialog();
+  publishFarmShare();
 });
-elements.sharePublish.addEventListener("click", publishFarmShare);
 elements.shareCopy.addEventListener("click", copyShareUrl);
 elements.shareRevoke.addEventListener("click", revokeFarmShare);
 
