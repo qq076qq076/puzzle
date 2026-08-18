@@ -14,6 +14,7 @@ const STORAGE_KEY = "puzzle-club-save:harvest-clicker:v4";
 const LEGACY_STORAGE_KEYS = ["puzzle-club-save:harvest-clicker:v3"];
 const CLOUD_SAVE_KEY = "harvest-clicker";
 const ASSET_ROOT = "assets/";
+const TAB_ID = globalThis.crypto?.randomUUID?.() || `harvest-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const TILE_W = 96;
 const TILE_H = 48;
 const TILE_DEPTH = 13;
@@ -73,7 +74,6 @@ let pendingDecorationSlot = null;
 let selectedShopProduct = null;
 let keyboardIndex = indexesForPlot(INITIAL_PLOT_ID)[4];
 let toastTimer = 0;
-let passiveBecauseOtherTab = false;
 let audioContext = null;
 let rustleBuffer = null;
 let canvasWidth = 0;
@@ -91,8 +91,10 @@ let focusedPlotStartedAt = -Infinity;
 let lastFarmFrameAt = -Infinity;
 let localCreatedAt = 0;
 let localSavedAt = 0;
+let localRevision = 0;
 let initialLocalCreatedAt = 0;
 let initialLocalSavedAt = 0;
+let lastPersistedState = "";
 let cloudReady = !window.PuzzleFirebase?.enabled;
 let cloudSaveTimer = null;
 let cloudSavePending = null;
@@ -154,22 +156,66 @@ function normalizeLoadedState(candidate) {
   return parsed;
 }
 
-function applyLoadedState(candidate, showSummary = true) {
+function applyLoadedState(candidate, showSummary = true, simulate = true) {
   const parsed = normalizeLoadedState(candidate);
   if (!parsed) return false;
   state = parsed;
-  const summary = simulateTo(state, Date.now());
-  state.stats.offlineGold = (state.stats.offlineGold || 0) + summary.gold;
-  if (showSummary && (summary.elapsedMs >= 60000 || summary.gold > 0)) showOfflineSummary(summary);
+  if (simulate) {
+    const summary = simulateTo(state, Date.now());
+    state.stats.offlineGold = (state.stats.offlineGold || 0) + summary.gold;
+    if (showSummary && (summary.elapsedMs >= 60000 || summary.gold > 0)) showOfflineSummary(summary);
+  }
   return true;
 }
 
+function stateSnapshot() {
+  return state ? JSON.stringify(state) : "";
+}
+
+function hasUnsavedChanges() {
+  return Boolean(state && lastPersistedState && stateSnapshot() !== lastPersistedState);
+}
+
+function isActiveTab() {
+  return document.visibilityState === "visible" && document.hasFocus();
+}
+
+function parseLocalCheckpoint(raw) {
+  try {
+    const stored = JSON.parse(raw);
+    const envelope = stored && stored.version === 1 && stored.data ? stored : { version: 1, data: stored };
+    const data = normalizeLoadedState(envelope.data);
+    if (!data) return null;
+    return {
+      version: 1,
+      createdAt: Number(envelope.createdAt) || Number(envelope.savedAt) || 0,
+      savedAt: Number(envelope.savedAt) || 0,
+      revision: Number(envelope.revision) || 0,
+      writerId: envelope.writerId || "",
+      data
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+function readLocalCheckpoint() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? parseLocalCheckpoint(raw) : null;
+  } catch (error) {
+    return null;
+  }
+}
+
 function queueCloudSave(immediate = false) {
-  if (!window.PuzzleFirebase?.enabled || !cloudReady || !state) return;
+  if (!window.PuzzleFirebase?.enabled || !cloudReady || !state || !isActiveTab()) return;
   cloudSavePending = {
     data: JSON.parse(JSON.stringify(state)),
     createdAt: localCreatedAt,
-    savedAt: localSavedAt
+    savedAt: localSavedAt,
+    revision: localRevision,
+    writerId: TAB_ID
   };
   if (immediate) {
     flushCloudSave();
@@ -180,7 +226,7 @@ function queueCloudSave(immediate = false) {
 
 function flushCloudSave() {
   cloudSaveTimer = null;
-  if (!window.PuzzleFirebase?.enabled || !cloudReady || !cloudSavePending) return;
+  if (!window.PuzzleFirebase?.enabled || !cloudReady || !cloudSavePending || !isActiveTab()) return;
   const snapshot = cloudSavePending;
   cloudSavePending = null;
   cloudSaveInFlight = cloudSaveInFlight.then(() => window.PuzzleFirebase.save(CLOUD_SAVE_KEY, snapshot.data, snapshot)).then(() => {
@@ -203,13 +249,14 @@ async function syncCloudState(gate) {
   const shouldUseRemote = Boolean(
     remoteState &&
     (!(remoteCreatedAt > 0 && initialLocalCreatedAt > 0 && remoteCreatedAt > initialLocalCreatedAt)) &&
-    remoteSavedAt >= initialLocalSavedAt
+    (!initialLocalSavedAt || remoteSavedAt > initialLocalSavedAt)
   );
 
   if (shouldUseRemote) {
     applyLoadedState(remoteState, true);
     localCreatedAt = remoteCreatedAt || localCreatedAt || Date.now();
     localSavedAt = remoteSavedAt;
+    localRevision = Number(remote?.clientRevision) || localRevision;
     saveNow(false);
   }
 
@@ -223,13 +270,14 @@ function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY) || LEGACY_STORAGE_KEYS.map((key) => localStorage.getItem(key)).find(Boolean);
     if (raw) {
-      const stored = JSON.parse(raw);
-      const candidate = stored && stored.version === 1 && stored.data ? stored.data : stored;
-      if (applyLoadedState(candidate)) {
-        localCreatedAt = Number(stored?.createdAt) || Number(stored?.savedAt) || Number(state.lastSimulatedAt) || 0;
-        localSavedAt = Number(stored?.savedAt) || Number(state.lastSimulatedAt) || 0;
+      const checkpoint = parseLocalCheckpoint(raw);
+      if (checkpoint && applyLoadedState(checkpoint.data)) {
+        localCreatedAt = checkpoint.createdAt || Number(state.lastSimulatedAt) || 0;
+        localSavedAt = checkpoint.savedAt || Number(state.lastSimulatedAt) || 0;
+        localRevision = checkpoint.revision;
         initialLocalCreatedAt = localCreatedAt;
         initialLocalSavedAt = localSavedAt;
+        lastPersistedState = stateSnapshot();
         saveNow(false);
         return;
       }
@@ -240,21 +288,85 @@ function loadState() {
   state = createInitialState(Date.now());
   localCreatedAt = Date.now();
   localSavedAt = 0;
+  localRevision = 0;
   initialLocalCreatedAt = localCreatedAt;
   initialLocalSavedAt = 0;
+  lastPersistedState = "";
   saveNow(true);
 }
 
-function saveNow(forceCloud = false) {
-  if (!state) return;
+function saveNow(forceCloud = false, { allowInactive = false, forceOverwrite = false } = {}) {
+  if (!state || (!allowInactive && !isActiveTab())) return false;
   try {
+    const currentCheckpoint = readLocalCheckpoint();
+    const currentIsNewer = currentCheckpoint && (
+      currentCheckpoint.savedAt > localSavedAt ||
+      (currentCheckpoint.savedAt === localSavedAt && currentCheckpoint.revision > localRevision)
+    );
+    if (currentIsNewer && !forceOverwrite) return false;
     localCreatedAt ||= Date.now();
-    localSavedAt = Date.now();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, createdAt: localCreatedAt, savedAt: localSavedAt, data: state }));
+    localSavedAt = Math.max(Date.now(), localSavedAt + 1, (currentCheckpoint?.savedAt || 0) + (forceOverwrite ? 1 : 0));
+    localRevision = Math.max(localRevision, currentCheckpoint?.revision || 0) + 1;
+    const checkpoint = {
+      version: 1,
+      createdAt: localCreatedAt,
+      savedAt: localSavedAt,
+      revision: localRevision,
+      writerId: TAB_ID,
+      data: JSON.parse(JSON.stringify(state))
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(checkpoint));
+    lastPersistedState = stateSnapshot();
     queueCloudSave(forceCloud);
+    return true;
   } catch (error) {
     console.warn("無法儲存農場進度", error);
+    return false;
   }
+}
+
+function adoptLocalCheckpoint(checkpoint, showMessage = false) {
+  if (!checkpoint || checkpoint.savedAt <= localSavedAt || !applyLoadedState(checkpoint.data, false, false)) return false;
+  localCreatedAt = checkpoint.createdAt || localCreatedAt || checkpoint.savedAt;
+  localSavedAt = checkpoint.savedAt;
+  localRevision = checkpoint.revision;
+  lastPersistedState = stateSnapshot();
+  cloudSavePending = null;
+  window.clearTimeout(cloudSaveTimer);
+  cloudSaveTimer = null;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      version: 1,
+      createdAt: localCreatedAt,
+      savedAt: localSavedAt,
+      revision: localRevision,
+      writerId: checkpoint.writerId || TAB_ID,
+      data: state
+    }));
+  } catch (error) {
+    console.warn("無法載入其他分頁的農場進度", error);
+  }
+  if (showMessage) showToast("已載入其他分頁進度");
+  renderAll();
+  return true;
+}
+
+function handleIncomingCheckpoint(checkpoint) {
+  if (!checkpoint || checkpoint.savedAt <= localSavedAt) return;
+  if (isActiveTab() && hasUnsavedChanges()) {
+    const shouldLoad = window.confirm("其他分頁有較新的農場進度。\n\n要載入其他分頁進度嗎？");
+    if (!shouldLoad) {
+      saveNow(true, { forceOverwrite: true });
+      showToast("已保留目前分頁進度");
+      return;
+    }
+  }
+  adoptLocalCheckpoint(checkpoint, isActiveTab());
+}
+
+function syncNewestLocalCheckpoint() {
+  const checkpoint = readLocalCheckpoint();
+  if (checkpoint) handleIncomingCheckpoint(checkpoint);
 }
 
 function showOfflineSummary(summary) {
@@ -2548,23 +2660,30 @@ window.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("storage", (event) => {
-  if (event.key === STORAGE_KEY && event.newValue && document.visibilityState === "visible") {
-    passiveBecauseOtherTab = true;
-    showToast("另一個分頁正在使用同一座農場，本頁已暫停計算");
-  }
+  if (event.key !== STORAGE_KEY || !event.newValue) return;
+  handleIncomingCheckpoint(parseLocalCheckpoint(event.newValue));
 });
 
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") {
     simulateTo(state, Date.now());
-    saveNow(true);
-  } else if (!passiveBecauseOtherTab) {
+    saveNow(true, { allowInactive: true });
+  } else {
+    syncNewestLocalCheckpoint();
+    if (cloudSavePending) flushCloudSave();
     const summary = simulateTo(state, Date.now());
     if (summary.gold) showToast(`自動收成 +${formatMoney(summary.gold)}`);
     renderAll();
   }
 });
-window.addEventListener("pagehide", () => { simulateTo(state, Date.now()); saveNow(true); });
+window.addEventListener("focus", () => {
+  syncNewestLocalCheckpoint();
+  if (cloudSavePending) flushCloudSave();
+});
+window.addEventListener("pagehide", () => {
+  simulateTo(state, Date.now());
+  if (hasUnsavedChanges()) saveNow(true, { allowInactive: true });
+});
 
 preloadAssets();
 const cloudSyncGate = window.PuzzleFirebase?.createSyncGate("正在同步農場進度…");
@@ -2575,14 +2694,14 @@ new ResizeObserver(resizeCanvas).observe(elements.canvasShell);
 window.requestAnimationFrame(drawFarm);
 
 window.setInterval(() => {
-  if (passiveBecauseOtherTab || document.visibilityState === "hidden") return;
+  if (!isActiveTab()) return;
   const summary = simulateTo(state, Date.now());
   renderHeader();
   if (summary.gold || summary.harvested) {
     renderShop(); renderQuickbar();
   }
 }, 500);
-window.setInterval(() => { if (!passiveBecauseOtherTab) saveNow(); }, 10000);
+window.setInterval(() => { if (isActiveTab()) saveNow(); }, 10000);
 syncCloudState(cloudSyncGate);
 
 globalThis.__harvestGame = {

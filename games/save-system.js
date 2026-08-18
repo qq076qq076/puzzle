@@ -209,7 +209,7 @@
       if (!remoteCheckpoint) return false;
       if (!localCheckpoint) return true;
       if (remoteCheckpoint.createdAt > 0 && localCheckpoint.createdAt > 0 && remoteCheckpoint.createdAt > localCheckpoint.createdAt) return false;
-      return remoteCheckpoint.savedAt >= localCheckpoint.savedAt;
+      return remoteCheckpoint.savedAt > localCheckpoint.savedAt;
     }
 
     function applyCheckpoint(checkpoint, fallbackFresh) {

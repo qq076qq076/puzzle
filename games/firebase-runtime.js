@@ -32,6 +32,7 @@
   let setDocument = null;
   let deleteDocument = null;
   let makeDocument = null;
+  let runTransaction = null;
   let serverTimestamp = null;
 
   function accountLabel(user) {
@@ -130,6 +131,7 @@
       setDocument = firestoreMethods.setDoc;
       deleteDocument = firestoreMethods.deleteDoc;
       makeDocument = firestoreMethods.doc;
+      runTransaction = firestoreMethods.runTransaction;
       serverTimestamp = firestoreMethods.serverTimestamp;
       return authSdk.setPersistence(authApi, authSdk.browserLocalPersistence)
         .catch(function () { /* Some restricted browsers only support session persistence. */ })
@@ -159,6 +161,8 @@
       data: cloneData(value.data),
       clientCreatedAt: Number(value.clientCreatedAt) || 0,
       clientSavedAt: Number(value.clientSavedAt) || 0,
+      clientRevision: Number(value.clientRevision) || 0,
+      clientWriterId: value.clientWriterId || "",
       updatedAt: value.updatedAt || null
     };
   }
@@ -171,17 +175,38 @@
     });
   }
 
-  function writeSaveForUser(user, gameKey, data, clientSavedAt, clientCreatedAt) {
+  function compareSaveVersions(left, right) {
+    const savedAtDifference = (Number(left?.clientSavedAt) || 0) - (Number(right?.clientSavedAt) || 0);
+    if (savedAtDifference !== 0) return savedAtDifference;
+    return (Number(left?.clientRevision) || 0) - (Number(right?.clientRevision) || 0);
+  }
+
+  function writeSaveForUser(user, gameKey, data, metadata) {
     const reference = getSaveDocumentForUser(user, gameKey);
     if (!reference) return Promise.resolve(false);
-    const savedAt = Number(clientSavedAt) || Date.now();
-    return setDocument(reference, {
+    const savedAt = Number(metadata?.savedAt) || Date.now();
+    const createdAt = Number(metadata?.createdAt) || savedAt;
+    const revision = Number(metadata?.revision) || 0;
+    const writerId = metadata?.writerId || "";
+    const nextValue = {
       version: 1,
       data: cloneData(data),
-      clientCreatedAt: Number(clientCreatedAt) || savedAt,
+      clientCreatedAt: createdAt,
       clientSavedAt: savedAt,
+      clientRevision: revision,
+      clientWriterId: writerId,
       updatedAt: serverTimestamp()
-    }, { merge: true }).then(function () { return true; });
+    };
+    if (!runTransaction) {
+      return setDocument(reference, nextValue, { merge: true }).then(function () { return true; });
+    }
+    return runTransaction(firestore, function (transaction) {
+      return transaction.get(reference).then(function (snapshot) {
+        if (snapshot.exists() && compareSaveVersions(snapshot.data(), nextValue) >= 0) return false;
+        transaction.set(reference, nextValue, { merge: true });
+        return true;
+      });
+    });
   }
 
   function readAllSavesForUser(user) {
@@ -200,7 +225,12 @@
       if (!entry.checkpoint) return null;
       return readSaveForUser(targetUser, entry.gameKey).then(function (targetCheckpoint) {
         if (targetCheckpoint && targetCheckpoint.clientSavedAt >= entry.checkpoint.clientSavedAt) return false;
-        return writeSaveForUser(targetUser, entry.gameKey, entry.checkpoint.data, entry.checkpoint.clientSavedAt, entry.checkpoint.clientCreatedAt);
+        return writeSaveForUser(targetUser, entry.gameKey, entry.checkpoint.data, {
+          savedAt: entry.checkpoint.clientSavedAt,
+          createdAt: entry.checkpoint.clientCreatedAt,
+          revision: entry.checkpoint.clientRevision,
+          writerId: entry.checkpoint.clientWriterId
+        });
       });
     }));
   }
@@ -230,9 +260,7 @@
   function save(gameKey, data, metadata) {
     return ready.then(function (user) {
       if (!user) return false;
-      const savedAt = Number(metadata?.savedAt) || Date.now();
-      const createdAt = Number(metadata?.createdAt) || savedAt;
-      return writeSaveForUser(user, gameKey, data, savedAt, createdAt).then(function (saved) {
+      return writeSaveForUser(user, gameKey, data, metadata).then(function (saved) {
         if (saved) notify("online", "Firebase 已同步");
         return saved;
       }).catch(function (error) {

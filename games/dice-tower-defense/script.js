@@ -265,7 +265,7 @@ const LOCAL_CREATED_META_KEY = "puzzle.diceTowerDefense.created.v1";
     const shouldUseRemote = Boolean(
       payload &&
       (!(payload.createdAt > 0 && initialLocalCloudCreatedAt > 0 && payload.createdAt > initialLocalCloudCreatedAt)) &&
-      payload.savedAt >= initialLocalCloudSavedAt
+      (!initialLocalCloudSavedAt || payload.savedAt > initialLocalCloudSavedAt)
     );
     if (shouldUseRemote) {
       applyCloudPayload(payload);
