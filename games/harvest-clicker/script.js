@@ -72,7 +72,9 @@ const CELL_PAINT_ORDER = Array.from({ length: BOARD_SIZE * BOARD_SIZE }, (_, ind
     return (aRow + aCol) - (bRow + bCol) || aRow - bRow;
   });
 const camera = { scale: 1, x: 0, y: 0 };
-let state;
+// Keep the shop and canvas safe even if an optional integration fails before
+// the persisted farm finishes loading. initializeGame() replaces this state.
+let state = createInitialState(Date.now());
 let activeTab = "tools";
 let selection = null;
 let selectedLandPlot = null;
@@ -442,12 +444,13 @@ function showToast(message) {
 }
 
 function setShareBusy(busy) {
-  elements.shareDialog.classList.toggle("is-busy", busy);
-  elements.shareCopy.disabled = busy;
-  elements.shareRevoke.disabled = busy;
+  elements.shareDialog?.classList.toggle("is-busy", busy);
+  if (elements.shareCopy) elements.shareCopy.disabled = busy;
+  if (elements.shareRevoke) elements.shareRevoke.disabled = busy;
 }
 
 function setShareStatus(message, isError = false) {
+  if (!elements.shareStatus) return;
   elements.shareStatus.textContent = message || "";
   elements.shareStatus.classList.toggle("is-error", isError);
 }
@@ -475,6 +478,10 @@ function shareErrorMessage(error) {
 }
 
 async function publishFarmShare() {
+  if (!elements.shareDialog || !elements.shareLink || !elements.shareLinkField || !elements.shareCopy || !elements.shareRevoke) {
+    showToast("分享介面載入不完整，請重新整理頁面");
+    return;
+  }
   if (!window.PuzzleFirebase?.enabled || !window.PuzzleFirebase?.publishShare) {
     clearShareLink();
     if (!elements.shareDialog.open) elements.shareDialog.showModal();
@@ -2820,12 +2827,12 @@ $("#settings-button").addEventListener("click", () => {
 elements.settingSound.addEventListener("change", () => { state.settings.sound = elements.settingSound.checked; saveNow(); renderHeader(); });
 elements.settingMotion.addEventListener("change", () => { state.settings.reducedMotion = elements.settingMotion.checked; saveNow(); renderHeader(); });
 
-$("#share-button").addEventListener("click", () => {
+$("#share-button")?.addEventListener("click", () => {
   if (READ_ONLY) return;
   publishFarmShare();
 });
-elements.shareCopy.addEventListener("click", copyShareUrl);
-elements.shareRevoke.addEventListener("click", revokeFarmShare);
+elements.shareCopy?.addEventListener("click", copyShareUrl);
+elements.shareRevoke?.addEventListener("click", revokeFarmShare);
 
 $("#export-button").addEventListener("click", () => {
   if (READ_ONLY) return;
