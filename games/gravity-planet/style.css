@@ -219,6 +219,70 @@ h1 span { color: var(--cyan); }
 .danger-alert strong { font-size: 0.75rem; }
 .danger-alert small { margin-top: 2px; color: #d99cac; font-size: 0.61rem; }
 
+.cosmic-event {
+  --event-color: var(--cyan);
+  position: absolute;
+  z-index: 4;
+  top: 20px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: min(310px, calc(100% - 32px));
+  padding: 9px 12px;
+  border: 1px solid color-mix(in srgb, var(--event-color) 45%, transparent);
+  border-radius: 13px;
+  color: var(--event-color);
+  background: rgba(13, 20, 48, 0.72);
+  box-shadow: 0 0 28px color-mix(in srgb, var(--event-color) 18%, transparent);
+  backdrop-filter: blur(12px);
+  transform: translateX(-50%);
+  pointer-events: none;
+  animation: event-pulse 1100ms ease-in-out infinite alternate;
+}
+.event-orb { display: grid; flex: 0 0 auto; width: 24px; height: 24px; place-items: center; border: 1px solid currentColor; border-radius: 50%; font-size: 0.8rem; }
+.cosmic-event strong, .cosmic-event small { display: block; }
+.cosmic-event strong { font-size: 0.72rem; }
+.cosmic-event small { max-width: 230px; margin-top: 3px; color: var(--muted); font-size: 0.58rem; line-height: 1.35; }
+.cosmic-event em { margin-left: auto; color: var(--text); font-size: 0.7rem; font-style: normal; font-weight: 850; }
+
+.region-badge {
+  --region-color: var(--cyan);
+  position: absolute;
+  z-index: 4;
+  top: 20px;
+  right: 20px;
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--region-color) 35%, transparent);
+  border-radius: 999px;
+  color: var(--region-color);
+  background: rgba(8, 14, 38, 0.48);
+  font-size: 0.59rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+
+.mission-tracker {
+  position: absolute;
+  z-index: 4;
+  top: 20px;
+  left: 20px;
+  width: min(205px, calc(100% - 40px));
+  padding: 10px 12px;
+  border: 1px solid rgba(184, 207, 255, 0.16);
+  border-radius: 12px;
+  background: rgba(8, 14, 38, 0.54);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(9px);
+  pointer-events: none;
+}
+.mission-kicker { display: block; color: var(--soft); font-size: 0.48rem; font-weight: 850; letter-spacing: 0.14em; }
+.mission-tracker strong, .mission-tracker small { display: block; }
+.mission-tracker strong { margin-top: 5px; color: var(--text); font-size: 0.7rem; }
+.mission-tracker small { margin-top: 3px; overflow: hidden; color: var(--muted); font-size: 0.56rem; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+
 .combo-pill {
   position: absolute;
   z-index: 4;
@@ -272,6 +336,14 @@ h1 span { color: var(--cyan); }
 .evolution-card h2 { margin-top: 12px; color: var(--text); font-size: clamp(2rem, 5vw, 2.8rem); letter-spacing: -0.08em; }
 .evolution-card p { margin: 13px auto 0; max-width: 330px; color: var(--muted); font-size: 0.84rem; line-height: 1.75; }
 .evolution-note { margin: 19px 0 23px; padding: 10px 12px; border: 1px solid rgba(184, 207, 255, 0.13); border-radius: 10px; color: #b8c8ee; background: rgba(255, 255, 255, 0.035); font-size: 0.65rem; line-height: 1.55; }
+.evolution-choices { display: grid; gap: 7px; margin-top: 17px; text-align: left; }
+.evolution-choice { display: block; width: 100%; padding: 9px 11px; border: 1px solid color-mix(in srgb, var(--choice-color) 34%, rgba(184, 207, 255, 0.12)); border-radius: 10px; color: var(--text); background: rgba(255, 255, 255, 0.035); cursor: pointer; text-align: left; transition: transform 140ms ease, background 140ms ease, border-color 140ms ease, opacity 140ms ease; }
+.evolution-choice:hover { border-color: var(--choice-color); background: color-mix(in srgb, var(--choice-color) 12%, rgba(255, 255, 255, 0.04)); transform: translateX(3px); }
+.evolution-choice.selected { border-color: var(--choice-color); background: color-mix(in srgb, var(--choice-color) 16%, rgba(255, 255, 255, 0.06)); box-shadow: 0 0 18px color-mix(in srgb, var(--choice-color) 15%, transparent); }
+.evolution-choice:disabled:not(.selected) { cursor: default; opacity: 0.35; }
+.evolution-choice strong, .evolution-choice span { display: block; }
+.evolution-choice strong { color: var(--choice-color); font-size: 0.7rem; }
+.evolution-choice span { margin-top: 3px; color: var(--muted); font-size: 0.59rem; line-height: 1.4; }
 .evolution-card .button { width: 100%; }
 
 .evolving-flash::after {
@@ -322,6 +394,7 @@ h1 span { color: var(--cyan); }
 [hidden] { display: none !important; }
 
 @keyframes danger-pulse { from { transform: translateX(0); } to { transform: translateX(4px); } }
+@keyframes event-pulse { from { box-shadow: 0 0 22px color-mix(in srgb, var(--event-color) 13%, transparent); } to { box-shadow: 0 0 34px color-mix(in srgb, var(--event-color) 27%, transparent); } }
 @keyframes toast-rise { from { opacity: 0; transform: translateY(10px) scale(0.92); } 18% { opacity: 1; } to { opacity: 0; transform: translateY(-28px) scale(1.03); } }
 @keyframes evolution-pop { from { opacity: 0; transform: translateY(16px) scale(0.92); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes evolution-flash { from { opacity: 0.9; } to { opacity: 0; } }
@@ -345,6 +418,10 @@ h1 span { color: var(--cyan); }
   .canvas-frame { min-height: min(690px, 142vw); border-radius: 19px; }
   .danger-alert { top: 153px; left: 12px; max-width: calc(100% - 24px); }
   .scene-toast { top: 174px; }
+  .cosmic-event { top: 13px; min-width: 0; width: calc(100% - 116px); padding: 7px 9px; }
+  .cosmic-event small { max-width: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .region-badge { top: 13px; right: 12px; font-size: 0.52rem; }
+  .mission-tracker { top: 67px; left: 12px; width: min(188px, calc(100% - 24px)); padding: 8px 10px; }
   .game-controls { grid-template-columns: 1fr; }
   .record-card { grid-column: auto; }
   .control-card { min-height: 73px; }

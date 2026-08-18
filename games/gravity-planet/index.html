@@ -41,6 +41,17 @@
             <span class="danger-orb" aria-hidden="true"></span>
             <span><strong id="danger-name">危險星體靠近</strong><small id="danger-distance">保持距離</small></span>
           </div>
+          <div class="cosmic-event" id="cosmic-event" hidden>
+            <span class="event-orb" aria-hidden="true">✦</span>
+            <span><strong id="cosmic-event-name">宇宙事件</strong><small id="cosmic-event-description">事件效果</small></span>
+            <em id="cosmic-event-time">10s</em>
+          </div>
+          <div class="region-badge" id="region-badge">碎石帶</div>
+          <div class="mission-tracker" id="mission-tracker">
+            <span class="mission-kicker">CURRENT MISSION</span>
+            <strong id="mission-name">星塵採集者</strong>
+            <small id="mission-progress">吸收 30 個星體 · 0/30</small>
+          </div>
           <div class="combo-pill" id="combo-pill" hidden>COMBO ×<strong id="combo-value">3</strong></div>
           <div class="scene-toast" id="scene-toast" aria-live="polite"></div>
           <div class="evolution-popup" id="evolution-popup" hidden>
@@ -48,6 +59,8 @@
               <div class="evolution-kicker"><span class="evolution-spark" aria-hidden="true">✦</span> EVOLUTION COMPLETE</div>
               <h2 id="evolution-name">小行星</h2>
               <p id="evolution-description">你的核心已經足夠強大，現在可以用更大的引力收集碎石。</p>
+              <div class="evolution-choices" id="evolution-choices"></div>
+              <div class="evolution-note" id="evolution-note">選擇一項進化分支；按空白鍵會採用第一項並繼續探索。</div>
               <button class="button button-primary" id="evolution-continue" type="button">繼續探索 <span aria-hidden="true">↗</span></button>
             </div>
           </div>

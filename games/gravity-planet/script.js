@@ -11,6 +11,52 @@ const LEVELS = [
   { name: "黑洞", mass: 100000, bodyMass: 15000, radius: 16, drift: 0.8, gravity: 30, color: 0x0a0818, accent: 0xff8e52, spin: 0.07, description: "最後的形態。吸積盤吞吐星光，連光線與空間都開始在你的核心周圍彎曲。" },
 ];
 
+const REGIONS = [
+  { id: "debris", name: "碎石帶", description: "碎石密度提高，收集路線更容易形成連鎖。", color: 0x62e6ff, gridColor: 0x234c73, gravityMultiplier: 1, bodyDriftMultiplier: 1, playerAccelerationMultiplier: 1.04, anomalyBonus: 0.02 },
+  { id: "nebula", name: "幽暗星雲", description: "視野被星雲染深，高階星體的警戒距離縮短。", color: 0xc58cff, gridColor: 0x3b2860, gravityMultiplier: 0.84, bodyDriftMultiplier: 0.92, playerAccelerationMultiplier: 1, anomalyBonus: 0.06 },
+  { id: "gravity-well", name: "重力井", description: "所有星體的牽引更強，靠近時要提早規劃逃生路線。", color: 0xff9b70, gridColor: 0x6a3e3c, gravityMultiplier: 1.28, bodyDriftMultiplier: 0.88, playerAccelerationMultiplier: 0.95, anomalyBonus: 0.01 },
+  { id: "crystal", name: "晶體星域", description: "稀有異常星體更常出現，適合冒險尋找高額回饋。", color: 0x9deeff, gridColor: 0x28627a, gravityMultiplier: 0.94, bodyDriftMultiplier: 1.12, playerAccelerationMultiplier: 1.08, anomalyBonus: 0.14 },
+  { id: "solar", name: "耀斑邊境", description: "星體漂移加快，但太陽能量讓你的推進器更靈敏。", color: 0xffd17b, gridColor: 0x6d4d32, gravityMultiplier: 1.08, bodyDriftMultiplier: 1.22, playerAccelerationMultiplier: 1.2, anomalyBonus: 0.04 },
+];
+
+const ANOMALIES = [
+  { id: "golden", name: "黃金核心", color: 0xffd77c, description: "吸收後提供 2.4 倍質量與額外星能。", massMultiplier: 2.4, energyBonus: 4 },
+  { id: "time", name: "時間碎片", color: 0x8ee9ff, description: "吸收後延長連擊窗口，讓下一條路線更容易接上。", massMultiplier: 1, energyBonus: 2, comboBonus: 3.2 },
+  { id: "crystal", name: "重力晶簇", color: 0xc58cff, description: "吸收後釋放大量星能，適合提前強化引力核心。", massMultiplier: 1.35, energyBonus: 12 },
+  { id: "unstable", name: "不穩定反物質", color: 0xff7b9a, description: "高風險高回報，吸收時會產生更強的衝擊粒子。", massMultiplier: 3.2, energyBonus: 8, comboBonus: 1.6 },
+];
+
+const EVOLUTION_PERKS = [
+  { id: "collector", name: "引力收集器", description: "吸收半徑 +8%，不用更靠近碎石。", color: "#62e6ff" },
+  { id: "thruster", name: "脈衝推進器", description: "移動加速度 +16%，轉向更快。", color: "#9deeff" },
+  { id: "mass-core", name: "質量核心", description: "每次吸收的質量收益 +12%。", color: "#ffd77c" },
+  { id: "rebound", name: "反作用護甲", description: "碰撞反作用力 +22%，更容易脫離黏著。", color: "#ff9ca8" },
+  { id: "fracture", name: "裂變晶格", description: "相差一階的碰撞多產生 2 個碎星。", color: "#c58cff" },
+  { id: "shield", name: "護盾穩定器", description: "護盾上限 +1，進化時也會補回護盾。", color: "#a8f4ff" },
+];
+
+const COSMIC_EVENTS = [
+  { id: "meteor", name: "流星雨", description: "畫面外高速碎石湧入，連鎖與星能收益提高。", color: "#ffd77c", duration: 13, gravityMultiplier: 1, bodyDriftMultiplier: 1.18, playerAccelerationMultiplier: 1, anomalyBonus: 0.03 },
+  { id: "gravity-storm", name: "重力風暴", description: "所有星體的牽引短暫增強，碰撞路線會快速改變。", color: "#c58cff", duration: 11, gravityMultiplier: 1.72, bodyDriftMultiplier: 0.94, playerAccelerationMultiplier: 1, anomalyBonus: 0 },
+  { id: "solar-flare", name: "太陽耀斑", description: "推進器吸收耀斑能量，移動加速度暫時提升。", color: "#ff9b70", duration: 10, gravityMultiplier: 1.06, bodyDriftMultiplier: 1.08, playerAccelerationMultiplier: 1.42, anomalyBonus: 0.06 },
+  { id: "anti-gravity", name: "反重力潮", description: "牽引變弱，星體漂移加快；適合穿越危險區域。", color: "#8ee9ff", duration: 9, gravityMultiplier: 0.38, bodyDriftMultiplier: 1.34, playerAccelerationMultiplier: 1.12, anomalyBonus: 0.02 },
+];
+
+const BOSSES = [
+  { id: "rogue-black-hole", name: "流浪黑洞", description: "會把附近星體拖向自己，撐過完整週期即可獲得星能。", color: 0xff8e52, duration: 27, gravityMultiplier: 1.65, sizeScale: 1.42, health: 3 },
+  { id: "star-eater", name: "吞星獸", description: "移動較快、會吞食小星體；讓它在場上停留太久會越來越危險。", color: 0xff7b9a, duration: 23, gravityMultiplier: 1.35, sizeScale: 1.34, health: 4 },
+  { id: "binary-warden", name: "雙星守門者", description: "雙重引力核心形成擺動路徑，碰撞時會釋放強烈反作用力。", color: 0x9deeff, duration: 30, gravityMultiplier: 1.5, sizeScale: 1.28, health: 5 },
+];
+
+const MISSIONS = [
+  { id: "absorb", title: "星塵採集者", description: "吸收 30 個星體", target: 30, reward: 10, format: (value, target) => `${value}/${target}` },
+  { id: "reach-level", title: "跨越天體", description: "進化到第 5 階", target: 5, reward: 20, format: (value, target) => `LV ${value}/${target}` },
+  { id: "anomaly", title: "異常觀測員", description: "吸收 3 個異常星體", target: 3, reward: 18, format: (value, target) => `${value}/${target}` },
+  { id: "chain", title: "碰撞藝術家", description: "完成 8 次星體連鎖碰撞", target: 8, reward: 22, format: (value, target) => `${value}/${target}` },
+  { id: "survive", title: "長途漂流", description: "存活 180 秒", target: 180, reward: 35, format: (value, target) => `${formatTime(value)}/${formatTime(target)}` },
+  { id: "boss", title: "巨物倖存者", description: "完成 1 次 Boss 遭遇", target: 1, reward: 45, format: (value, target) => `${value}/${target}` },
+];
+
 const WORLD = { maxBodies: 90, recycleRadius: 96, spawnRadius: 72, gridTileSize: 70 };
 const VIEWPORT_SPAWN_MARGIN = 0.24;
 const PLAYER_RADIUS = 1.25;
@@ -28,6 +74,10 @@ const NATURAL_SPAWN_CLEARANCE = 1.2;
 const NATURAL_SPAWN_MAX_SPEED = 3;
 const COMET_TAIL_MIN_SPEED = 2.6;
 const COMET_TAIL_AXIS = new THREE.Vector3(0, 1, 0);
+const COSMIC_EVENT_FIRST_DELAY = 18;
+const COSMIC_EVENT_COOLDOWN = 17;
+const BOSS_FIRST_DELAY = 32;
+const BOSS_COOLDOWN = 48;
 const input = new Set();
 const directionMap = { up: "up", down: "down", left: "left", right: "right" };
 
@@ -49,6 +99,16 @@ const ui = {
   dangerDistance: document.querySelector("#danger-distance"),
   comboPill: document.querySelector("#combo-pill"),
   comboValue: document.querySelector("#combo-value"),
+  cosmicEvent: document.querySelector("#cosmic-event"),
+  cosmicEventName: document.querySelector("#cosmic-event-name"),
+  cosmicEventDescription: document.querySelector("#cosmic-event-description"),
+  cosmicEventTime: document.querySelector("#cosmic-event-time"),
+  regionBadge: document.querySelector("#region-badge"),
+  missionTracker: document.querySelector("#mission-tracker"),
+  missionName: document.querySelector("#mission-name"),
+  missionProgress: document.querySelector("#mission-progress"),
+  evolutionChoices: document.querySelector("#evolution-choices"),
+  evolutionNote: document.querySelector("#evolution-note"),
   sceneToast: document.querySelector("#scene-toast"),
   massProgress: document.querySelector("#mass-progress"),
   massProgressFill: document.querySelector("#mass-progress-fill"),
@@ -89,6 +149,14 @@ const state = {
   highMass: 1,
   highLevel: 1,
   spawnTimer: 0,
+  region: REGIONS[0],
+  regionKey: null,
+  cosmicEvent: { event: null, remaining: 0, cooldown: COSMIC_EVENT_FIRST_DELAY, spawnTimer: 0 },
+  bossCooldown: BOSS_FIRST_DELAY,
+  evolutionChoice: null,
+  missions: Object.fromEntries(MISSIONS.map((mission) => [mission.id, { progress: 0, completed: false }])),
+  chainCombo: 0,
+  chainTimer: 0,
   lastUiUpdate: 0,
   evolutionAnimation: null,
   effects: [],
@@ -97,6 +165,7 @@ const state = {
     mass: 1,
     level: 1,
     shield: 3,
+    shieldMax: 3,
     energy: 0,
     coreUpgrade: 0,
     position: new THREE.Vector3(0, 0, 0),
@@ -104,6 +173,14 @@ const state = {
     invulnerable: 0,
     combo: 0,
     comboTimer: 0,
+    perks: {
+      collector: 0,
+      thruster: 0,
+      "mass-core": 0,
+      rebound: 0,
+      fracture: 0,
+      shield: 0,
+    },
     model: null,
     field: null,
   },
@@ -142,6 +219,74 @@ function levelForMass(mass) {
     if (mass >= LEVELS[index].mass) level = index + 1;
   }
   return level;
+}
+
+function dataForId(collection, id) {
+  return collection.find((item) => item.id === id) || null;
+}
+
+function activeCosmicEvent() {
+  return state.cosmicEvent.event ? dataForId(COSMIC_EVENTS, state.cosmicEvent.event) : null;
+}
+
+function activeBossData(body) {
+  return body?.bossType ? dataForId(BOSSES, body.bossType) : null;
+}
+
+function randomAnomalyForLevel(level, forced = false) {
+  const event = activeCosmicEvent();
+  const chance = forced ? 1 : 0.055 + (state.region?.anomalyBonus || 0) + (event?.anomalyBonus || 0);
+  if (!forced && Math.random() > chance) return null;
+  const available = ANOMALIES.filter((anomaly) => anomaly.id !== "unstable" || level >= 3);
+  return available[Math.floor(Math.random() * available.length)].id;
+}
+
+function missionStateFor(id) {
+  if (!state.missions[id]) state.missions[id] = { progress: 0, completed: false };
+  return state.missions[id];
+}
+
+function updateMission(id, amount = 1) {
+  const mission = MISSIONS.find((item) => item.id === id);
+  if (!mission) return;
+  const progress = missionStateFor(id);
+  if (progress.completed) return;
+  progress.progress = Math.min(mission.target, progress.progress + amount);
+  if (progress.progress < mission.target) return;
+  progress.completed = true;
+  state.player.energy += mission.reward;
+  addToast(`成就完成 · ${mission.title} · 星能 +${mission.reward}`, "#ffd77c");
+  try {
+    const saved = JSON.parse(window.localStorage.getItem("gravityPlanetAchievements") || "[]");
+    if (!saved.includes(id)) {
+      saved.push(id);
+      window.localStorage.setItem("gravityPlanetAchievements", JSON.stringify(saved));
+    }
+  } catch {
+    // 儲存空間被限制時，成就仍只在本局生效。
+  }
+}
+
+function updateMissionAbsolute(id, value) {
+  const mission = MISSIONS.find((item) => item.id === id);
+  if (!mission) return;
+  const progress = missionStateFor(id);
+  if (progress.completed) return;
+  progress.progress = Math.min(mission.target, Math.max(progress.progress, value));
+  if (progress.progress >= mission.target) updateMission(id, 0);
+}
+
+function currentMission() {
+  return MISSIONS.find((mission) => !missionStateFor(mission.id).completed) || MISSIONS[MISSIONS.length - 1];
+}
+
+function updateMissionUi() {
+  if (!ui.missionTracker) return;
+  const mission = currentMission();
+  const progress = missionStateFor(mission.id);
+  ui.missionTracker.hidden = !mission;
+  ui.missionName.textContent = mission.title;
+  ui.missionProgress.textContent = `${mission.description} · ${mission.format(progress.progress, mission.target)}`;
 }
 
 function hexRgb(hex) {
@@ -495,6 +640,39 @@ function updateGridDensity() {
   });
 }
 
+function regionForChunk(chunkX, chunkZ) {
+  const hash = Math.abs((chunkX * 92821 + chunkZ * 68917 + chunkX * chunkZ * 31) % REGIONS.length);
+  return REGIONS[hash];
+}
+
+function updateRegionVisuals() {
+  const region = state.region || REGIONS[0];
+  infiniteWorld.gridTiles.forEach((tile) => {
+    const grid = tile.userData.grid;
+    const materials = Array.isArray(grid?.material) ? grid.material : [grid?.material];
+    materials.filter(Boolean).forEach((material) => {
+      material.color.setHex(region.gridColor);
+      material.opacity = region.id === "nebula" ? 0.17 : 0.22;
+    });
+  });
+  if (ui.regionBadge) {
+    ui.regionBadge.textContent = region.name;
+    ui.regionBadge.style.setProperty("--region-color", `#${region.color.toString(16).padStart(6, "0")}`);
+  }
+}
+
+function updateRegionForPosition(chunkX, chunkZ) {
+  const key = `${chunkX}:${chunkZ}`;
+  if (key === state.regionKey) return;
+  const previous = state.region;
+  state.regionKey = key;
+  state.region = regionForChunk(chunkX, chunkZ);
+  updateRegionVisuals();
+  if (previous && previous.id !== state.region.id) {
+    addToast(`進入 ${state.region.name} · ${state.region.description}`, `#${state.region.color.toString(16).padStart(6, "0")}`);
+  }
+}
+
 function updateInfiniteWorld() {
   const tileSize = WORLD.gridTileSize;
   const chunkX = Math.floor(state.player.position.x / tileSize);
@@ -514,6 +692,7 @@ function updateInfiniteWorld() {
       infiniteWorld.starfield.position.z = Math.round(state.player.position.z / 100) * 100;
     }
   }
+  updateRegionForPosition(chunkX, chunkZ);
 }
 
 function updateModel(model, time, delta) {
@@ -567,6 +746,11 @@ function createBody(level, forcedPosition = null, options = {}) {
     gravityRadius: data.gravity,
     sizeScale: options.sizeScale ?? 1,
     gravitySignal: 0,
+    anomaly: Object.prototype.hasOwnProperty.call(options, "anomaly") ? options.anomaly : randomAnomalyForLevel(level),
+    isBoss: options.isBoss ?? false,
+    bossType: options.bossType ?? null,
+    bossHealth: options.bossHealth ?? 0,
+    bossTimer: 0,
     position,
     velocity: initialVelocity,
     phase: rand(0, Math.PI * 2),
@@ -586,7 +770,31 @@ function createBody(level, forcedPosition = null, options = {}) {
   bodyGroup.add(body.group);
   state.bodies.push(body);
   updateBodyVisualScale(body);
+  if (body.anomaly) decorateAnomaly(body);
+  if (body.isBoss) decorateBoss(body);
   return body;
+}
+
+function decorateAnomaly(body) {
+  const anomaly = dataForId(ANOMALIES, body.anomaly);
+  if (!anomaly) return;
+  const baseRadius = LEVELS[body.level - 1].radius;
+  const ring = addRing(body.group, baseRadius * 1.28, Math.max(0.025, baseRadius * 0.035), anomaly.color, 0.82, 0.52, 0.55);
+  const sprite = makeSprite(anomaly.color, baseRadius * 2.25, 0.2);
+  sprite.position.y = baseRadius * 0.15;
+  body.group.add(sprite);
+  body.anomalyVisual = { ring, sprite, phase: rand(0, Math.PI * 2) };
+}
+
+function decorateBoss(body) {
+  const boss = activeBossData(body);
+  if (!boss) return;
+  const baseRadius = LEVELS[body.level - 1].radius;
+  const outer = addRing(body.group, baseRadius * 1.5, Math.max(0.06, baseRadius * 0.045), boss.color, 0.85, 0.34, 0.22);
+  const core = makeSprite(boss.color, baseRadius * 3.25, 0.18);
+  core.position.y = baseRadius * 0.12;
+  body.group.add(core);
+  body.bossVisual = { outer, core, phase: rand(0, Math.PI * 2) };
 }
 
 function randomBodyPosition(level) {
@@ -877,8 +1085,14 @@ function currentPlayerRadius() {
   return PLAYER_RADIUS;
 }
 
+function currentPlayerAbsorbRadius() {
+  return PLAYER_RADIUS * (1 + state.player.perks.collector * 0.08);
+}
+
 function gravityMassFor(entity) {
   if (entity === state.player) return entity.mass * (1 + entity.coreUpgrade * 0.1);
+  const boss = activeBossData(entity);
+  if (boss) return entity.mass * boss.gravityMultiplier;
   return entity.mass;
 }
 
@@ -905,16 +1119,21 @@ function applyGravityPair(first, second, delta) {
   const distance = Math.max(0.5, Math.sqrt(distanceSquared));
   const direction = distanceSquared > 0.0001 ? offset.clone().normalize() : new THREE.Vector3();
   const softenedDistanceCubed = Math.pow(distanceSquared + GRAVITY_SOFTENING * GRAVITY_SOFTENING, 1.5);
-  const firstAcceleration = clamp(
+  let firstAcceleration = clamp(
     GRAVITY_CONSTANT * gravityMassFor(second) * distance / softenedDistanceCubed,
     0,
     GRAVITY_MAX_ACCELERATION,
   ) * accelerationResponseFor(first);
-  const secondAcceleration = clamp(
+  let secondAcceleration = clamp(
     GRAVITY_CONSTANT * gravityMassFor(first) * distance / softenedDistanceCubed,
     0,
     GRAVITY_MAX_ACCELERATION,
   ) * accelerationResponseFor(second);
+  const regionMultiplier = state.region?.gravityMultiplier || 1;
+  const eventMultiplier = activeCosmicEvent()?.gravityMultiplier || 1;
+  const combinedMultiplier = regionMultiplier * eventMultiplier;
+  firstAcceleration *= combinedMultiplier;
+  secondAcceleration *= combinedMultiplier;
   first.velocity.addScaledVector(direction, firstAcceleration * delta);
   second.velocity.addScaledVector(direction, -secondAcceleration * delta);
 
@@ -946,7 +1165,10 @@ function resolveSolidCollision(first, second) {
   if (velocityAlongNormal < COLLISION_SEPARATION_SPEED) {
     const penetrationRatio = clamp(penetration / Math.max(0.001, minimumDistance), 0, 1);
     const repulsionSpeed = COLLISION_SEPARATION_SPEED * (1 + penetrationRatio * 0.75);
-    const targetSeparationSpeed = Math.max(repulsionSpeed, -velocityAlongNormal * COLLISION_RESTITUTION);
+    const playerReboundBonus = first === state.player || second === state.player
+      ? 1 + state.player.perks.rebound * 0.22
+      : 1;
+    const targetSeparationSpeed = Math.max(repulsionSpeed * playerReboundBonus, -velocityAlongNormal * COLLISION_RESTITUTION * playerReboundBonus);
     const impulse = (targetSeparationSpeed - velocityAlongNormal) / inverseMassTotal;
     first.velocity.addScaledVector(normal, -impulse * firstInverseMass);
     second.velocity.addScaledVector(normal, impulse * secondInverseMass);
@@ -978,17 +1200,26 @@ function updatePlayerVisual() {
 
 function absorbBody(body) {
   if (!state.bodies.includes(body)) return;
-  const gain = body.mass;
+  const anomaly = dataForId(ANOMALIES, body.anomaly);
+  const gain = body.mass * (anomaly?.massMultiplier || 1) * (1 + state.player.perks["mass-core"] * 0.12);
   const oldLevel = state.player.level;
   state.player.mass += gain;
-  state.player.energy += Math.max(1, Math.round(gain * 0.15));
+  state.player.energy += Math.max(1, Math.round(gain * 0.15)) + (anomaly?.energyBonus || 0);
   state.player.combo += 1;
   state.player.comboTimer = 1.8;
+  state.chainCombo = Math.max(state.chainCombo, state.player.combo);
+  state.chainTimer = Math.max(state.chainTimer, 1.8);
   state.highMass = Math.max(state.highMass, state.player.mass);
   state.highLevel = Math.max(state.highLevel, state.player.level);
   removeBody(body);
   createBurst(body.position, LEVELS[body.level - 1].accent, 18, 2.4);
-  addToast(`+${formatNumber(gain)} 質量`, "#a8f4ff");
+  addToast(`+${formatNumber(gain)} 質量`, anomaly ? `#${anomaly.color.toString(16).padStart(6, "0")}` : "#a8f4ff");
+  updateMission("absorb");
+  if (anomaly) {
+    state.player.comboTimer += anomaly.comboBonus || 0;
+    updateMission("anomaly");
+    addToast(`${anomaly.name} · 星能 +${anomaly.energyBonus || 0}`, `#${anomaly.color.toString(16).padStart(6, "0")}`);
+  }
   if (state.player.combo >= 3) {
     state.player.energy += 1;
     ui.comboValue.textContent = state.player.combo;
@@ -1015,10 +1246,56 @@ function maybeAutoUpgrade() {
   }
 }
 
+function evolutionChoicesForLevel() {
+  const choices = [...EVOLUTION_PERKS];
+  for (let index = choices.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [choices[index], choices[swapIndex]] = [choices[swapIndex], choices[index]];
+  }
+  return choices.slice(0, 3);
+}
+
+function renderEvolutionChoices() {
+  if (!ui.evolutionChoices) return;
+  ui.evolutionChoices.innerHTML = "";
+  state.evolutionChoice = null;
+  const choices = evolutionChoicesForLevel();
+  state.evolutionChoices = choices;
+  choices.forEach((perk, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "evolution-choice";
+    button.dataset.index = String(index);
+    button.style.setProperty("--choice-color", perk.color);
+    button.innerHTML = `<strong>${perk.name}</strong><span>${perk.description}</span>`;
+    button.addEventListener("click", () => chooseEvolutionPerk(index));
+    ui.evolutionChoices.appendChild(button);
+  });
+  ui.evolutionNote.textContent = "選擇一項進化分支；按空白鍵會採用第一項並繼續探索。";
+  ui.evolutionContinue.disabled = false;
+}
+
+function chooseEvolutionPerk(index) {
+  const perk = state.evolutionChoices?.[index];
+  if (!perk || state.evolutionChoice) return;
+  state.evolutionChoice = perk.id;
+  state.player.perks[perk.id] += 1;
+  if (perk.id === "shield") state.player.shieldMax += 1;
+  if (perk.id === "shield") state.player.shield = Math.min(state.player.shieldMax, state.player.shield + 1);
+  document.querySelectorAll(".evolution-choice").forEach((button, buttonIndex) => {
+    button.classList.toggle("selected", buttonIndex === index);
+    button.disabled = buttonIndex !== index;
+  });
+  ui.evolutionNote.textContent = `已選擇「${perk.name}」：${perk.description}`;
+  addToast(`進化分支 · ${perk.name}`, perk.color);
+  updatePlayerVisual();
+}
+
 function triggerEvolution(nextLevel) {
   state.status = "evolving";
   state.player.level = nextLevel;
-  state.player.shield = Math.min(3, state.player.shield + 1);
+  updateMissionAbsolute("reach-level", nextLevel);
+  state.player.shield = Math.min(state.player.shieldMax, state.player.shield + 1);
   state.highLevel = Math.max(state.highLevel, nextLevel);
   const data = LEVELS[nextLevel - 1];
   const oldModel = state.player.model;
@@ -1035,6 +1312,7 @@ function triggerEvolution(nextLevel) {
   ui.evolutionName.textContent = data.name;
   ui.evolutionDescription.textContent = data.description;
   ui.evolutionPopup.hidden = true;
+  if (ui.evolutionChoices) ui.evolutionChoices.innerHTML = "";
   state.evolutionAnimation = {
     oldModel,
     newModel,
@@ -1073,12 +1351,14 @@ function updateEvolutionAnimation(delta) {
   animation.newModel.scale.setScalar(animation.newScale);
   state.evolutionAnimation = null;
   updatePlayerVisual();
+  renderEvolutionChoices();
   ui.evolutionPopup.hidden = false;
   addToast(`進化完成 · ${LEVELS[state.player.level - 1].name}`, "#d6fbff");
 }
 
 function continueAfterEvolution() {
   if (state.status !== "evolving") return;
+  if (!state.evolutionChoice) chooseEvolutionPerk(0);
   state.status = "playing";
   ui.evolutionPopup.hidden = true;
   updateInfiniteWorld();
@@ -1086,7 +1366,7 @@ function continueAfterEvolution() {
 
 function takeHit(body) {
   if (state.player.invulnerable > 0 || state.status !== "playing") return;
-  const damage = body.level - state.player.level >= 2 ? 2 : 1;
+  const damage = body.isBoss || body.level - state.player.level >= 2 ? 2 : 1;
   const lossRate = damage === 2 ? 0.35 : 0.15;
   state.player.shield -= damage;
   state.player.mass = Math.max(1, Math.round(state.player.mass * (1 - lossRate)));
@@ -1116,7 +1396,10 @@ function updatePlayer(delta) {
   );
   if (movement.lengthSq() > 0) movement.normalize();
   const playerSpeed = 12.5;
-  const playerAcceleration = 28;
+  const playerAcceleration = 28
+    * (1 + player.perks.thruster * 0.16)
+    * (state.region?.playerAccelerationMultiplier || 1)
+    * (activeCosmicEvent()?.playerAccelerationMultiplier || 1);
   player.velocity.addScaledVector(movement, playerAcceleration * delta);
 
   let nearestDanger = null;
@@ -1125,7 +1408,8 @@ function updatePlayer(delta) {
     const distance = Math.max(0.1, offset.length());
     const bodyIsThreat = body.level > player.level;
     if (bodyIsThreat) {
-      const dangerRadius = body.gravityRadius * (body.level >= player.level + 2 ? 1.08 : 0.92);
+      const dangerRadius = body.gravityRadius * (body.level >= player.level + 2 ? 1.08 : 0.92)
+        * (body.isBoss ? 1.18 : 1);
       if (distance < dangerRadius) {
         if (!nearestDanger || distance < nearestDanger.distance) nearestDanger = { body, distance };
       }
@@ -1140,8 +1424,11 @@ function updatePlayer(delta) {
   player.comboTimer -= delta;
   if (player.comboTimer <= 0) {
     player.combo = 0;
-    ui.comboPill.hidden = true;
   }
+  player.comboTimer = Math.max(0, player.comboTimer);
+  state.chainTimer -= delta;
+  if (state.chainTimer <= 0) state.chainCombo = 0;
+  updateMissionAbsolute("survive", Math.floor(state.time));
   playerRoot.position.copy(player.position);
   playerRoot.position.y = Math.sin(state.time * 2.2) * 0.16;
   if (player.invulnerable > 0) state.player.model.visible = Math.floor(state.time * 16) % 2 === 0;
@@ -1166,6 +1453,12 @@ function updateBodyGravity(delta) {
       applyGravityPair(first, second, delta);
     }
   }
+  const playerVelocityCap = 12.5;
+  if (state.player.velocity.lengthSq() > playerVelocityCap * playerVelocityCap) state.player.velocity.setLength(playerVelocityCap);
+  state.bodies.forEach((body) => {
+    const bodyVelocityCap = Math.max(6, LEVELS[body.level - 1].drift * 3.5) * (body.isBoss ? 0.82 : 1);
+    if (body.velocity.lengthSq() > bodyVelocityCap * bodyVelocityCap) body.velocity.setLength(bodyVelocityCap);
+  });
   for (const body of state.bodies) {
     body.gravityAura.material.opacity = 0.025 + body.gravitySignal * 0.085;
     body.gravityAura.rotation.z += delta * 0.5;
@@ -1177,20 +1470,170 @@ function updateBodies(delta) {
   for (const body of state.bodies) {
     body.collisionCooldown = Math.max(0, body.collisionCooldown - delta);
     body.gravityGrace = Math.max(0, body.gravityGrace - delta);
+    if (body.isBoss) {
+      body.bossTimer += delta;
+      const boss = activeBossData(body);
+      if (boss && body.bossTimer >= boss.duration) {
+        defeatBoss(body);
+        continue;
+      }
+    }
     const driftResponse = accelerationResponseFor(body);
     const drift = body.velocity.clone();
-    drift.x += Math.sin(state.time * 0.36 + body.phase) * 0.12 * driftResponse;
-    drift.z += Math.cos(state.time * 0.31 + body.phase * 1.3) * 0.12 * driftResponse;
+    const driftMultiplier = (state.region?.bodyDriftMultiplier || 1) * (activeCosmicEvent()?.bodyDriftMultiplier || 1);
+    drift.x += Math.sin(state.time * 0.36 + body.phase) * 0.12 * driftResponse * driftMultiplier;
+    drift.z += Math.cos(state.time * 0.31 + body.phase * 1.3) * 0.12 * driftResponse * driftMultiplier;
     body.position.addScaledVector(drift, delta);
     body.group.position.copy(body.position);
     body.group.position.y = Math.sin(state.time * 1.1 + body.phase) * 0.25;
     updateModel(body.group, state.time, delta);
     updateCometTail(body);
+    updateAnomalyVisual(body, delta);
+    updateBossVisual(body, delta);
 
     const distance = body.position.distanceTo(state.player.position);
-    if (distance > WORLD.recycleRadius) toRemove.push(body);
+    if (distance > WORLD.recycleRadius) {
+      if (body.isBoss) defeatBoss(body, true);
+      else toRemove.push(body);
+    }
   }
   toRemove.forEach(removeBody);
+}
+
+function updateAnomalyVisual(body, delta) {
+  if (!body.anomalyVisual) return;
+  const { ring, sprite, phase } = body.anomalyVisual;
+  ring.rotation.y += delta * 0.55;
+  sprite.material.opacity = 0.15 + Math.sin(state.time * 4 + phase) * 0.05;
+}
+
+function updateBossVisual(body, delta) {
+  if (!body.bossVisual) return;
+  const { outer, core, phase } = body.bossVisual;
+  outer.rotation.z += delta * 0.28;
+  core.material.opacity = 0.14 + Math.sin(state.time * 3.2 + phase) * 0.05;
+}
+
+function registerChainCollision(position, level) {
+  const previousCombo = state.chainCombo;
+  state.chainCombo = Math.min(12, state.chainCombo + 1);
+  state.chainTimer = 2.6;
+  updateMission("chain");
+  if (state.chainCombo > previousCombo && state.chainCombo >= 2 && (state.chainCombo === 2 || state.chainCombo % 2 === 0)) {
+    const reward = Math.min(5, 1 + Math.floor(state.chainCombo / 4));
+    state.player.energy += reward;
+    ui.comboValue.textContent = state.chainCombo;
+    ui.comboPill.hidden = false;
+    addToast(`碰撞連鎖 ×${state.chainCombo} · 星能 +${reward}`, `#${LEVELS[level - 1].accent.toString(16).padStart(6, "0")}`);
+  }
+}
+
+function spawnBoss() {
+  if (state.bodies.some((body) => body.isBoss) || state.player.level < 3) return;
+  const boss = BOSSES[Math.floor(Math.random() * BOSSES.length)];
+  const level = clamp(state.player.level + 2, 3, 10);
+  const position = randomBodyPosition(level);
+  createBody(level, position, {
+    isBoss: true,
+    bossType: boss.id,
+    bossHealth: boss.health + Math.floor(state.player.level / 4),
+    mass: LEVELS[level - 1].bodyMass * (1.8 + state.player.level * 0.12),
+    sizeScale: boss.sizeScale,
+    anomaly: null,
+    velocity: randomSpawnVelocity(level, position).multiplyScalar(0.48),
+    collisionCooldown: 0.8,
+    gravityGrace: 0.8,
+  });
+  addToast(`Boss 出現 · ${boss.name}`, `#${boss.color.toString(16).padStart(6, "0")}`);
+}
+
+function defeatBoss(body, escaped = false) {
+  if (!body || !state.bodies.includes(body)) return;
+  const boss = activeBossData(body);
+  const position = body.position.clone();
+  removeBody(body);
+  state.player.energy += escaped ? 18 : 26;
+  updateMission("boss");
+  createBurst(position, boss?.color || 0xffd77c, escaped ? 48 : 76, escaped ? 4.6 : 6.2);
+  addToast(`${boss?.name || "Boss"} ${escaped ? "離開" : "崩解"} · 星能 +${escaped ? 18 : 26}`, `#${(boss?.color || 0xffd77c).toString(16).padStart(6, "0")}`);
+}
+
+function damageBoss(body, position, fromPlayer = true) {
+  if (!body || !state.bodies.includes(body) || !body.isBoss) return;
+  body.bossHealth -= fromPlayer ? 1 : 1;
+  createBurst(position || body.position, activeBossData(body)?.color || 0xffd77c, 18, 2.8);
+  addToast(`${activeBossData(body)?.name || "Boss"} · HP ${Math.max(0, body.bossHealth)}`, "#ffcf92");
+  if (body.bossHealth <= 0) defeatBoss(body);
+}
+
+function resolveBossBodyCollision(boss, other, collision) {
+  if (!state.bodies.includes(boss) || !state.bodies.includes(other)) return;
+  registerChainCollision(collision.position, boss.level);
+  if (other.level >= boss.level - 1) {
+    damageBoss(boss, collision.position, false);
+    if (state.bodies.includes(other)) removeBody(other);
+    return;
+  }
+  absorbBodyIntoBody(boss, other, collision);
+}
+
+function updateBossSystem(delta) {
+  state.bossCooldown = Math.max(0, state.bossCooldown - delta);
+  if (state.time < BOSS_FIRST_DELAY || state.player.level < 3) return;
+  if (state.bodies.some((body) => body.isBoss) || state.bossCooldown > 0) return;
+  spawnBoss();
+  state.bossCooldown = BOSS_COOLDOWN;
+}
+
+function startCosmicEvent() {
+  if (activeCosmicEvent()) return;
+  const previousId = state.cosmicEvent.lastEventId;
+  const available = COSMIC_EVENTS.filter((event) => event.id !== previousId);
+  const event = available[Math.floor(Math.random() * available.length)];
+  state.cosmicEvent.event = event.id;
+  state.cosmicEvent.lastEventId = event.id;
+  state.cosmicEvent.remaining = event.duration;
+  state.cosmicEvent.spawnTimer = 0;
+  addToast(`宇宙事件 · ${event.name}`, `#${event.color.toString(16).padStart(6, "0")}`);
+}
+
+function endCosmicEvent() {
+  const event = activeCosmicEvent();
+  if (!event) return;
+  addToast(`${event.name} 結束 · 宇宙恢復穩定`, "#a8f4ff");
+  state.cosmicEvent.event = null;
+  state.cosmicEvent.remaining = 0;
+  state.cosmicEvent.cooldown = COSMIC_EVENT_COOLDOWN;
+}
+
+function spawnMeteorDuringEvent() {
+  if (state.bodies.length >= WORLD.maxBodies) return;
+  const level = clamp(state.player.level - (Math.random() < 0.72 ? 1 : 0), 1, 10);
+  const position = randomBodyPosition(level);
+  createBody(level, position, {
+    anomaly: Math.random() < 0.15 ? "golden" : null,
+    sizeScale: rand(0.65, 0.9),
+    velocity: randomSpawnVelocity(level, position).multiplyScalar(rand(1.35, 1.8)),
+    collisionCooldown: 0.35,
+  });
+}
+
+function updateCosmicEvents(delta) {
+  const event = activeCosmicEvent();
+  if (event) {
+    state.cosmicEvent.remaining -= delta;
+    if (event.id === "meteor") {
+      state.cosmicEvent.spawnTimer -= delta;
+      if (state.cosmicEvent.spawnTimer <= 0) {
+        spawnMeteorDuringEvent();
+        state.cosmicEvent.spawnTimer = 0.7;
+      }
+    }
+    if (state.cosmicEvent.remaining <= 0) endCosmicEvent();
+    return;
+  }
+  state.cosmicEvent.cooldown -= delta;
+  if (state.time >= COSMIC_EVENT_FIRST_DELAY && state.cosmicEvent.cooldown <= 0) startCosmicEvent();
 }
 
 function absorbBodyIntoBody(larger, smaller, collision) {
@@ -1232,7 +1675,7 @@ function fractureBody(smaller, larger, collision) {
     * fragmentSizeScale;
 
   removeBody(smaller);
-  const desiredFragmentCount = 6 + Math.floor(Math.random() * 5);
+  const desiredFragmentCount = Math.min(14, 6 + Math.floor(Math.random() * 5) + state.player.perks.fracture * 2);
   const slotsNeeded = Math.max(0, desiredFragmentCount - (WORLD.maxBodies - state.bodies.length));
   if (slotsNeeded > 0) {
     [...state.bodies]
@@ -1319,12 +1762,14 @@ function splitEqualBodies(first, second, collision) {
   removeBody(second);
   createBody(downgradedLevel, firstPosition, {
     mass: LEVELS[downgradedLevel - 1].bodyMass,
+    anomaly: null,
     velocity: firstVelocity,
     collisionCooldown: 0.55,
     gravityGrace: 0.45,
   });
   createBody(downgradedLevel, secondPosition, {
     mass: LEVELS[downgradedLevel - 1].bodyMass,
+    anomaly: null,
     velocity: secondVelocity,
     collisionCooldown: 0.55,
     gravityGrace: 0.45,
@@ -1338,6 +1783,7 @@ function splitEqualBodies(first, second, collision) {
     createBody(fragmentLevel, impactPosition.clone().addScaledVector(direction, ejectDistance), {
       mass: LEVELS[fragmentLevel - 1].bodyMass,
       sizeScale: 0.84,
+      anomaly: null,
       velocity: fragmentVelocity,
       collisionCooldown: FRAGMENT_GRAVITY_GRACE,
       gravityGrace: FRAGMENT_GRAVITY_GRACE,
@@ -1378,7 +1824,14 @@ function updateBodyCollisions() {
       createBurst(collision.position, LEVELS[level - 1].accent, 7, 0.75);
       first.collisionCooldown = 0.14;
       second.collisionCooldown = 0.14;
-      resolveBodyCollisionOutcome(first, second, collision);
+      if (first.isBoss || second.isBoss) {
+        const boss = first.isBoss ? first : second;
+        const other = boss === first ? second : first;
+        resolveBossBodyCollision(boss, other, collision);
+      } else {
+        registerChainCollision(collision.position, level);
+        resolveBodyCollisionOutcome(first, second, collision);
+      }
     }
   }
 
@@ -1386,7 +1839,15 @@ function updateBodyCollisions() {
     if (!state.bodies.includes(body)) continue;
     const offset = body.position.clone().sub(state.player.position);
     const distance = offset.length();
-    if (distance >= currentPlayerRadius() + body.radius) continue;
+    if (distance >= currentPlayerAbsorbRadius() + body.radius) continue;
+
+    if (body.isBoss) {
+      resolveSolidCollision(state.player, body);
+      damageBoss(body, state.player.position, true);
+      takeHit(body);
+      if (state.status === "gameover") break;
+      continue;
+    }
 
     if (body.level <= state.player.level) {
       absorbBody(body);
@@ -1452,6 +1913,20 @@ function updateUi(force = false) {
   ui.timeValue.textContent = formatTime(state.time);
   ui.bestValue.textContent = formatNumber(Math.max(getBestMass(), state.highMass));
   ui.pauseButton.textContent = state.status === "paused" ? "繼續" : "暫停";
+  const comboValue = Math.max(state.player.combo, state.chainCombo);
+  ui.comboValue.textContent = comboValue;
+  ui.comboPill.hidden = comboValue < 3;
+  const event = activeCosmicEvent();
+  if (ui.cosmicEvent) {
+    ui.cosmicEvent.hidden = !event;
+    if (event) {
+      ui.cosmicEventName.textContent = event.name;
+      ui.cosmicEventDescription.textContent = event.description;
+      ui.cosmicEventTime.textContent = `${Math.ceil(state.cosmicEvent.remaining)}s`;
+      ui.cosmicEvent.style.setProperty("--event-color", `#${event.color.toString(16).padStart(6, "0")}`);
+    }
+  }
+  updateMissionUi();
 }
 
 function getBestMass() {
@@ -1494,6 +1969,15 @@ function restartGame() {
   state.highMass = 1;
   state.highLevel = 1;
   state.spawnTimer = 0;
+  state.region = REGIONS[0];
+  state.regionKey = null;
+  state.cosmicEvent = { event: null, remaining: 0, cooldown: COSMIC_EVENT_FIRST_DELAY, spawnTimer: 0, lastEventId: null };
+  state.bossCooldown = BOSS_FIRST_DELAY;
+  state.evolutionChoice = null;
+  state.evolutionChoices = [];
+  state.missions = Object.fromEntries(MISSIONS.map((mission) => [mission.id, { progress: 0, completed: false }]));
+  state.chainCombo = 0;
+  state.chainTimer = 0;
   state.lastUiUpdate = 0;
   state.effects.forEach((effect) => effectGroup.remove(effect.points || effect.halo || effect.group));
   state.effects.length = 0;
@@ -1501,6 +1985,7 @@ function restartGame() {
   state.player.mass = 1;
   state.player.level = 1;
   state.player.shield = 3;
+  state.player.shieldMax = 3;
   state.player.energy = 0;
   state.player.coreUpgrade = 0;
   state.player.position.set(0, 0, 0);
@@ -1508,9 +1993,12 @@ function restartGame() {
   state.player.invulnerable = 0;
   state.player.combo = 0;
   state.player.comboTimer = 0;
+  Object.keys(state.player.perks).forEach((key) => { state.player.perks[key] = 0; });
   input.clear();
+  ui.sceneToast.innerHTML = "";
   updateGridDensity();
   updateInfiniteWorld();
+  updateRegionVisuals();
   rebuildPlayerModel();
   camera.position.set(0, 33, 28);
   camera.lookAt(0, 0, 0);
@@ -1540,6 +2028,7 @@ function getSavedGame() {
       mass: state.player.mass,
       level: state.player.level,
       shield: state.player.shield,
+      shieldMax: state.player.shieldMax,
       energy: state.player.energy,
       coreUpgrade: state.player.coreUpgrade,
       position: state.player.position.toArray(),
@@ -1547,11 +2036,22 @@ function getSavedGame() {
       invulnerable: state.player.invulnerable,
       combo: state.player.combo,
       comboTimer: state.player.comboTimer,
+      perks: { ...state.player.perks },
     },
+    missions: state.missions,
+    chainCombo: state.chainCombo,
+    chainTimer: state.chainTimer,
+    bossCooldown: state.bossCooldown,
+    regionKey: state.regionKey,
     bodies: state.bodies.map((body) => ({
       level: body.level,
       mass: body.mass,
       sizeScale: body.sizeScale,
+      anomaly: body.anomaly,
+      isBoss: body.isBoss,
+      bossType: body.bossType,
+      bossHealth: body.bossHealth,
+      bossTimer: body.bossTimer,
       position: body.position.toArray(),
       velocity: body.velocity.toArray(),
       collisionCooldown: body.collisionCooldown,
@@ -1572,12 +2072,19 @@ function restoreGame(saved) {
     mass: saved.player.mass,
     level: saved.player.level,
     shield: saved.player.shield,
+    shieldMax: saved.player.shieldMax || 3,
     energy: saved.player.energy,
     coreUpgrade: saved.player.coreUpgrade,
     invulnerable: saved.player.invulnerable,
     combo: saved.player.combo,
     comboTimer: saved.player.comboTimer,
   });
+  Object.assign(state.player.perks, saved.player.perks || {});
+  state.missions = saved.missions || Object.fromEntries(MISSIONS.map((mission) => [mission.id, { progress: 0, completed: false }]));
+  state.chainCombo = saved.chainCombo || 0;
+  state.chainTimer = saved.chainTimer || 0;
+  state.bossCooldown = saved.bossCooldown ?? BOSS_FIRST_DELAY;
+  state.regionKey = null;
   state.player.position.fromArray(saved.player.position);
   state.player.velocity.fromArray(saved.player.velocity);
   rebuildPlayerModel();
@@ -1585,10 +2092,16 @@ function restoreGame(saved) {
     createBody(body.level, new THREE.Vector3().fromArray(body.position), {
       mass: body.mass,
       sizeScale: body.sizeScale,
+      anomaly: body.anomaly ?? null,
+      isBoss: body.isBoss ?? false,
+      bossType: body.bossType ?? null,
+      bossHealth: body.bossHealth ?? 0,
       velocity: new THREE.Vector3().fromArray(body.velocity),
       collisionCooldown: body.collisionCooldown,
       gravityGrace: body.gravityGrace,
     });
+    const restoredBody = state.bodies[state.bodies.length - 1];
+    if (restoredBody) restoredBody.bossTimer = body.bossTimer || 0;
   });
   updateGridDensity();
   updateInfiniteWorld();
@@ -1652,6 +2165,8 @@ function animate() {
     updateBodies(delta);
     updateBodyCollisions();
     updateCamera(delta);
+    updateCosmicEvents(delta);
+    updateBossSystem(delta);
     updateSpawning(delta);
   } else if (state.status === "evolving") {
     updateEvolutionAnimation(delta);
