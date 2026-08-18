@@ -29,6 +29,11 @@ import {
 const CLOUD_SAVE_KEY = "dice-tower-defense";
 const LOCAL_SYNC_META_KEY = "puzzle.diceTowerDefense.sync.v1";
 const LOCAL_CREATED_META_KEY = "puzzle.diceTowerDefense.created.v1";
+const LOCAL_CLIENT_SYNC_META_KEY = "puzzle.diceTowerDefense.client-sync.v1";
+const LOCAL_SERVER_SYNC_META_KEY = "puzzle.diceTowerDefense.server-sync.v1";
+const LOCAL_SERVER_REVISION_META_KEY = "puzzle.diceTowerDefense.server-revision.v1";
+const LOCAL_REVISION_META_KEY = "puzzle.diceTowerDefense.revision.v1";
+const TAB_ID = globalThis.crypto?.randomUUID?.() || `dice-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 (function () {
   "use strict";
@@ -100,6 +105,10 @@ const LOCAL_CREATED_META_KEY = "puzzle.diceTowerDefense.created.v1";
   let profile = loadProfile();
   let localCloudCreatedAt = readLocalCloudCreatedAt();
   let localCloudSavedAt = readLocalCloudSavedAt();
+  let localCloudClientSavedAt = readLocalCloudClientSavedAt();
+  let localCloudServerSavedAt = readLocalCloudServerSavedAt();
+  let localCloudServerRevision = readLocalCloudServerRevision();
+  let localCloudRevision = readLocalCloudRevision();
   localCloudCreatedAt ||= localCloudSavedAt;
   const initialLocalCloudCreatedAt = localCloudCreatedAt;
   const initialLocalCloudSavedAt = localCloudSavedAt;
@@ -167,12 +176,54 @@ const LOCAL_CREATED_META_KEY = "puzzle.diceTowerDefense.created.v1";
     }
   }
 
+  function readLocalCloudClientSavedAt() {
+    try {
+      const stored = Number(window.localStorage.getItem(LOCAL_CLIENT_SYNC_META_KEY));
+      return Number.isFinite(stored) && stored > 0 ? stored : readLocalCloudSavedAt();
+    } catch (error) {
+      return readLocalCloudSavedAt();
+    }
+  }
+
+  function readLocalCloudServerSavedAt() {
+    try {
+      const stored = Number(window.localStorage.getItem(LOCAL_SERVER_SYNC_META_KEY));
+      return Number.isFinite(stored) && stored > 0 ? stored : 0;
+    } catch (error) {
+      return 0;
+    }
+  }
+
+  function readLocalCloudServerRevision() {
+    try {
+      const stored = Number(window.localStorage.getItem(LOCAL_SERVER_REVISION_META_KEY));
+      return Number.isFinite(stored) && stored > 0 ? stored : 0;
+    } catch (error) {
+      return 0;
+    }
+  }
+
+  function readLocalCloudRevision() {
+    try {
+      const stored = Number(window.localStorage.getItem(LOCAL_REVISION_META_KEY));
+      return Number.isFinite(stored) && stored > 0 ? stored : 0;
+    } catch (error) {
+      return 0;
+    }
+  }
+
   function markLocalCloudSaved() {
     localCloudCreatedAt ||= Date.now();
-    localCloudSavedAt = Date.now();
+    localCloudClientSavedAt = Math.max(Date.now(), localCloudClientSavedAt + 1);
+    localCloudSavedAt = localCloudClientSavedAt;
+    localCloudRevision += 1;
     try {
       window.localStorage.setItem(LOCAL_CREATED_META_KEY, String(localCloudCreatedAt));
       window.localStorage.setItem(LOCAL_SYNC_META_KEY, String(localCloudSavedAt));
+      window.localStorage.setItem(LOCAL_CLIENT_SYNC_META_KEY, String(localCloudClientSavedAt));
+      window.localStorage.setItem(LOCAL_SERVER_SYNC_META_KEY, String(localCloudServerSavedAt));
+      window.localStorage.setItem(LOCAL_SERVER_REVISION_META_KEY, String(localCloudServerRevision));
+      window.localStorage.setItem(LOCAL_REVISION_META_KEY, String(localCloudRevision));
     } catch (error) { /* Storage may be unavailable. */ }
   }
 
@@ -197,7 +248,13 @@ const LOCAL_CREATED_META_KEY = "puzzle.diceTowerDefense.created.v1";
     cloudSavePending = {
       data: JSON.parse(JSON.stringify(getCloudPayload())),
       createdAt: localCloudCreatedAt,
-      savedAt: localCloudSavedAt
+      savedAt: localCloudSavedAt,
+      clientSavedAt: localCloudClientSavedAt,
+      serverSavedAt: localCloudServerSavedAt,
+      serverRevision: localCloudServerRevision,
+      baseServerRevision: localCloudServerRevision,
+      revision: localCloudRevision,
+      writerId: TAB_ID
     };
     if (immediate) {
       flushCloudSave();
@@ -208,12 +265,24 @@ const LOCAL_CREATED_META_KEY = "puzzle.diceTowerDefense.created.v1";
 
   function flushCloudSave() {
     cloudSaveTimer = null;
-    if (!window.PuzzleFirebase?.enabled || !cloudReady || !cloudSavePending) return;
+    if (!window.PuzzleFirebase?.enabled || !cloudReady || !cloudSavePending) return cloudSaveInFlight;
     const snapshot = cloudSavePending;
     cloudSavePending = null;
-    cloudSaveInFlight = cloudSaveInFlight.then(() => window.PuzzleFirebase.save(CLOUD_SAVE_KEY, snapshot.data, snapshot)).then(() => {
+    cloudSaveInFlight = cloudSaveInFlight.then(() => window.PuzzleFirebase.save(CLOUD_SAVE_KEY, snapshot.data, snapshot)).then((result) => {
+      if (result?.accepted && result.checkpoint && localCloudRevision === snapshot.revision && localCloudClientSavedAt === snapshot.clientSavedAt) {
+        localCloudServerSavedAt = Number(result.checkpoint.serverSavedAt) || Number(result.checkpoint.savedAt) || localCloudServerSavedAt;
+        localCloudServerRevision = Number(result.checkpoint.serverRevision) || localCloudServerRevision;
+        localCloudSavedAt = localCloudServerSavedAt || snapshot.savedAt;
+        try {
+          window.localStorage.setItem(LOCAL_SYNC_META_KEY, String(localCloudSavedAt));
+          window.localStorage.setItem(LOCAL_SERVER_SYNC_META_KEY, String(localCloudServerSavedAt));
+          window.localStorage.setItem(LOCAL_SERVER_REVISION_META_KEY, String(localCloudServerRevision));
+        } catch (error) { /* Local storage is optional. */ }
+      }
       if (cloudSavePending && !cloudSaveTimer) cloudSaveTimer = window.setTimeout(flushCloudSave, 5000);
+      return result;
     });
+    return cloudSaveInFlight;
   }
 
   function normalizeCloudPayload(remote) {
@@ -223,7 +292,12 @@ const LOCAL_CREATED_META_KEY = "puzzle.diceTowerDefense.created.v1";
       profile: normalizeProfile(remote.data.profile),
       run: remote.data.run || null,
       createdAt: Number(remote.clientCreatedAt) || 0,
-      savedAt: Number(remote.clientSavedAt) || 0
+      savedAt: Number(remote.savedAt) || Number(remote.clientSavedAt) || 0,
+      clientSavedAt: Number(remote.clientSavedAt) || 0,
+      serverSavedAt: Number(remote.serverSavedAt) || 0,
+      serverRevision: Number(remote.serverRevision) || 0,
+      revision: Number(remote.clientRevision) || 0,
+      writerId: remote.clientWriterId || ""
     };
     if (normalized.run) {
       try {
@@ -245,9 +319,17 @@ const LOCAL_CREATED_META_KEY = "puzzle.diceTowerDefense.created.v1";
     }
     localCloudCreatedAt = payload.createdAt || payload.savedAt;
     localCloudSavedAt = payload.savedAt;
+    localCloudClientSavedAt = payload.clientSavedAt || payload.savedAt;
+    localCloudServerSavedAt = payload.serverSavedAt || 0;
+    localCloudServerRevision = payload.serverRevision || 0;
+    localCloudRevision = payload.revision || localCloudRevision;
     try {
       window.localStorage.setItem(LOCAL_CREATED_META_KEY, String(localCloudCreatedAt));
       window.localStorage.setItem(LOCAL_SYNC_META_KEY, String(localCloudSavedAt));
+      window.localStorage.setItem(LOCAL_CLIENT_SYNC_META_KEY, String(localCloudClientSavedAt));
+      window.localStorage.setItem(LOCAL_SERVER_SYNC_META_KEY, String(localCloudServerSavedAt));
+      window.localStorage.setItem(LOCAL_SERVER_REVISION_META_KEY, String(localCloudServerRevision));
+      window.localStorage.setItem(LOCAL_REVISION_META_KEY, String(localCloudRevision));
     } catch (error) { /* Storage may be unavailable. */ }
     initializeGame();
   }
@@ -264,7 +346,6 @@ const LOCAL_CREATED_META_KEY = "puzzle.diceTowerDefense.created.v1";
     const payload = normalizeCloudPayload(remote);
     const shouldUseRemote = Boolean(
       payload &&
-      (!(payload.createdAt > 0 && initialLocalCloudCreatedAt > 0 && payload.createdAt > initialLocalCloudCreatedAt)) &&
       (!initialLocalCloudSavedAt || payload.savedAt > initialLocalCloudSavedAt)
     );
     if (shouldUseRemote) {
@@ -3584,5 +3665,9 @@ const LOCAL_CREATED_META_KEY = "puzzle.diceTowerDefense.created.v1";
   resizeCanvas();
   render();
   animationFrame = window.requestAnimationFrame(loop);
-  syncCloudState(cloudSyncGate);
+  const cloudSyncPromise = syncCloudState(cloudSyncGate);
+  window.PuzzleFirebase?.registerSaveFlusher?.(() => cloudSyncPromise.then(() => {
+    if (state && state.phase === "preparation") savePreparationCheckpoint();
+    return flushCloudSave();
+  }));
 })();

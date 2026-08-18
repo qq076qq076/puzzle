@@ -22,6 +22,7 @@
     return typeof config[key] === "string" && config[key].trim().length > 0;
   });
   const listeners = new Set();
+  const saveFlushers = new Set();
   let status = configured ? "connecting" : "local";
   let statusDetail = configured ? "正在連線 Firebase" : "尚未設定 Firebase，使用本機存檔";
   let currentUser = null;
@@ -56,6 +57,16 @@
   function cloneData(data) {
     if (typeof structuredClone === "function") return structuredClone(data);
     return JSON.parse(JSON.stringify(data));
+  }
+
+  function timestampToMillis(value) {
+    if (!value) return 0;
+    if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+    if (typeof value.toMillis === "function") return Number(value.toMillis()) || 0;
+    if (typeof value.seconds === "number") {
+      return value.seconds * 1000 + Math.floor((Number(value.nanoseconds) || 0) / 1000000);
+    }
+    return 0;
   }
 
   function createSyncGate(label) {
@@ -156,13 +167,18 @@
 
   function normalizeRemoteValue(value) {
     if (!value || value.version !== 1 || !value.data) return null;
+    const clientSavedAt = Number(value.clientSavedAt) || 0;
+    const serverSavedAt = timestampToMillis(value.serverSavedAt || value.updatedAt);
     return {
       version: 1,
       data: cloneData(value.data),
       clientCreatedAt: Number(value.clientCreatedAt) || 0,
-      clientSavedAt: Number(value.clientSavedAt) || 0,
+      clientSavedAt: clientSavedAt,
+      savedAt: serverSavedAt || clientSavedAt,
+      serverSavedAt: serverSavedAt,
       clientRevision: Number(value.clientRevision) || 0,
       clientWriterId: value.clientWriterId || "",
+      serverRevision: Number(value.serverRevision) || 0,
       updatedAt: value.updatedAt || null
     };
   }
@@ -184,10 +200,11 @@
   function writeSaveForUser(user, gameKey, data, metadata) {
     const reference = getSaveDocumentForUser(user, gameKey);
     if (!reference) return Promise.resolve(false);
-    const savedAt = Number(metadata?.savedAt) || Date.now();
+    const savedAt = Number(metadata?.clientSavedAt) || Number(metadata?.savedAt) || Date.now();
     const createdAt = Number(metadata?.createdAt) || savedAt;
     const revision = Number(metadata?.revision) || 0;
     const writerId = metadata?.writerId || "";
+    const expectedServerRevision = Number(metadata?.baseServerRevision) || Number(metadata?.serverRevision) || 0;
     const nextValue = {
       version: 1,
       data: cloneData(data),
@@ -195,18 +212,55 @@
       clientSavedAt: savedAt,
       clientRevision: revision,
       clientWriterId: writerId,
-      updatedAt: serverTimestamp()
+      serverRevision: 0
     };
-    if (!runTransaction) {
-      return setDocument(reference, nextValue, { merge: true }).then(function () { return true; });
-    }
-    return runTransaction(firestore, function (transaction) {
+    const commit = function (transaction) {
       return transaction.get(reference).then(function (snapshot) {
-        if (snapshot.exists() && compareSaveVersions(snapshot.data(), nextValue) >= 0) return false;
+        const currentValue = snapshot.exists() ? snapshot.data() : null;
+        const currentServerRevision = Number(currentValue?.serverRevision) || 0;
+        if (snapshot.exists()) {
+          if (currentServerRevision > 0) {
+            if (expectedServerRevision !== currentServerRevision) {
+              return { accepted: false, serverRevision: currentServerRevision };
+            }
+          } else if (compareSaveVersions(currentValue, nextValue) >= 0) {
+            return { accepted: false, serverRevision: currentServerRevision };
+          }
+        }
+        const nextServerRevision = currentServerRevision + 1;
+        nextValue.serverRevision = nextServerRevision;
+        const serverNow = serverTimestamp ? serverTimestamp() : null;
+        if (serverNow) {
+          nextValue.serverSavedAt = serverNow;
+          nextValue.updatedAt = serverNow;
+        }
         transaction.set(reference, nextValue, { merge: true });
-        return true;
+        return { accepted: true, serverRevision: nextServerRevision };
       });
-    });
+    };
+
+    function readCommittedValue(result) {
+      return getDocument(reference).then(function (snapshot) {
+        const checkpoint = snapshot.exists() ? normalizeRemoteValue(snapshot.data()) : null;
+        if (checkpoint && result.accepted && checkpoint.serverRevision !== result.serverRevision) {
+          return Object.assign({}, result, { checkpoint: null });
+        }
+        return Object.assign({}, result, { checkpoint: checkpoint });
+      });
+    }
+
+    if (!runTransaction) {
+      const serverNow = serverTimestamp ? serverTimestamp() : null;
+      if (serverNow) {
+        nextValue.serverSavedAt = serverNow;
+        nextValue.updatedAt = serverNow;
+      }
+      nextValue.serverRevision = expectedServerRevision + 1;
+      return setDocument(reference, nextValue, { merge: true }).then(function () {
+        return readCommittedValue({ accepted: true, serverRevision: nextValue.serverRevision });
+      });
+    }
+    return runTransaction(firestore, commit).then(readCommittedValue);
   }
 
   function readAllSavesForUser(user) {
@@ -224,22 +278,27 @@
     return Promise.all(saves.map(function (entry) {
       if (!entry.checkpoint) return null;
       return readSaveForUser(targetUser, entry.gameKey).then(function (targetCheckpoint) {
-        if (targetCheckpoint && targetCheckpoint.clientSavedAt >= entry.checkpoint.clientSavedAt) return false;
+        if (targetCheckpoint && targetCheckpoint.savedAt >= entry.checkpoint.savedAt) return false;
         return writeSaveForUser(targetUser, entry.gameKey, entry.checkpoint.data, {
           savedAt: entry.checkpoint.clientSavedAt,
           createdAt: entry.checkpoint.clientCreatedAt,
           revision: entry.checkpoint.clientRevision,
-          writerId: entry.checkpoint.clientWriterId
+          writerId: entry.checkpoint.clientWriterId,
+          baseServerRevision: targetCheckpoint?.serverRevision
         });
       });
     }));
   }
 
   function flushPendingSaves() {
+    const pending = [];
     if (window.PuzzleSave && typeof window.PuzzleSave.flushAll === "function") {
-      return window.PuzzleSave.flushAll();
+      pending.push(window.PuzzleSave.flushAll());
     }
-    return Promise.resolve();
+    saveFlushers.forEach(function (flush) {
+      try { pending.push(Promise.resolve(flush())); } catch (error) { pending.push(Promise.reject(error)); }
+    });
+    return Promise.all(pending);
   }
 
   function load(gameKey) {
@@ -260,13 +319,13 @@
   function save(gameKey, data, metadata) {
     return ready.then(function (user) {
       if (!user) return false;
-      return writeSaveForUser(user, gameKey, data, metadata).then(function (saved) {
-        if (saved) notify("online", "Firebase 已同步");
-        return saved;
+      return writeSaveForUser(user, gameKey, data, metadata).then(function (result) {
+        if (result && result.accepted) notify("online", "Firebase 已同步");
+        return result;
       }).catch(function (error) {
         notify("error", "雲端寫入失敗，保留本機存檔");
         console.warn("[PuzzleFirebase] Cannot save save", gameKey, error);
-        return false;
+        return { accepted: false, checkpoint: null };
       });
     });
   }
@@ -415,6 +474,7 @@
       style.textContent += ".puzzle-account__social{display:grid;gap:8px;margin:14px 0 12px}.puzzle-account__social button,.puzzle-account__email-toggle,.puzzle-account__email-back{width:100%;border:0;border-radius:9px;padding:11px 10px;color:#fff;background:#334155;font:700 13px/1.2 inherit;cursor:pointer}.puzzle-account__social button[data-provider=google]{color:#172033;background:#fff}.puzzle-account__social button[data-provider=facebook]{background:#1877f2}.puzzle-account__email-toggle,.puzzle-account__email-back{padding:8px;color:#bfdbfe;background:transparent;font-size:12px}.puzzle-account__email-section[hidden],.puzzle-account__email-toggle[hidden],.puzzle-account__email-back[hidden]{display:none}.puzzle-account__divider{display:flex;align-items:center;gap:8px;color:#64748b;font-size:11px}.puzzle-account__divider::before,.puzzle-account__divider::after{content:\"\";height:1px;flex:1;background:#334155}";
       style.textContent += ".puzzle-account__trigger{display:inline-flex;align-items:center;gap:8px}.puzzle-account__avatar{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;color:#0f172a;background:#bfdbfe;font-size:11px;font-weight:800}.puzzle-account__avatar[hidden]{display:none}";
       style.textContent += ".puzzle-account__trigger [data-role=trigger-label]{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}";
+      style.textContent += ".puzzle-account__trigger{touch-action:none;user-select:none}.puzzle-account--dragging .puzzle-account__trigger{cursor:grabbing;opacity:.86}";
       document.head.appendChild(style);
     }
 
@@ -439,11 +499,92 @@
     const statusElement = root.querySelector('[data-role="status"]');
     const errorElement = root.querySelector('[data-role="error"]');
     const logoutButton = root.querySelector(".puzzle-account__logout");
+    const positionStorageKey = "puzzle-account-position.v1";
+    let dragState = null;
+    let suppressNextClick = false;
+
+    function clampPosition(left, top) {
+      const rect = trigger.getBoundingClientRect();
+      const width = rect.width || 120;
+      const height = rect.height || 44;
+      return {
+        left: Math.max(8, Math.min(Number(left) || 0, window.innerWidth - width - 8)),
+        top: Math.max(8, Math.min(Number(top) || 0, window.innerHeight - height - 8))
+      };
+    }
+
+    function applyPosition(left, top, persist) {
+      const position = clampPosition(left, top);
+      root.style.left = position.left + "px";
+      root.style.top = position.top + "px";
+      root.style.right = "auto";
+      if (persist) {
+        try { window.localStorage.setItem(positionStorageKey, JSON.stringify(position)); } catch (error) { /* Position persistence is optional. */ }
+      }
+    }
+
+    function restorePosition() {
+      try {
+        const stored = JSON.parse(window.localStorage.getItem(positionStorageKey) || "null");
+        if (stored && Number.isFinite(Number(stored.left)) && Number.isFinite(Number(stored.top))) {
+          applyPosition(stored.left, stored.top, false);
+        }
+      } catch (error) { /* Position persistence is optional. */ }
+    }
+
+    function finishDrag(event) {
+      if (!dragState || (event && event.pointerId !== dragState.pointerId)) return;
+      if (trigger.hasPointerCapture?.(dragState.pointerId)) trigger.releasePointerCapture(dragState.pointerId);
+      if (dragState.moved) {
+        suppressNextClick = true;
+        applyPosition(dragState.left, dragState.top, true);
+        window.setTimeout(function () { suppressNextClick = false; }, 500);
+      }
+      dragState = null;
+      root.classList.remove("puzzle-account--dragging");
+    }
+
+    trigger.addEventListener("pointerdown", function (event) {
+      if (event.button !== undefined && event.button !== 0) return;
+      const rect = trigger.getBoundingClientRect();
+      dragState = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        originLeft: rect.left,
+        originTop: rect.top,
+        left: rect.left,
+        top: rect.top,
+        moved: false
+      };
+      trigger.setPointerCapture?.(event.pointerId);
+    });
+
+    trigger.addEventListener("pointermove", function (event) {
+      if (!dragState || event.pointerId !== dragState.pointerId) return;
+      const deltaX = event.clientX - dragState.startX;
+      const deltaY = event.clientY - dragState.startY;
+      if (!dragState.moved && Math.hypot(deltaX, deltaY) < 6) return;
+      dragState.moved = true;
+      const position = clampPosition(dragState.originLeft + deltaX, dragState.originTop + deltaY);
+      dragState.left = position.left;
+      dragState.top = position.top;
+      applyPosition(position.left, position.top, false);
+      root.classList.add("puzzle-account--dragging");
+      event.preventDefault();
+    });
+
+    trigger.addEventListener("pointerup", finishDrag);
+    trigger.addEventListener("pointercancel", finishDrag);
+    window.addEventListener("resize", function () {
+      if (root.style.left && root.style.top) applyPosition(root.offsetLeft, root.offsetTop, true);
+    });
+    window.setTimeout(restorePosition, 0);
 
     function render(snapshot) {
       const user = snapshot.user;
       const signedIn = Boolean(user && !user.isAnonymous);
-      triggerLabel.textContent = signedIn ? accountLabel(user) : "登入雲端";
+      triggerLabel.textContent = signedIn ? "已登入" : "登入雲端";
       avatar.textContent = signedIn ? accountInitial(user) : "";
       avatar.hidden = !signedIn;
       trigger.title = signedIn ? "帳號設定與登出" : "登入雲端存檔";
@@ -464,6 +605,10 @@
     }
 
     trigger.addEventListener("click", function () {
+      if (suppressNextClick) {
+        suppressNextClick = false;
+        return;
+      }
       panel.hidden = !panel.hidden;
     });
 
@@ -532,6 +677,11 @@
     load: load,
     save: save,
     clear: clear,
+    registerSaveFlusher: function (flush) {
+      if (typeof flush !== "function") return function () {};
+      saveFlushers.add(flush);
+      return function () { saveFlushers.delete(flush); };
+    },
     registerAccount: registerAccount,
     signInAccount: signInAccount,
     signInSocialAccount: signInSocialAccount,

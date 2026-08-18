@@ -32,7 +32,12 @@
       const savedAt = Number(parsed.savedAt) || 0;
       return Object.assign({}, parsed, {
         createdAt: Number(parsed.createdAt) || savedAt,
-        savedAt: savedAt
+        savedAt: savedAt,
+        clientSavedAt: Number(parsed.clientSavedAt) || savedAt,
+        serverSavedAt: Number(parsed.serverSavedAt) || 0,
+        serverRevision: Number(parsed.serverRevision) || 0,
+        revision: Number(parsed.revision) || 0,
+        writerId: parsed.writerId || ""
       });
     } catch (error) {
       return null;
@@ -50,6 +55,14 @@
     let cloudOperations = Promise.resolve();
     let eventsInstalled = false;
     let localCreatedAt = 0;
+    let localSavedAt = 0;
+    let localClientSavedAt = 0;
+    let localServerSavedAt = 0;
+    let localServerRevision = 0;
+    let localRevision = 0;
+    const writerId = (window.crypto && typeof window.crypto.randomUUID === "function") ? window.crypto.randomUUID() : Math.random().toString(36).slice(2);
+    let resolveInitialization;
+    const initializationReady = new Promise(function (resolve) { resolveInitialization = resolve; });
 
     function readCheckpoint() {
       const checkpoint = readLocal(storageKey);
@@ -67,6 +80,11 @@
     function clear() {
       clearLocal();
       localCreatedAt = 0;
+      localSavedAt = 0;
+      localClientSavedAt = 0;
+      localServerSavedAt = 0;
+      localServerRevision = 0;
+      localRevision = 0;
       cloudPending = null;
       if (firebase) {
         cloudOperations = cloudOperations.then(function () { return firebase.clear(options.key); });
@@ -76,10 +94,44 @@
     function writeLocal(data, metadata) {
       const savedAt = Number(metadata?.savedAt) || Date.now();
       const createdAt = Number(metadata?.createdAt) || localCreatedAt || savedAt;
+      const clientSavedAt = Number(metadata?.clientSavedAt) || savedAt;
+      const serverSavedAt = Number(metadata?.serverSavedAt) || 0;
+      const serverRevision = Number(metadata?.serverRevision) || 0;
+      const revision = Number(metadata?.revision) || 0;
       localCreatedAt = createdAt;
-      const checkpoint = { version: 1, createdAt: createdAt, savedAt: savedAt, data: data };
+      localSavedAt = savedAt;
+      localClientSavedAt = clientSavedAt;
+      localServerSavedAt = serverSavedAt;
+      localServerRevision = serverRevision;
+      localRevision = revision;
+      const checkpoint = {
+        version: 1,
+        createdAt: createdAt,
+        savedAt: savedAt,
+        clientSavedAt: clientSavedAt,
+        serverSavedAt: serverSavedAt,
+        serverRevision: serverRevision,
+        revision: revision,
+        writerId: metadata?.writerId || writerId,
+        data: data
+      };
       try { window.localStorage.setItem(storageKey, JSON.stringify(checkpoint)); } catch (error) { /* Storage may be unavailable. */ }
       return checkpoint;
+    }
+
+    function recordCloudResult(checkpoint, result) {
+      if (!result || !result.accepted || !result.checkpoint) return;
+      const current = readCheckpoint();
+      if (!current || current.revision !== checkpoint.revision || current.clientSavedAt !== checkpoint.clientSavedAt) return;
+      const remote = result.checkpoint;
+      writeLocal(current.data, Object.assign({}, current, {
+        savedAt: remote.savedAt || current.savedAt,
+        serverSavedAt: remote.serverSavedAt || remote.savedAt || current.serverSavedAt,
+        serverRevision: remote.serverRevision || current.serverRevision,
+        clientSavedAt: current.clientSavedAt,
+        revision: current.revision,
+        writerId: current.writerId || writerId
+      }));
     }
 
     function flushCloud() {
@@ -89,6 +141,9 @@
       cloudPending = null;
       cloudOperations = cloudOperations.then(function () {
         return firebase.save(options.key, checkpoint.data, checkpoint);
+      }).then(function (result) {
+        recordCloudResult(checkpoint, result);
+        return result;
       }).then(function () {
         if (cloudPending && !cloudTimer) cloudTimer = window.setTimeout(flushCloud, options.cloudInterval || 5000);
       });
@@ -109,7 +164,17 @@
       if (!active) return;
       try {
         const data = options.getState();
-        if (data) queueCloudSave(writeLocal(data), Boolean(immediate));
+        if (!data) return;
+        localClientSavedAt = Math.max(Date.now(), localClientSavedAt + 1);
+        localRevision += 1;
+        queueCloudSave(writeLocal(data, {
+          createdAt: localCreatedAt,
+          savedAt: localClientSavedAt,
+          clientSavedAt: localClientSavedAt,
+          serverRevision: localServerRevision,
+          revision: localRevision,
+          writerId: writerId
+        }), Boolean(immediate));
       } catch (error) {
         // A blocked or full localStorage must never stop the game.
       }
@@ -137,8 +202,14 @@
 
     if (window.PuzzleSave && Array.isArray(window.PuzzleSave._flushers)) {
       window.PuzzleSave._flushers.push(function () {
-        saveNow(true);
-        return flushCloud();
+        return initializationReady.then(function () {
+          if (!active && selectedCheckpoint) {
+            cloudPending = selectedCheckpoint;
+          } else {
+            saveNow(true);
+          }
+          return flushCloud();
+        });
       });
     }
 
@@ -197,10 +268,16 @@
       if (!remote || remote.version !== 1 || !remote.data) return null;
       if (options.validate && !options.validate(remote.data)) return null;
       const savedAt = Number(remote.clientSavedAt) || 0;
+      const serverSavedAt = Number(remote.serverSavedAt) || 0;
       return {
         version: 1,
         createdAt: Number(remote.clientCreatedAt) || 0,
-        savedAt: savedAt,
+        savedAt: serverSavedAt || savedAt,
+        clientSavedAt: savedAt,
+        serverSavedAt: serverSavedAt,
+        serverRevision: Number(remote.serverRevision) || 0,
+        revision: Number(remote.clientRevision) || 0,
+        writerId: remote.clientWriterId || "",
         data: remote.data
       };
     }
@@ -208,7 +285,6 @@
     function shouldUseRemote(remoteCheckpoint, localCheckpoint) {
       if (!remoteCheckpoint) return false;
       if (!localCheckpoint) return true;
-      if (remoteCheckpoint.createdAt > 0 && localCheckpoint.createdAt > 0 && remoteCheckpoint.createdAt > localCheckpoint.createdAt) return false;
       return remoteCheckpoint.savedAt > localCheckpoint.savedAt;
     }
 
@@ -231,6 +307,11 @@
     let selectedCheckpoint = localCheckpoint;
     let selectedSource = localCheckpoint ? "已載入本機存檔" : "";
     localCreatedAt = localCheckpoint ? localCheckpoint.createdAt : 0;
+    localSavedAt = localCheckpoint ? localCheckpoint.savedAt : 0;
+    localClientSavedAt = localCheckpoint ? localCheckpoint.clientSavedAt : 0;
+    localServerSavedAt = localCheckpoint ? localCheckpoint.serverSavedAt : 0;
+    localServerRevision = localCheckpoint ? localCheckpoint.serverRevision : 0;
+    localRevision = localCheckpoint ? localCheckpoint.revision : 0;
     applyCheckpoint(localCheckpoint, !localCheckpoint);
 
     const syncCover = firebase ? createCover('<div class="puzzle-save-dialog"><div class="puzzle-save-kicker">FIREBASE SYNC</div><h2 id="puzzle-save-title">正在同步進度…</h2><p>正在確認雲端與本機的最新存檔，請稍候。</p></div>') : null;
@@ -249,6 +330,7 @@
 
       cloudReady = true;
       if (syncCover) syncCover.close();
+      resolveInitialization();
       if (selectedCheckpoint) {
         showChoice(selectedCheckpoint, selectedSource);
       } else {

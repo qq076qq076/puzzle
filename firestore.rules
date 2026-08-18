@@ -28,7 +28,9 @@ service cloud.firestore {
         && isPuzzleGame(gameId)
         && request.resource.data.version == 1
         && request.resource.data.data is map
-        && request.resource.data.clientSavedAt is int;
+        && request.resource.data.clientSavedAt is int
+        && request.resource.data.clientRevision is int
+        && request.resource.data.serverRevision is int;
     }
   }
 }

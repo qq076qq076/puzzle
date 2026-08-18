@@ -91,6 +91,9 @@ let focusedPlotStartedAt = -Infinity;
 let lastFarmFrameAt = -Infinity;
 let localCreatedAt = 0;
 let localSavedAt = 0;
+let localClientSavedAt = 0;
+let localServerSavedAt = 0;
+let localServerRevision = 0;
 let localRevision = 0;
 let initialLocalCreatedAt = 0;
 let initialLocalSavedAt = 0;
@@ -190,6 +193,9 @@ function parseLocalCheckpoint(raw) {
       version: 1,
       createdAt: Number(envelope.createdAt) || Number(envelope.savedAt) || 0,
       savedAt: Number(envelope.savedAt) || 0,
+      clientSavedAt: Number(envelope.clientSavedAt) || Number(envelope.savedAt) || 0,
+      serverSavedAt: Number(envelope.serverSavedAt) || 0,
+      serverRevision: Number(envelope.serverRevision) || 0,
       revision: Number(envelope.revision) || 0,
       writerId: envelope.writerId || "",
       data
@@ -214,6 +220,10 @@ function queueCloudSave(immediate = false) {
     data: JSON.parse(JSON.stringify(state)),
     createdAt: localCreatedAt,
     savedAt: localSavedAt,
+    clientSavedAt: localClientSavedAt,
+    serverSavedAt: localServerSavedAt,
+    serverRevision: localServerRevision,
+    baseServerRevision: localServerRevision,
     revision: localRevision,
     writerId: TAB_ID
   };
@@ -226,12 +236,29 @@ function queueCloudSave(immediate = false) {
 
 function flushCloudSave() {
   cloudSaveTimer = null;
-  if (!window.PuzzleFirebase?.enabled || !cloudReady || !cloudSavePending || !isActiveTab()) return;
+  if (!window.PuzzleFirebase?.enabled || !cloudReady || !cloudSavePending || !isActiveTab()) return cloudSaveInFlight;
   const snapshot = cloudSavePending;
   cloudSavePending = null;
-  cloudSaveInFlight = cloudSaveInFlight.then(() => window.PuzzleFirebase.save(CLOUD_SAVE_KEY, snapshot.data, snapshot)).then(() => {
+  cloudSaveInFlight = cloudSaveInFlight.then(() => window.PuzzleFirebase.save(CLOUD_SAVE_KEY, snapshot.data, snapshot)).then((result) => {
+    const current = readLocalCheckpoint();
+    if (result?.accepted && result.checkpoint && current && current.revision === snapshot.revision && current.clientSavedAt === snapshot.clientSavedAt) {
+      const serverSavedAt = Number(result.checkpoint.serverSavedAt) || Number(result.checkpoint.savedAt) || 0;
+      localServerSavedAt = serverSavedAt;
+      localServerRevision = Number(result.checkpoint.serverRevision) || localServerRevision;
+      localSavedAt = serverSavedAt || current.savedAt;
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          ...current,
+          savedAt: localSavedAt,
+          serverSavedAt: localServerSavedAt,
+          serverRevision: localServerRevision
+        }));
+      } catch (error) { /* Local storage is optional. */ }
+    }
     if (cloudSavePending && !cloudSaveTimer) cloudSaveTimer = window.setTimeout(flushCloudSave, 5000);
+    return result;
   });
+  return cloudSaveInFlight;
 }
 
 async function syncCloudState(gate) {
@@ -244,18 +271,19 @@ async function syncCloudState(gate) {
   let remote = null;
   try { remote = await window.PuzzleFirebase.load(CLOUD_SAVE_KEY); } catch (error) { /* Local save remains available. */ }
   const remoteState = remote ? normalizeLoadedState(remote.data) : null;
-  const remoteCreatedAt = Number(remote?.clientCreatedAt) || 0;
-  const remoteSavedAt = Number(remote?.clientSavedAt) || 0;
+  const remoteSavedAt = Number(remote?.savedAt) || Number(remote?.clientSavedAt) || 0;
   const shouldUseRemote = Boolean(
     remoteState &&
-    (!(remoteCreatedAt > 0 && initialLocalCreatedAt > 0 && remoteCreatedAt > initialLocalCreatedAt)) &&
     (!initialLocalSavedAt || remoteSavedAt > initialLocalSavedAt)
   );
 
   if (shouldUseRemote) {
     applyLoadedState(remoteState, true);
-    localCreatedAt = remoteCreatedAt || localCreatedAt || Date.now();
+    localCreatedAt = Number(remote?.clientCreatedAt) || localCreatedAt || Date.now();
     localSavedAt = remoteSavedAt;
+    localClientSavedAt = Number(remote?.clientSavedAt) || remoteSavedAt;
+    localServerSavedAt = Number(remote?.serverSavedAt) || 0;
+    localServerRevision = Number(remote?.serverRevision) || 0;
     localRevision = Number(remote?.clientRevision) || localRevision;
     saveNow(false);
   }
@@ -274,6 +302,9 @@ function loadState() {
       if (checkpoint && applyLoadedState(checkpoint.data)) {
         localCreatedAt = checkpoint.createdAt || Number(state.lastSimulatedAt) || 0;
         localSavedAt = checkpoint.savedAt || Number(state.lastSimulatedAt) || 0;
+        localClientSavedAt = checkpoint.clientSavedAt || localSavedAt;
+        localServerSavedAt = checkpoint.serverSavedAt || 0;
+        localServerRevision = checkpoint.serverRevision || 0;
         localRevision = checkpoint.revision;
         initialLocalCreatedAt = localCreatedAt;
         initialLocalSavedAt = localSavedAt;
@@ -288,6 +319,9 @@ function loadState() {
   state = createInitialState(Date.now());
   localCreatedAt = Date.now();
   localSavedAt = 0;
+  localClientSavedAt = 0;
+  localServerSavedAt = 0;
+  localServerRevision = 0;
   localRevision = 0;
   initialLocalCreatedAt = localCreatedAt;
   initialLocalSavedAt = 0;
@@ -305,12 +339,16 @@ function saveNow(forceCloud = false, { allowInactive = false, forceOverwrite = f
     );
     if (currentIsNewer && !forceOverwrite) return false;
     localCreatedAt ||= Date.now();
-    localSavedAt = Math.max(Date.now(), localSavedAt + 1, (currentCheckpoint?.savedAt || 0) + (forceOverwrite ? 1 : 0));
+    localClientSavedAt = Math.max(Date.now(), localClientSavedAt + 1, (currentCheckpoint?.clientSavedAt || 0) + (forceOverwrite ? 1 : 0));
+    localSavedAt = localClientSavedAt;
     localRevision = Math.max(localRevision, currentCheckpoint?.revision || 0) + 1;
     const checkpoint = {
       version: 1,
       createdAt: localCreatedAt,
       savedAt: localSavedAt,
+      clientSavedAt: localClientSavedAt,
+      serverSavedAt: localServerSavedAt,
+      serverRevision: localServerRevision,
       revision: localRevision,
       writerId: TAB_ID,
       data: JSON.parse(JSON.stringify(state))
@@ -329,6 +367,9 @@ function adoptLocalCheckpoint(checkpoint, showMessage = false) {
   if (!checkpoint || checkpoint.savedAt <= localSavedAt || !applyLoadedState(checkpoint.data, false, false)) return false;
   localCreatedAt = checkpoint.createdAt || localCreatedAt || checkpoint.savedAt;
   localSavedAt = checkpoint.savedAt;
+  localClientSavedAt = checkpoint.clientSavedAt || checkpoint.savedAt;
+  localServerSavedAt = checkpoint.serverSavedAt || 0;
+  localServerRevision = checkpoint.serverRevision || 0;
   localRevision = checkpoint.revision;
   lastPersistedState = stateSnapshot();
   cloudSavePending = null;
@@ -339,6 +380,9 @@ function adoptLocalCheckpoint(checkpoint, showMessage = false) {
       version: 1,
       createdAt: localCreatedAt,
       savedAt: localSavedAt,
+      clientSavedAt: localClientSavedAt,
+      serverSavedAt: localServerSavedAt,
+      serverRevision: localServerRevision,
       revision: localRevision,
       writerId: checkpoint.writerId || TAB_ID,
       data: state
@@ -2702,7 +2746,11 @@ window.setInterval(() => {
   }
 }, 500);
 window.setInterval(() => { if (isActiveTab()) saveNow(); }, 10000);
-syncCloudState(cloudSyncGate);
+const cloudSyncPromise = syncCloudState(cloudSyncGate);
+window.PuzzleFirebase?.registerSaveFlusher?.(() => cloudSyncPromise.then(() => {
+  if (state && isActiveTab()) saveNow(true);
+  return flushCloudSave();
+}));
 
 globalThis.__harvestGame = {
   getState: () => state,
