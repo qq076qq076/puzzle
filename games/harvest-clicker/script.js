@@ -1650,12 +1650,54 @@ function drawVehicleWheel(x, y, color, highlight) {
   ctx.fill();
 }
 
+function drawKenneyVehicleAttachment(device, now) {
+  // The Kenney previews already contain the 2.5D vehicle body. These small
+  // overlays keep the machine's job readable without replacing the model
+  // with a flat icon: a saw for forestry, logs for hauling, and a tank for
+  // the larger crop machines.
+  if (device.model === "sawmill") {
+    ctx.fillStyle = "#e7e1cb";
+    ctx.beginPath(); ctx.arc(29, 7, 7, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#8b6c42"; ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = "#68533a";
+    ctx.beginPath(); ctx.arc(29, 7, 2, 0, Math.PI * 2); ctx.fill();
+    return;
+  }
+  if (device.model === "lumber") {
+    ctx.fillStyle = "#9e6438";
+    ctx.strokeStyle = "#5e3927"; ctx.lineWidth = 1;
+    for (let log = 0; log < 3; log += 1) {
+      ctx.beginPath(); ctx.roundRect(-25 + log * 5, -18 + (log % 2) * 3, 18, 5, 2); ctx.fill(); ctx.stroke();
+    }
+    return;
+  }
+  if (device.model === "hopper" || device.model === "steam" || device.model === "autonomous") {
+    const pulse = state.settings.reducedMotion ? 0 : Math.sin(now / 180) * .7;
+    ctx.fillStyle = device.model === "autonomous" ? "#f6d76b" : "#d8b45c";
+    ctx.globalAlpha = .9;
+    ctx.beginPath(); ctx.roundRect(-8, -32 - pulse, 16, 5, 2); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+}
+
 function drawHarvesterVehicle(device, x, y, heading, now) {
   const model = HARVESTER_MODELS[device.model] || HARVESTER_MODELS.combine;
   const pulse = state.settings.reducedMotion ? 0 : Math.sin(now / 160) * .8;
+  const image = device.image ? images.get(device.image) : null;
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(heading || 0);
+  if (image) {
+    // Kenney Car Kit previews are already rendered from an isometric camera.
+    // Rotating the transparent sprite along the path gives the car a visible
+    // front, side, and rear instead of the old single-plane silhouette.
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(image, -32, -50, 64, 64);
+    drawKenneyVehicleAttachment(device, now);
+    ctx.restore();
+    return;
+  }
   ctx.scale(1, .72);
   ctx.lineJoin = "round";
 

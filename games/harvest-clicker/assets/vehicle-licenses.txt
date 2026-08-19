@@ -1,10 +1,14 @@
-自動化車輛圖示授權
+自動化車輛圖示與模型授權
 
-vehicle-tractor-farm.png
-來源：https://freegamesprites.com/en/assets/tractor-farm-vehicle
-來源頁標示：Creative Commons Zero (CC0)
+kenney-tractor.png
+kenney-tractor-shovel.png
+kenney-delivery.png
+kenney-delivery-flat.png
+kenney-garbage-truck.png
+kenney-truck-flat.png
+kenney-truck.png
 
-vehicle-tractor.png、vehicle-delivery.png、vehicle-tow.png
-來源：https://kenney.nl/assets/pixel-vehicle-pack
-下載頁：https://opengameart.org/content/pixel-vehicle-pack
+來源：https://kenney.nl/assets/car-kit
+下載檔案：https://kenney.nl/media/pages/assets/car-kit/1a312ec241-1775131960/kenney_car-kit.zip
+素材格式：Kenney Car Kit 的 Previews/*.png（由 3D 車輛模型預先渲染）
 授權：Creative Commons Zero (CC0)

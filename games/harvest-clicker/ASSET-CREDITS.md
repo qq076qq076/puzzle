@@ -10,7 +10,7 @@
 
 - 植物：`lettuce-head.png`、`tomato-plant-staked.png`、`cabbage-head-row.png`、`wheat-stalk.png`、`corn-stalk-row.png`、`strawberry-plant.png`、`zucchini-plant.png`、`pumpkin-patch.png`、`eggplant-plant.png`、`lavender-bush.png`、`blueberry-bush.png`、`pepper-plant.png`、`rose-bush.png`、`sunflower-row.png`、`cotton-plant.png`、`sugar-cane.png`、`rice-paddy-bundle.png`、`grape-vine.png`、`vanilla-vine.png`、`coffee-bean-plant.png`
 - 農具：`vegetable-peeler.png`、`pruning-shears.png`、`hand-trowel.png`、`garden-spade.png`、`farm-scythe.png`、`garden-hoe.png`、`compost-pile-pitchfork.png`、`copper-pickaxe.png`、`iron-hoe.png`
-- 設備：`combine-harvester.png`、`vehicle-tractor-farm.png`、`watering-can-metal.png`、`sprinkler-head.png`
+- 設備：`combine-harvester.png`、`watering-can-metal.png`、`sprinkler-head.png`
 
 ## 林業擴充素材
 
@@ -18,7 +18,7 @@
 - 授權：來源頁標示為 [Creative Commons Zero 1.0 Universal（CC0）](https://creativecommons.org/publicdomain/zero/1.0/)。
 - 樹木：`apple-tree.png`、`orange-tree.png`、`cherry-tree.png`、`peach-tree.png`、`lemon-tree.png`、`banana-tree.png`、`coconut-palm.png`、`ginkgo-tree-yellow.png`、`maple-tree-red-autumn.png`、`cypress-tree.png`
 - 伐木工具：`woodcutter-hand-axe.png`、`steel-hatchet.png`、`hand-saw-crosscut.png`、`double-bit-war-axe.png`、`circular-saw-mini.png`
-- 林業設備：`sawmill.webp`、`lumber-mill.webp`
+- 林業設備的車體改用下方 Kenney Car Kit 車輛，Canvas 另外繪製鋸木與木材標記。
 
 植物 PNG 只裁除透明留白，讓根部能貼齊土面；Canvas 在執行時縮放、加上接觸陰影，並依等角座標排序，以形成 2.5D 呈現。土壤與山、水、樹、野花、農舍景觀皆由 Canvas 程式繪製。
 
@@ -44,6 +44,7 @@
 
 ## 自動化車輛圖示與模型
 
-- `vehicle-tractor-farm.png` 來自 [FreeGameSprites — Tractor Farm Vehicle](https://freegamesprites.com/en/assets/tractor-farm-vehicle)，來源頁標示 CC0。
-- `vehicle-tractor.png`、`vehicle-delivery.png`、`vehicle-tow.png` 來自 [Kenney Pixel Vehicle Pack](https://kenney.nl/assets/pixel-vehicle-pack)，由 OpenGameArt 的 [Pixel Vehicle Pack](https://opengameart.org/content/pixel-vehicle-pack) 提供下載；授權為 CC0。
-- 商店與工具列使用上述不同車輛圖示；田間則以 Canvas 依設備型號繪製不同的 2.5D 車體、輪胎、車廂與伐木附件，並依行進方向旋轉，不重複使用單一側面圖。
+- `kenney-tractor.png`、`kenney-tractor-shovel.png`、`kenney-delivery.png`、`kenney-delivery-flat.png`、`kenney-garbage-truck.png`、`kenney-truck-flat.png`、`kenney-truck.png` 來自 [Kenney Car Kit](https://kenney.nl/assets/car-kit)。
+- 專案使用 Car Kit 中由 3D 模型預先渲染的 `Previews/*.png`，保留透明背景與等角 2.5D 車體，並依自動化設備等級分配不同車型。
+- Kenney Car Kit 授權為 [Creative Commons CC0](https://creativecommons.org/publicdomain/zero/1.0/)，可用於個人與商業專案。
+- Canvas 會依車輛行進方向旋轉透明車體；伐木設備另外繪製圓鋸或木材載荷標記，讓功能與車型保持可辨識。
