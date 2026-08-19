@@ -1136,7 +1136,7 @@ function focusOwnedFarm() {
   constrainCamera();
 }
 
-function focusPlot(plotId) {
+function focusPlot(plotId, { highlightPlot = true } = {}) {
   if (!state?.ownedPlots.includes(plotId) || !canvasWidth || !canvasHeight) return false;
   const center = plotGeometry(plotId).center;
   const targetScale = clamp(Math.min(canvasWidth / (TILE_W * 5.2), canvasHeight / (TILE_H * 7)), 0.78, 1.55);
@@ -1154,8 +1154,8 @@ function focusPlot(plotId) {
     ? null
     : { from, target, startedAt: now, duration: 440 };
   if (!cameraFocusAnimation) Object.assign(camera, target);
-  focusedPlotId = plotId;
-  focusedPlotStartedAt = now;
+  focusedPlotId = highlightPlot ? plotId : null;
+  focusedPlotStartedAt = highlightPlot ? now : -Infinity;
   keyboardIndex = indexesForPlot(plotId)[4];
   return true;
 }
@@ -1573,19 +1573,6 @@ function automationCellPath(targets) {
   return path;
 }
 
-function pathAutomationRangeOutline(context, geometry) {
-  const top = worldPoint(geometry.minRow, geometry.minCol);
-  const right = worldPoint(geometry.minRow, geometry.maxCol);
-  const bottom = worldPoint(geometry.maxRow, geometry.maxCol);
-  const left = worldPoint(geometry.maxRow, geometry.minCol);
-  context.beginPath();
-  context.moveTo(top.x, top.y - CELL_SURFACE_H / 2);
-  context.lineTo(right.x + CELL_SURFACE_W / 2, right.y);
-  context.lineTo(bottom.x, bottom.y + CELL_SURFACE_H / 2);
-  context.lineTo(left.x - CELL_SURFACE_W / 2, left.y);
-  context.closePath();
-}
-
 function automationRangeGeometry(device, plotId, centerIndex) {
   const safeCenterIndex = Number.isInteger(centerIndex) && centerIndex >= 0 && centerIndex < BOARD_SIZE * BOARD_SIZE
     ? centerIndex
@@ -1614,18 +1601,34 @@ function automationRangeGeometry(device, plotId, centerIndex) {
   };
 }
 
+function drawAutomationTargetCells(kind, geometry, now, fillAlpha = 1) {
+  if (!geometry?.targets?.length) return;
+  const sprinkler = kind === "sprinkler";
+  const pulse = state.settings.reducedMotion ? .22 : .13 + (Math.sin(now / 120) + 1) * .055;
+  ctx.lineWidth = (2.5 + pulse * 5) / camera.scale;
+  for (const index of geometry.targets) {
+    const row = Math.floor(index / BOARD_SIZE);
+    const col = index % BOARD_SIZE;
+    const point = worldPoint(row, col);
+    const cellPulse = state.settings.reducedMotion
+      ? pulse
+      : pulse * (.82 + (Math.sin(now / 150 + index * .19) + 1) * .09);
+    pathCellSurface(ctx, point.x, point.y);
+    ctx.fillStyle = sprinkler
+      ? `rgba(126,218,238,${cellPulse * .38 * fillAlpha})`
+      : `rgba(255,211,89,${cellPulse * .42 * fillAlpha})`;
+    ctx.fill();
+    ctx.strokeStyle = sprinkler ? "rgba(183,244,255,.88)" : "rgba(255,235,141,.9)";
+    ctx.stroke();
+  }
+}
+
 function drawSelectedAutomationRange(kind, device, plotId, geometry, now) {
   const selected = selection?.kind === kind && selection.id === device?.id && selection.sourcePlot === plotId;
   if (!selected) return;
   if (!geometry) return;
-  const pulse = state.settings.reducedMotion ? .16 : .11 + (Math.sin(now / 120) + 1) * .035;
   ctx.save();
-  ctx.fillStyle = kind === "sprinkler" ? `rgba(126,218,238,${pulse * .42})` : `rgba(255,211,89,${pulse * .42})`;
-  ctx.strokeStyle = kind === "sprinkler" ? "rgba(183,244,255,.88)" : "rgba(255,235,141,.9)";
-  ctx.lineWidth = (3 + pulse * 7) / camera.scale;
-  pathAutomationRangeOutline(ctx, geometry);
-  ctx.fill();
-  ctx.stroke();
+  drawAutomationTargetCells(kind, geometry, now);
   ctx.restore();
 }
 
@@ -2013,9 +2016,7 @@ function drawPlacementSelectionPreview() {
   if (isAutomation) {
     const geometry = automationRangeGeometry(item, pendingActionPlotId, center);
     if (geometry) {
-      pathAutomationRangeOutline(ctx, geometry);
-      ctx.fill();
-      ctx.stroke();
+      drawAutomationTargetCells(selection.kind, geometry, performance.now(), 0.72);
     }
   } else {
     for (const index of targets) {
@@ -3327,7 +3328,8 @@ elements.quickbar.addEventListener("click", (event) => {
   selection = sameSelection ? null : nextSelection;
   closeLandPopover();
   renderAll();
-  if (!sameSelection && nextSelection.sourcePlot != null && focusPlot(nextSelection.sourcePlot)) {
+  const isAutomationSelection = nextSelection.kind === "harvester" || nextSelection.kind === "sprinkler";
+  if (!sameSelection && nextSelection.sourcePlot != null && focusPlot(nextSelection.sourcePlot, { highlightPlot: !isAutomationSelection })) {
     const device = nextSelection.kind === "harvester" ? getHarvester(nextSelection.id) : getSprinkler(nextSelection.id);
     const plot = PLOTS.find((candidate) => candidate.id === nextSelection.sourcePlot);
     showToast(`${device?.name || "設備"}位於${plot?.name || "這塊土地"}`);
