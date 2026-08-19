@@ -592,16 +592,6 @@ function sowPlantAt(state, centerIndex, plantId) {
   return true;
 }
 
-function getTopmostOwnedPlotId(ownedPlots) {
-  return [...new Set(Array.isArray(ownedPlots) ? ownedPlots : [])]
-    .filter((plotId) => Number.isInteger(plotId) && plotId >= 0 && plotId < PLOTS.length)
-    .sort((a, b) => {
-      const aRow = Math.floor(a / PLOT_GRID_SIZE); const aCol = a % PLOT_GRID_SIZE;
-      const bRow = Math.floor(b / PLOT_GRID_SIZE); const bCol = b % PLOT_GRID_SIZE;
-      return aRow + aCol - bRow - bCol || aRow - bRow || aCol - bCol;
-    })[0] ?? null;
-}
-
 function claimMonthlyCherryTreeReward(state, now = Date.now()) {
   if (!state || !Array.isArray(state.ownedPlots)) return false;
   state.events ||= {};
@@ -611,24 +601,16 @@ function claimMonthlyCherryTreeReward(state, now = Date.now()) {
   if (Number(event.claimedAt) > 0) return false;
   const currentTime = Number(now);
   if (!Number.isFinite(currentTime) || currentTime < MONTHLY_EVENT_START_AT || currentTime >= MONTHLY_EVENT_END_AT) return false;
-  const plotId = getTopmostOwnedPlotId(state.ownedPlots);
   const plant = getPlant(MONTHLY_EVENT_REWARD_PLANT_ID);
-  if (plotId == null || !plant || !state.ownedPlots.includes(plotId)) return false;
-  const centerIndex = indexesForPlot(plotId)[4];
-  if (!sowPlantAt(state, centerIndex, plant.id)) return false;
-  const plantedIndexes = getPlantPlacementIndexes(centerIndex, plant.id);
-  for (const index of plantedIndexes) {
-    const cell = state.cells[index];
-    if (!cell) continue;
-    cell.phase = "mature";
-    cell.growthProgress = 1;
-    cell.currentHp = plant.hp;
-  }
+  if (!plant) return false;
+  state.inventory ||= {};
+  const inventoryKey = `seed_${plant.id}`;
+  state.inventory[inventoryKey] = (Number(state.inventory[inventoryKey]) || 0) + 1;
   event.claimedAt = currentTime;
-  event.plotId = plotId;
-  event.centerIndex = centerIndex;
+  event.plotId = null;
+  event.centerIndex = null;
   event.rewardPlantId = plant.id;
-  return { eventId: MONTHLY_EVENT_ID, plantId: plant.id, plotId, centerIndex };
+  return { eventId: MONTHLY_EVENT_ID, plantId: plant.id, inventoryKey };
 }
 
 function fertilizePlot(state, plotId, fertilizerId) {
@@ -860,7 +842,7 @@ globalThis.HarvestCore = Object.freeze({
   indexesForPlot, getLandPrice, getPlantFootprint, getPlantPlacementIndexes, createInitialState, isAutomationUnlocked,
   isToolUnlocked, isPlantUnlocked, isFertilizerUnlocked,
   getToolTargetIndexes, automationTargetIndexes, manualHarvest, growthDurationSeconds,
-  simulateTo, sowPlot, sowPlantAt, getTopmostOwnedPlotId, claimMonthlyCherryTreeReward, fertilizePlot, buyPlot, formatNumber,
+  simulateTo, sowPlot, sowPlantAt, claimMonthlyCherryTreeReward, fertilizePlot, buyPlot, formatNumber,
   formatTime, migrateLegacyCropIds, normalizeStateData, validateState
 });
 }(globalThis));

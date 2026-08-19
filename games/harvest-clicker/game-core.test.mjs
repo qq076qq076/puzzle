@@ -14,7 +14,7 @@ const {
   INITIAL_PLOT_ID, INITIAL_PLOT_IDS, BOARD_SIZE, PLOTS,
   PLANTS, TOOLS, HARVESTERS, SPRINKLERS, FERTILIZERS, DECORATIONS, getDecoration, getProductPrice,
   getLandPrice, getPlantFootprint, getPlantPlacementIndexes, normalizeStateData, isFertilizerUnlocked,
-  getTopmostOwnedPlotId, claimMonthlyCherryTreeReward
+  claimMonthlyCherryTreeReward
 } = globalThis.HarvestCore;
 
 test("舊存檔的胡蘿蔔植株與種子會無損轉成樁架番茄", () => {
@@ -213,22 +213,18 @@ test("新遊戲從中央 9×9 成熟雜草與小刀開始", () => {
   assert.ok(validateState(state));
 });
 
-test("限時活動期間開啟農場會在最上方土地贈送一棵成熟緋櫻果樹且只領一次", () => {
+test("限時活動期間開啟農場會把緋櫻果樹種子放入包包且只領一次", () => {
   const state = createInitialState(0);
-  assert.equal(getTopmostOwnedPlotId(state.ownedPlots), 30);
   assert.equal(claimMonthlyCherryTreeReward(state, MONTHLY_EVENT_START_AT - 1), false);
 
   const reward = claimMonthlyCherryTreeReward(state, MONTHLY_EVENT_START_AT);
   assert.deepEqual(reward, {
     eventId: MONTHLY_EVENT_ID,
     plantId: "cherry_tree",
-    plotId: 30,
-    centerIndex: indexesForPlot(30)[4]
+    inventoryKey: "seed_cherry_tree"
   });
-  const treeIndexes = getPlantPlacementIndexes(reward.centerIndex, "cherry_tree");
-  assert.equal(treeIndexes.length, 4);
-  assert.ok(treeIndexes.every((index) => state.cells[index].plantId === "cherry_tree"));
-  assert.ok(treeIndexes.every((index) => state.cells[index].phase === "mature"));
+  assert.equal(state.inventory.seed_cherry_tree, 1);
+  assert.equal(state.cells.some((cell) => cell.plantId === "cherry_tree"), false);
   assert.equal(claimMonthlyCherryTreeReward(state, MONTHLY_EVENT_START_AT + 1), false);
   assert.equal(state.events[MONTHLY_EVENT_ID].claimedAt, MONTHLY_EVENT_START_AT);
   const expiredState = createInitialState(0);

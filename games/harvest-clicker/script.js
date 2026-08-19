@@ -487,7 +487,6 @@ function maybeClaimMonthlyEvent() {
   renderHeader();
   renderShop();
   renderQuickbar();
-  focusPlot(reward.plotId);
   playTone("purchase");
   showMonthlyEventReward(reward);
   return true;
@@ -1465,6 +1464,22 @@ function drawSideScenery() {
   ctx.restore();
 }
 
+function plantVisualPoint(cell, fallbackIndex) {
+  const plant = getPlant(cell?.plantId);
+  const safeFallbackIndex = Number.isInteger(fallbackIndex) ? fallbackIndex : 0;
+  const anchorIndex = Number.isInteger(cell?.plantAnchorIndex) ? cell.plantAnchorIndex : safeFallbackIndex;
+  if (!plant || plant.type !== "tree" || !Number.isInteger(anchorIndex)) {
+    return worldPoint(Math.floor(safeFallbackIndex / BOARD_SIZE), safeFallbackIndex % BOARD_SIZE);
+  }
+  const occupiedIndexes = getPlantPlacementIndexes(anchorIndex, plant.id);
+  if (!occupiedIndexes.length) return worldPoint(Math.floor(anchorIndex / BOARD_SIZE), anchorIndex % BOARD_SIZE);
+  const points = occupiedIndexes.map((index) => worldPoint(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE));
+  return {
+    x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
+    y: points.reduce((sum, point) => sum + point.y, 0) / points.length
+  };
+}
+
 function plantMetrics(cell) {
   const plant = getPlant(cell.plantId);
   const mature = cell.phase === "mature";
@@ -1472,7 +1487,7 @@ function plantMetrics(cell) {
   const growthScale = 0.28 + progress * 0.72;
   const image = plant.image ? images.get(plant.image) : null;
   const footprint = getPlantFootprint(plant);
-  const base = plant.type === "tree" ? 94 + footprint * 8 : TALL_PLANT_IDS.has(plant.id) ? 94 : plant.id === "cabbage" ? 70 : 82;
+  const base = plant.type === "tree" ? Math.max(104, footprint * 74) : TALL_PLANT_IDS.has(plant.id) ? 94 : plant.id === "cabbage" ? 70 : 82;
   const ratio = image ? (image.naturalWidth / image.naturalHeight || 1) : 1;
   const height = plant.image ? base * growthScale : 42 * growthScale;
   const width = plant.image ? Math.min(base * 1.18, height * ratio) : 52 * growthScale;
@@ -1496,7 +1511,7 @@ function drawPlant(cell, x, y, now) {
   ctx.save();
   ctx.fillStyle = "rgba(47,35,22,.25)";
   ctx.beginPath();
-  ctx.ellipse(x, y + contactY - 2, Math.max(23, footprint * TILE_W * .23) * growthScale, Math.max(7, footprint * TILE_H * .14) * growthScale, 0, 0, Math.PI * 2);
+  ctx.ellipse(x, y + contactY - 2, Math.max(23, footprint * TILE_W * .36) * growthScale, Math.max(7, footprint * TILE_H * .16) * growthScale, 0, 0, Math.PI * 2);
   ctx.fill();
   if (!LOW_POWER_RENDER) {
     ctx.shadowColor = "rgba(39,28,19,.28)";
@@ -1538,6 +1553,36 @@ function drawDeviceBadge(device, x, y, accent) {
   ctx.restore();
 }
 
+function automationCellPath(targets) {
+  const rows = new Map();
+  for (const index of targets) {
+    const row = Math.floor(index / BOARD_SIZE);
+    const col = index % BOARD_SIZE;
+    if (!rows.has(row)) rows.set(row, []);
+    rows.get(row).push(col);
+  }
+  const path = [];
+  [...rows.keys()].sort((a, b) => a - b).forEach((row, rowOrder) => {
+    const cols = rows.get(row).sort((a, b) => a - b);
+    if (rowOrder % 2) cols.reverse();
+    for (const col of cols) path.push(row * BOARD_SIZE + col);
+  });
+  return path;
+}
+
+function pathAutomationRangeOutline(context, geometry) {
+  const top = worldPoint(geometry.minRow, geometry.minCol);
+  const right = worldPoint(geometry.minRow, geometry.maxCol);
+  const bottom = worldPoint(geometry.maxRow, geometry.maxCol);
+  const left = worldPoint(geometry.maxRow, geometry.minCol);
+  context.beginPath();
+  context.moveTo(top.x, top.y - CELL_SURFACE_H / 2);
+  context.lineTo(right.x + CELL_SURFACE_W / 2, right.y);
+  context.lineTo(bottom.x, bottom.y + CELL_SURFACE_H / 2);
+  context.lineTo(left.x - CELL_SURFACE_W / 2, left.y);
+  context.closePath();
+}
+
 function automationRangeGeometry(device, plotId, centerIndex) {
   const safeCenterIndex = Number.isInteger(centerIndex) && centerIndex >= 0 && centerIndex < BOARD_SIZE * BOARD_SIZE
     ? centerIndex
@@ -1550,10 +1595,17 @@ function automationRangeGeometry(device, plotId, centerIndex) {
   const maxX = Math.max(...points.map((point) => point.x));
   const minY = Math.min(...points.map((point) => point.y));
   const maxY = Math.max(...points.map((point) => point.y));
+  const rows = targets.map((index) => Math.floor(index / BOARD_SIZE));
+  const cols = targets.map((index) => index % BOARD_SIZE);
   return {
     targets,
+    path: automationCellPath(targets),
+    minRow: Math.min(...rows),
+    maxRow: Math.max(...rows),
+    minCol: Math.min(...cols),
+    maxCol: Math.max(...cols),
     // The operation path is derived from the same cell set used by the
-    // simulator, so a 1×1/3×3/5×5 machine no longer gets a guessed ellipse.
+    // simulator, so a machine no longer gets a guessed ellipse.
     radiusX: Math.max(TILE_W / 2, Math.max(Math.abs(anchor.x - minX), Math.abs(maxX - anchor.x)) + TILE_W / 2),
     radiusY: Math.max(TILE_H / 2, Math.max(Math.abs(anchor.y - minY), Math.abs(maxY - anchor.y)) + TILE_H / 2)
   };
@@ -1565,33 +1617,41 @@ function drawSelectedAutomationRange(kind, device, plotId, geometry, now) {
   if (!geometry) return;
   const pulse = state.settings.reducedMotion ? .16 : .11 + (Math.sin(now / 120) + 1) * .035;
   ctx.save();
-  ctx.fillStyle = kind === "sprinkler" ? `rgba(126,218,238,${pulse})` : `rgba(255,211,89,${pulse})`;
+  ctx.fillStyle = kind === "sprinkler" ? `rgba(126,218,238,${pulse * .42})` : `rgba(255,211,89,${pulse * .42})`;
   ctx.strokeStyle = kind === "sprinkler" ? "rgba(183,244,255,.88)" : "rgba(255,235,141,.9)";
-  ctx.lineWidth = 2 / camera.scale;
-  for (const index of geometry.targets) {
-    const point = worldPoint(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE);
-    pathCellSurface(ctx, point.x, point.y);
-    ctx.fill();
-    ctx.stroke();
-  }
+  ctx.lineWidth = (3 + pulse * 7) / camera.scale;
+  pathAutomationRangeOutline(ctx, geometry);
+  ctx.fill();
+  ctx.stroke();
   ctx.restore();
 }
 
 function drawHarvesterOperation(device, plotId, x, y, geometry, now) {
-  const phase = state.settings.reducedMotion ? .12 : (now / Math.max(3800, 9200 - device.tier * 520) + plotId * .137) % 1;
-  const angle = phase * Math.PI * 2;
-  const radiusX = geometry?.radiusX || TILE_W / 2;
-  const radiusY = geometry?.radiusY || TILE_H / 2;
-  const vehicleX = x + Math.cos(angle) * radiusX;
-  const vehicleY = y + 7 + Math.sin(angle) * radiusY;
-  const direction = Math.cos(angle) >= 0 ? 1 : -1;
+  const phase = state.settings.reducedMotion ? 0 : (now / Math.max(3800, 9200 - device.tier * 520) + plotId * .137) % 1;
+  const path = geometry?.path || [];
+  const pathPoints = path.map((index) => worldPoint(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE));
+  const segmentCount = Math.max(1, pathPoints.length - 1);
+  const scaledPath = phase * segmentCount;
+  const pathIndex = Math.min(pathPoints.length - 1, Math.floor(scaledPath));
+  const nextPathIndex = Math.min(pathPoints.length - 1, pathIndex + 1);
+  const localProgress = pathIndex === nextPathIndex ? 0 : scaledPath - pathIndex;
+  const currentPoint = pathPoints[pathIndex] || { x, y };
+  const nextPoint = pathPoints[nextPathIndex] || currentPoint;
+  const vehicleX = currentPoint.x + (nextPoint.x - currentPoint.x) * localProgress;
+  const vehicleY = currentPoint.y + (nextPoint.y - currentPoint.y) * localProgress + 7;
+  const direction = nextPoint.x === currentPoint.x ? 1 : nextPoint.x >= currentPoint.x ? 1 : -1;
   const forestry = device.targetType === "tree";
 
   ctx.save();
   ctx.strokeStyle = forestry ? "rgba(132,92,54,.58)" : "rgba(239,189,75,.58)";
   ctx.lineWidth = 2 / camera.scale;
   ctx.setLineDash([7 / camera.scale, 8 / camera.scale]);
-  ctx.beginPath(); ctx.ellipse(x, y + 7, radiusX, radiusY, 0, 0, Math.PI * 2); ctx.stroke();
+  if (pathPoints.length > 1) {
+    ctx.beginPath();
+    ctx.moveTo(pathPoints[0].x, pathPoints[0].y + 7);
+    for (let index = 1; index < pathPoints.length; index += 1) ctx.lineTo(pathPoints[index].x, pathPoints[index].y + 7);
+    ctx.stroke();
+  }
   ctx.setLineDash([]);
   ctx.fillStyle = "rgba(39,32,21,.25)";
   ctx.beginPath(); ctx.ellipse(vehicleX, vehicleY + 10, 22, 7, 0, 0, Math.PI * 2); ctx.fill();
@@ -1608,7 +1668,7 @@ function drawHarvesterOperation(device, plotId, x, y, geometry, now) {
 
   ctx.translate(vehicleX, vehicleY - 6);
   ctx.scale(direction, 1);
-  ctx.rotate(Math.sin(angle) * .09);
+  ctx.rotate(Math.sin(phase * Math.PI * 2) * .09);
   const vehicleImage = images.get("combine-harvester.png");
   if (vehicleImage) ctx.drawImage(vehicleImage, -21, -22, 42, 42);
   else {
@@ -1691,7 +1751,7 @@ function drawFertilizerOperation(plotId, x, y, now) {
     const anchorIndex = Number.isInteger(state.cells[treeRootIndex]?.plantAnchorIndex)
       ? state.cells[treeRootIndex].plantAnchorIndex
       : treeRootIndex;
-    const anchorPoint = worldPoint(Math.floor(anchorIndex / BOARD_SIZE), anchorIndex % BOARD_SIZE);
+    const anchorPoint = plantVisualPoint(state.cells[treeRootIndex], anchorIndex);
     x = anchorPoint.x;
     y = anchorPoint.y;
   }
@@ -1808,13 +1868,22 @@ function drawPlacementSelectionPreview() {
   ctx.fillStyle = !validPlacement ? "rgba(232,111,92,.18)" : isAutomation && selection.kind === "sprinkler" ? "rgba(115,216,236,.16)" : "rgba(245,197,82,.16)";
   ctx.strokeStyle = !validPlacement ? "rgba(255,151,125,.8)" : isAutomation && selection.kind === "sprinkler" ? "rgba(168,239,250,.72)" : "rgba(255,224,105,.74)";
   ctx.lineWidth = 2 / camera.scale;
-  for (const index of targets) {
-    const row = Math.floor(index / BOARD_SIZE);
-    const col = index % BOARD_SIZE;
-    const point = worldPoint(row, col);
-    pathCellSurface(ctx, point.x, point.y);
-    ctx.fill();
-    ctx.stroke();
+  if (isAutomation) {
+    const geometry = automationRangeGeometry(item, pendingActionPlotId, center);
+    if (geometry) {
+      pathAutomationRangeOutline(ctx, geometry);
+      ctx.fill();
+      ctx.stroke();
+    }
+  } else {
+    for (const index of targets) {
+      const row = Math.floor(index / BOARD_SIZE);
+      const col = index % BOARD_SIZE;
+      const point = worldPoint(row, col);
+      pathCellSurface(ctx, point.x, point.y);
+      ctx.fill();
+      ctx.stroke();
+    }
   }
   const centerRow = Math.floor(center / BOARD_SIZE);
   const centerCol = center % BOARD_SIZE;
@@ -2068,7 +2137,7 @@ function drawFarm(now = performance.now()) {
     const plantRootIndex = Number.isInteger(cell.plantRootIndex) ? cell.plantRootIndex : index;
     if (plantRootIndex !== index) continue;
     const anchorIndex = Number.isInteger(cell.plantAnchorIndex) ? cell.plantAnchorIndex : index;
-    const point = worldPoint(Math.floor(anchorIndex / BOARD_SIZE), anchorIndex % BOARD_SIZE);
+    const point = plantVisualPoint(cell, anchorIndex);
     const metrics = plantMetrics(cell);
     sceneNodes.push({ kind: "plant", depth: point.y + metrics.contactY, x: point.x, cell, point });
     plantOverlays.push({ cell, point, metrics });
@@ -2281,7 +2350,7 @@ function selectionActionPreview(plotId) {
       icon: item.emoji,
       image: item.image,
       title: `以${plot.name}的選取格為中心配置${item.name}？`,
-      text: `${effect}目前會覆蓋已購土地 ${coveredCells} 格；畫面中的金色框是作用中心，可自由選在已購土地內。${movement}`,
+      text: `${effect}目前會覆蓋已購土地 ${coveredCells} 格；外框顯示完整作用範圍，中央標記是作用中心，可自由選在已購土地內。${movement}`,
       button: staysInPlace ? "已配置於此" : "確認配置",
       disabled: staysInPlace
     };
@@ -3122,6 +3191,14 @@ elements.quickbar.addEventListener("click", (event) => {
     showToast(`${device?.name || "設備"}位於${plot?.name || "這塊土地"}`);
   }
 });
+
+elements.quickbar.addEventListener("wheel", (event) => {
+  if (elements.quickbar.scrollWidth <= elements.quickbar.clientWidth) return;
+  const delta = Math.abs(event.deltaX) >= Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+  if (!delta) return;
+  event.preventDefault();
+  elements.quickbar.scrollLeft += delta;
+}, { passive: false });
 
 elements.mobileShop.addEventListener("click", () => {
   if (READ_ONLY) return;

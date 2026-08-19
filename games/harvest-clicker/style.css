@@ -105,14 +105,15 @@ h1, h2, h3, p { margin: 0; }
 .action-confirm-button { color: #2d2916; background: var(--gold); }
 .action-confirm-button:disabled { color: rgba(255,255,255,.45); background: rgba(255,255,255,.1); cursor: not-allowed; }
 
-.quickbar-wrap { display: flex; gap: 8px; width: 100%; margin: 0; padding: 13px 14px 14px; border-top: 1px solid rgba(255,255,255,.7); background: rgba(246,244,229,.96); }
-.quickbar { display: flex; gap: 8px; min-width: 0; min-height: 67px; padding: 9px; flex: 1; overflow-x: auto; border: 1px solid var(--line); border-radius: 18px; background: rgba(255,255,255,.72); box-shadow: 0 10px 25px rgba(41,71,42,.07); scrollbar-width: thin; }
+.quickbar-wrap { display: flex; gap: 8px; width: 100%; min-width: 0; margin: 0; padding: 13px 14px 14px; overflow: hidden; border-top: 1px solid rgba(255,255,255,.45); background: transparent; }
+.quickbar { display: flex; gap: 8px; width: 0; min-width: 0; min-height: 67px; padding: 0; flex: 1 1 auto; overflow-x: auto; overflow-y: hidden; border: 0; border-radius: 0; background: transparent; box-shadow: none; scrollbar-width: thin; overscroll-behavior-x: contain; touch-action: pan-x; cursor: grab; }
+.quickbar:active { cursor: grabbing; }
 .quick-item { position: relative; display: grid; flex: 0 0 52px; height: 48px; padding: 3px; place-items: center; border: 1px solid rgba(38,72,44,.12); border-radius: 13px; color: var(--forest-900); background: #f9f6e9; cursor: pointer; font-size: 1.42rem; }
 .quick-art { display: block; width: 40px; height: 40px; object-fit: contain; filter: drop-shadow(0 3px 2px rgba(47,35,22,.18)); }
 .quick-item:hover { background: #fff; transform: translateY(-1px); }
 .quick-item.is-equipped, .quick-item.is-selected { border-color: var(--forest-700); box-shadow: inset 0 0 0 2px var(--forest-700), 0 4px 10px rgba(43,86,55,.13); }
 .quick-item small { position: absolute; right: -3px; bottom: -3px; min-width: 18px; padding: 2px 4px; border-radius: 99px; color: #1f2e22; background: var(--gold); font-size: .58rem; font-weight: 900; }
-.quick-item .installed-dot { position: absolute; top: 2px; right: 2px; width: 8px; height: 8px; border: 2px solid #f9f6e9; border-radius: 50%; background: #58a66c; }
+.quick-item .installed-dot { position: absolute; top: 2px; right: 2px; width: 8px; height: 8px; border: 2px solid var(--paper); border-radius: 50%; background: #58a66c; }
 .quick-divider { flex: 0 0 1px; align-self: stretch; margin: 2px; background: var(--line); }
 .quick-cancel { color: #a3453c; font-size: 1.15rem; font-weight: 900; }
 .readonly-quickbar { display: flex; width: 100%; align-items: center; justify-content: center; color: var(--forest-700); font-size: .72rem; font-weight: 800; letter-spacing: .02em; text-align: center; }
@@ -194,7 +195,7 @@ body.is-readonly .quickbar { min-height: 55px; }
   .readonly-banner strong { font-size: .69rem; }
   .readonly-banner a { padding: 7px 8px; font-size: .59rem; }
   .quickbar-wrap { min-width: 0; margin: 0; padding: 9px max(8px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); overflow: hidden; }
-  .quickbar { width: 0; max-width: 100%; min-height: 62px; padding: 7px; flex: 1 1 auto; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: none; touch-action: pan-x; -webkit-overflow-scrolling: touch; }
+  .quickbar { width: 0; max-width: 100%; min-height: 62px; padding: 0; flex: 1 1 auto; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: none; touch-action: pan-x; -webkit-overflow-scrolling: touch; }
   .quickbar::-webkit-scrollbar { display: none; }
   .quick-item { flex: 0 0 clamp(43px, 14vw, 47px); height: 46px; scroll-snap-align: start; }
   .quick-art { width: clamp(34px, 11vw, 38px); height: clamp(34px, 11vw, 38px); }
