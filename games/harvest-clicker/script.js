@@ -1826,18 +1826,24 @@ function drawHarvesterOperation(device, plotId, x, y, geometry, now) {
   const movingForward = loopDistance <= segmentCount;
   const pathDistance = movingForward ? loopDistance : segmentCount * 2 - loopDistance;
   const pathIndex = segmentCount ? Math.min(segmentCount, Math.floor(pathDistance)) : 0;
-  const pathDirection = movingForward ? 1 : -1;
-  const nextPathIndex = segmentCount ? clamp(pathIndex + pathDirection, 0, segmentCount) : pathIndex;
-  const localProgress = pathIndex === nextPathIndex ? 0 : pathDistance - pathIndex;
-  const currentPoint = pathPoints[pathIndex] || { x, y };
-  const nextPoint = pathPoints[nextPathIndex] || currentPoint;
-  const vehicleX = currentPoint.x + (nextPoint.x - currentPoint.x) * localProgress;
-  const vehicleY = currentPoint.y + (nextPoint.y - currentPoint.y) * localProgress + 7;
-  const previousPoint = pathPoints[Math.max(0, pathIndex - pathDirection)] || currentPoint;
-  const headingVector = { x: nextPoint.x - currentPoint.x, y: nextPoint.y - currentPoint.y };
-  if (!headingVector.x && !headingVector.y) {
-    headingVector.x = currentPoint.x - previousPoint.x;
-    headingVector.y = currentPoint.y - previousPoint.y;
+  // Interpolate position on the same segment for both directions. The old
+  // reverse branch used `pathIndex - 1` as the visual endpoint, so the car
+  // could jump onto the previous segment while its front pointed elsewhere.
+  const segmentEndIndex = segmentCount ? clamp(pathIndex + 1, 0, segmentCount) : pathIndex;
+  const localProgress = pathIndex === segmentEndIndex ? 0 : pathDistance - pathIndex;
+  const segmentStart = pathPoints[pathIndex] || { x, y };
+  const segmentEnd = pathPoints[segmentEndIndex] || segmentStart;
+  const vehicleX = segmentStart.x + (segmentEnd.x - segmentStart.x) * localProgress;
+  const vehicleY = segmentStart.y + (segmentEnd.y - segmentStart.y) * localProgress + 7;
+  const forwardVector = { x: segmentEnd.x - segmentStart.x, y: segmentEnd.y - segmentStart.y };
+  const headingVector = movingForward
+    ? forwardVector
+    : { x: -forwardVector.x, y: -forwardVector.y };
+  if (!headingVector.x && !headingVector.y && pathPoints.length > 1) {
+    const previous = pathPoints[Math.max(0, pathIndex - 1)] || segmentStart;
+    const fallback = { x: segmentStart.x - previous.x, y: segmentStart.y - previous.y };
+    headingVector.x = movingForward ? fallback.x : -fallback.x;
+    headingVector.y = movingForward ? fallback.y : -fallback.y;
   }
   const heading = Math.atan2(headingVector.y, headingVector.x);
   const forestry = device.targetType === "tree";
