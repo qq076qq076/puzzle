@@ -1642,6 +1642,19 @@ const HARVESTER_MODELS = Object.freeze({
   lumber: { body: "#6d4d39", top: "#ae7950", side: "#402d28", glass: "#d7e7d1", accent: "#f0c75b", attachment: "crane" }
 });
 
+// Kenney's preview renders have different transparent margins. The offset is
+// measured from the vehicle operation anchor so every chassis meets the same
+// ground shadow instead of appearing to float or sink into the soil.
+const KENNEY_VEHICLE_Y_OFFSETS = Object.freeze({
+  "kenney-tractor.png": -45,
+  "kenney-tractor-shovel.png": -43,
+  "kenney-delivery.png": -47,
+  "kenney-delivery-flat.png": -44,
+  "kenney-garbage-truck.png": -45,
+  "kenney-truck-flat.png": -41,
+  "kenney-truck.png": -42
+});
+
 function drawVehicleWheel(x, y, color, highlight) {
   ctx.fillStyle = color;
   ctx.beginPath();
@@ -1684,23 +1697,27 @@ function drawKenneyVehicleAttachment(device, now) {
   }
 }
 
-function drawHarvesterVehicle(device, x, y, heading, now) {
+function drawHarvesterVehicle(device, x, y, heading, now, movement = null) {
   const model = HARVESTER_MODELS[device.model] || HARVESTER_MODELS.combine;
   const pulse = state.settings.reducedMotion ? 0 : Math.sin(now / 160) * .8;
   const image = device.image ? images.get(device.image) : null;
   ctx.save();
   ctx.translate(x, y);
-  ctx.rotate(heading || 0);
   if (image) {
-    // Kenney Car Kit previews are already rendered from an isometric camera.
-    // Rotating the transparent sprite along the path gives the car a visible
-    // front, side, and rear instead of the old single-plane silhouette.
+    // The PNG is an isometric render, not a flat top-down sprite. Continuous
+    // rotation makes the cab lean and a 180° turn puts the baked shadow above
+    // the vehicle. Keep the model upright and mirror only its horizontal
+    // facing direction; the path can still move in all four grid directions.
+    const mirrorX = Number(movement?.x) > 0;
+    ctx.scale(mirrorX ? -1 : 1, 1);
     ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(image, -32, -50, 64, 64);
+    const spriteY = KENNEY_VEHICLE_Y_OFFSETS[device.image] ?? -44;
+    ctx.drawImage(image, -32, spriteY, 64, 64);
     drawKenneyVehicleAttachment(device, now);
     ctx.restore();
     return;
   }
+  ctx.rotate(heading || 0);
   ctx.scale(1, .72);
   ctx.lineJoin = "round";
 
@@ -1825,7 +1842,7 @@ function drawHarvesterOperation(device, plotId, x, y, geometry, now) {
     }
   }
 
-  drawHarvesterVehicle(device, vehicleX, vehicleY - 6, heading, now);
+  drawHarvesterVehicle(device, vehicleX, vehicleY - 6, heading, now, headingVector);
   ctx.restore();
 }
 
