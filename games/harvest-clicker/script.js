@@ -815,7 +815,9 @@ function updateFarmer(now) {
     farmer.actionDuration = duration;
     return;
   }
-  farmer.directionRow = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 2 : 1) : (dy > 0 ? 0 : 3);
+  // Sprite rows are ordered front, back, left, right.  World +Y is the
+  // screen-facing/down direction, while +X is the screen-right direction.
+  farmer.directionRow = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 3 : 2) : (dy > 0 ? 0 : 1);
   const speed = state.settings.reducedMotion ? .035 : .075;
   const distanceStep = Math.min(distance, speed * elapsed);
   farmer.x += dx / distance * distanceStep;
