@@ -115,6 +115,9 @@ let cloudReady = !window.PuzzleFirebase?.enabled;
 let cloudSaveTimer = null;
 let cloudSavePending = null;
 let cloudSaveInFlight = Promise.resolve();
+let cloudSaveOperations = 0;
+let cloudSaveUnsubscribe = null;
+let pendingRemoteSave = null;
 let shareActive = false;
 let shareOwnerUid = null;
 let shareStateRequestId = 0;
@@ -213,6 +216,100 @@ function hasUnsavedChanges() {
   return Boolean(state && lastPersistedState && stateSnapshot() !== lastPersistedState);
 }
 
+function hasCloudSaveInProgress() {
+  return Boolean(cloudSavePending || cloudSaveTimer || cloudSaveOperations > 0);
+}
+
+function remoteSaveIsNewer(remote) {
+  if (!remote?.data) return false;
+  const remoteRevision = Number(remote.serverRevision) || 0;
+  if (remoteRevision !== localServerRevision) return remoteRevision > localServerRevision;
+  const remoteClientSavedAt = Number(remote.clientSavedAt) || Number(remote.savedAt) || 0;
+  return remoteClientSavedAt > localClientSavedAt;
+}
+
+function remoteSaveCheckpoint(remote) {
+  return {
+    version: 1,
+    createdAt: Number(remote.clientCreatedAt) || Number(remote.createdAt) || Number(remote.savedAt) || Date.now(),
+    savedAt: Number(remote.savedAt) || Number(remote.serverSavedAt) || Number(remote.clientSavedAt) || 0,
+    clientSavedAt: Number(remote.clientSavedAt) || Number(remote.savedAt) || 0,
+    serverSavedAt: Number(remote.serverSavedAt) || Number(remote.savedAt) || 0,
+    serverRevision: Number(remote.serverRevision) || 0,
+    revision: Number(remote.clientRevision) || 0,
+    writerId: remote.clientWriterId || "",
+    data: remote.data
+  };
+}
+
+function applyRemoteCloudSave(remote, showMessage = true) {
+  const checkpoint = remoteSaveCheckpoint(remote);
+  if (!applyLoadedState(checkpoint.data, false, true)) return false;
+  localCreatedAt = checkpoint.createdAt || localCreatedAt || Date.now();
+  localSavedAt = checkpoint.savedAt || localSavedAt;
+  localClientSavedAt = checkpoint.clientSavedAt || localClientSavedAt;
+  localServerSavedAt = checkpoint.serverSavedAt || localServerSavedAt;
+  localServerRevision = checkpoint.serverRevision || localServerRevision;
+  localRevision = checkpoint.revision || localRevision;
+  lastPersistedState = stateSnapshot();
+  cloudSavePending = null;
+  window.clearTimeout(cloudSaveTimer);
+  cloudSaveTimer = null;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...checkpoint, data: state }));
+  } catch (error) {
+    console.warn("無法儲存即時同步的農場進度", error);
+  }
+  renderAll();
+  if (showMessage) showToast("已即時同步其他裝置的農場狀態");
+  return true;
+}
+
+function handleRemoteCloudSave(remote) {
+  if (READ_ONLY || !remoteSaveIsNewer(remote)) return;
+  if (remote.clientWriterId && remote.clientWriterId === TAB_ID) return;
+  if (hasCloudSaveInProgress()) {
+    pendingRemoteSave = remote;
+    if (!isActiveTab()) return;
+    const shouldLoad = window.confirm("其他裝置已更新農場進度。\n\n要立即載入最新狀態嗎？尚未同步的本機操作會被覆蓋。");
+    pendingRemoteSave = null;
+    if (shouldLoad) {
+      // A Firestore transaction already in flight cannot be cancelled. Wait
+      // for it to settle before applying the remote snapshot, otherwise the
+      // old local write could immediately overwrite the version just chosen.
+      if (cloudSaveOperations > 0) {
+        pendingRemoteSave = remote;
+        showToast("目前同步完成後會載入其他裝置的最新農場");
+      } else {
+        applyRemoteCloudSave(remote);
+      }
+    } else {
+      localServerRevision = Math.max(localServerRevision, Number(remote.serverRevision) || 0);
+      localServerSavedAt = Math.max(localServerSavedAt, Number(remote.serverSavedAt) || 0);
+      saveNow(true, { forceOverwrite: true });
+      showToast("已保留本機農場，並嘗試上傳本機版本");
+    }
+    return;
+  }
+  applyRemoteCloudSave(remote);
+}
+
+function applyPendingRemoteSave() {
+  if (!pendingRemoteSave || hasCloudSaveInProgress()) return;
+  const remote = pendingRemoteSave;
+  pendingRemoteSave = null;
+  handleRemoteCloudSave(remote);
+}
+
+function startCloudSaveWatcher() {
+  if (READ_ONLY || !window.PuzzleFirebase?.watchSave) return;
+  cloudSaveUnsubscribe?.();
+  cloudSaveUnsubscribe = window.PuzzleFirebase.watchSave(CLOUD_SAVE_KEY, handleRemoteCloudSave, (error) => {
+    console.warn("無法即時同步雲端農場", error);
+    showToast("雲端即時同步暫時中斷");
+  });
+}
+
 function isActiveTab() {
   return document.visibilityState === "visible" && document.hasFocus();
 }
@@ -273,6 +370,7 @@ function flushCloudSave() {
   if (READ_ONLY || !window.PuzzleFirebase?.enabled || !cloudReady || !cloudSavePending || !isActiveTab()) return cloudSaveInFlight;
   const snapshot = cloudSavePending;
   cloudSavePending = null;
+  cloudSaveOperations += 1;
   cloudSaveInFlight = cloudSaveInFlight.then(() => window.PuzzleFirebase.save(CLOUD_SAVE_KEY, snapshot.data, snapshot)).then((result) => {
     const current = readLocalCheckpoint();
     if (result?.accepted && result.checkpoint && current && current.revision === snapshot.revision && current.clientSavedAt === snapshot.clientSavedAt) {
@@ -295,6 +393,9 @@ function flushCloudSave() {
     }
     if (cloudSavePending && !cloudSaveTimer) cloudSaveTimer = window.setTimeout(flushCloudSave, 5000);
     return result;
+  }).finally(() => {
+    cloudSaveOperations = Math.max(0, cloudSaveOperations - 1);
+    applyPendingRemoteSave();
   });
   return cloudSaveInFlight;
 }
@@ -2969,7 +3070,10 @@ function useSelection(plotId) {
   }
   closeActionConfirm();
   playTone(feedbackSound);
-  saveNow();
+  // Planting, fertilising, and placing a device are intentional cross-device
+  // actions. Flush these writes immediately so another signed-in device can
+  // receive the Firestore snapshot without waiting for the background debounce.
+  saveNow(true);
   renderAll();
 }
 
@@ -3486,7 +3590,8 @@ document.addEventListener("visibilitychange", () => {
     saveNow(true, { allowInactive: true });
   } else {
     syncNewestLocalCheckpoint();
-    if (cloudSavePending) flushCloudSave();
+    if (cloudSavePending) flushCloudSave().then(applyPendingRemoteSave);
+    else applyPendingRemoteSave();
     const summary = simulateTo(state, Date.now());
     if (summary.gold) showToast(`自動收成 +${formatMoney(summary.gold)}`);
     renderAll();
@@ -3495,10 +3600,13 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("focus", () => {
   if (READ_ONLY) return;
   syncNewestLocalCheckpoint();
-  if (cloudSavePending) flushCloudSave();
+  if (cloudSavePending) flushCloudSave().then(applyPendingRemoteSave);
+  else applyPendingRemoteSave();
 });
 window.addEventListener("pagehide", () => {
   stopFirebaseStatus?.();
+  cloudSaveUnsubscribe?.();
+  cloudSaveUnsubscribe = null;
   if (READ_ONLY) {
     sharedFarmUnsubscribe?.();
     return;
@@ -3538,6 +3646,7 @@ async function initializeGame() {
   }, 500);
   window.setInterval(() => { if (isActiveTab()) saveNow(); }, 10000);
   cloudSyncPromise = syncCloudState(cloudSyncGate).then(() => {
+    startCloudSaveWatcher();
     maybeClaimMonthlyEvent();
   });
   window.PuzzleFirebase?.registerSaveFlusher?.(() => cloudSyncPromise.then(() => {

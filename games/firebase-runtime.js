@@ -550,6 +550,28 @@
     });
   }
 
+  function watchSave(gameKey, onValue, onError) {
+    if (!SAVE_KEYS.includes(gameKey) || typeof onValue !== "function") return function () {};
+    let stopped = false;
+    let unsubscribe = function () {};
+    ready.then(function (user) {
+      if (stopped || !user || !firestore || !listenDocument) return;
+      const reference = getSaveDocumentForUser(user, gameKey);
+      unsubscribe = listenDocument(reference, function (snapshot) {
+        if (stopped) return;
+        onValue(snapshot.exists() ? normalizeRemoteValue(snapshot.data()) : null);
+      }, function (error) {
+        if (!stopped && typeof onError === "function") onError(error);
+      });
+    }).catch(function (error) {
+      if (!stopped && typeof onError === "function") onError(error);
+    });
+    return function () {
+      stopped = true;
+      unsubscribe();
+    };
+  }
+
   function watchShare(shareId, onValue, onError) {
     if (!isValidShareId(shareId) || typeof onValue !== "function") return function () {};
     let stopped = false;
@@ -939,6 +961,7 @@
     getOwnedShare: getOwnedShare,
     publishShare: publishShare,
     loadShare: loadShare,
+    watchSave: watchSave,
     watchShare: watchShare,
     revokeShare: revokeShare,
     openAccount: openAccount,
