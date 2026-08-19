@@ -24,6 +24,7 @@ const TILE_H = 48;
 const TILE_DEPTH = 13;
 const CELL_SURFACE_W = 76;
 const CELL_SURFACE_H = 38;
+const HARVESTER_CELLS_PER_SECOND = 2;
 const MIN_ZOOM = 0.35;
 const MAX_ZOOM = 2.4;
 const $ = (selector) => document.querySelector(selector);
@@ -1628,33 +1629,144 @@ function drawSelectedAutomationRange(kind, device, plotId, geometry, now) {
   ctx.restore();
 }
 
+const HARVESTER_MODELS = Object.freeze({
+  tractor: { body: "#5baf4b", top: "#9bd66a", side: "#2e733e", glass: "#bce7df", accent: "#f2c24e", attachment: "blade" },
+  combine: { body: "#e9ad38", top: "#ffd978", side: "#b97820", glass: "#b7e5df", accent: "#5e873c", attachment: "header" },
+  hopper: { body: "#5b9bb0", top: "#9dd7d3", side: "#376d83", glass: "#d7f2e7", accent: "#edc65a", attachment: "hopper" },
+  steam: { body: "#c65b3f", top: "#eb9562", side: "#873b32", glass: "#d2e9df", accent: "#f1ca5d", attachment: "chimney" },
+  autonomous: { body: "#765db7", top: "#b6a1ed", side: "#4a397f", glass: "#d4f4ef", accent: "#f6d76b", attachment: "sensor" },
+  sawmill: { body: "#91603b", top: "#d19a5a", side: "#5e3927", glass: "#d7e7d1", accent: "#f0c75b", attachment: "saw" },
+  lumber: { body: "#6d4d39", top: "#ae7950", side: "#402d28", glass: "#d7e7d1", accent: "#f0c75b", attachment: "crane" }
+});
+
+function drawVehicleWheel(x, y, color, highlight) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.ellipse(x, y, 6.5, 4.3, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = highlight;
+  ctx.beginPath();
+  ctx.ellipse(x, y - .2, 2.2, 1.7, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawHarvesterVehicle(device, x, y, heading, now) {
+  const model = HARVESTER_MODELS[device.model] || HARVESTER_MODELS.combine;
+  const pulse = state.settings.reducedMotion ? 0 : Math.sin(now / 160) * .8;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(heading || 0);
+  ctx.scale(1, .72);
+  ctx.lineJoin = "round";
+
+  // Far wheels sit behind the chassis, making the icon read as a small 2.5D
+  // vehicle instead of a single flat side-facing image.
+  drawVehicleWheel(-13, -12, "#26352c", "#9aa48c");
+  drawVehicleWheel(15, -12, "#26352c", "#9aa48c");
+
+  ctx.fillStyle = model.side;
+  ctx.beginPath();
+  ctx.moveTo(-23, -9); ctx.lineTo(17, -9); ctx.lineTo(23, -3); ctx.lineTo(23, 7); ctx.lineTo(-18, 7); ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = model.top;
+  ctx.beginPath();
+  ctx.moveTo(-22, -12); ctx.lineTo(13, -12); ctx.lineTo(22, -4); ctx.lineTo(-16, -4); ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = model.body;
+  ctx.beginPath();
+  ctx.moveTo(-16, -4); ctx.lineTo(22, -4); ctx.lineTo(22, 5); ctx.lineTo(-16, 5); ctx.closePath();
+  ctx.fill();
+
+  if (device.model === "sawmill" || device.model === "lumber") {
+    ctx.fillStyle = model.top;
+    ctx.beginPath(); ctx.roundRect(-15, -17, 23, 9, 2); ctx.fill();
+    ctx.fillStyle = model.glass;
+    ctx.fillRect(-9, -15, 9, 5);
+  } else if (device.model === "autonomous") {
+    ctx.fillStyle = model.glass;
+    ctx.beginPath(); ctx.ellipse(-2, -12, 10, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = model.accent;
+    ctx.beginPath(); ctx.arc(3, -17, 2.4 + pulse * .15, 0, Math.PI * 2); ctx.fill();
+  } else {
+    ctx.fillStyle = model.glass;
+    ctx.beginPath(); ctx.moveTo(-10, -10); ctx.lineTo(6, -10); ctx.lineTo(11, -5); ctx.lineTo(-10, -5); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "rgba(38,63,53,.48)";
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+  }
+
+  if (model.attachment === "blade" || model.attachment === "header") {
+    ctx.fillStyle = model.accent;
+    ctx.fillRect(21, -5, 8, 9);
+    ctx.strokeStyle = model.side;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(27, -7); ctx.lineTo(27, 6); ctx.stroke();
+    if (model.attachment === "header") {
+      ctx.fillStyle = "#f4d86a";
+      for (let tine = -6; tine <= 6; tine += 4) ctx.fillRect(28, tine - 1, 7, 2);
+    }
+  } else if (model.attachment === "hopper") {
+    ctx.fillStyle = model.accent;
+    ctx.beginPath(); ctx.moveTo(-24, -5); ctx.lineTo(-17, -9); ctx.lineTo(-17, 4); ctx.lineTo(-24, 1); ctx.closePath(); ctx.fill();
+  } else if (model.attachment === "chimney") {
+    ctx.fillStyle = model.accent;
+    ctx.fillRect(-15, -22, 4, 10);
+    ctx.beginPath(); ctx.arc(-13, -23, 3, Math.PI, 0); ctx.fill();
+  } else if (model.attachment === "sensor") {
+    ctx.strokeStyle = model.accent;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(9, -15); ctx.lineTo(17, -22); ctx.stroke();
+    ctx.fillStyle = model.accent;
+    ctx.beginPath(); ctx.arc(18, -23, 2.5 + pulse * .2, 0, Math.PI * 2); ctx.fill();
+  } else if (model.attachment === "saw") {
+    ctx.fillStyle = "#e6ddc2";
+    ctx.beginPath(); ctx.arc(23, 1, 7, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#9b7c54";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = model.side;
+    ctx.beginPath(); ctx.arc(23, 1, 2, 0, Math.PI * 2); ctx.fill();
+  } else if (model.attachment === "crane") {
+    ctx.strokeStyle = model.accent;
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(13, -7); ctx.lineTo(21, -21); ctx.lineTo(30, -22); ctx.stroke();
+    ctx.fillStyle = "#bd7e42";
+    ctx.beginPath(); ctx.arc(31, -22, 3, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // Near wheels overlap the lower body, reinforcing the depth order.
+  drawVehicleWheel(-13, 8, "#1e2b27", "#aab39c");
+  drawVehicleWheel(15, 8, "#1e2b27", "#aab39c");
+  ctx.restore();
+}
+
 function drawHarvesterOperation(device, plotId, x, y, geometry, now) {
-  const phase = state.settings.reducedMotion ? 0 : (now / Math.max(3800, 9200 - device.tier * 520) + plotId * .137) % 1;
   const path = geometry?.path || [];
   const pathPoints = path.map((index) => worldPoint(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE));
-  const segmentCount = Math.max(1, pathPoints.length - 1);
-  const scaledPath = phase * segmentCount;
-  const pathIndex = Math.min(pathPoints.length - 1, Math.floor(scaledPath));
-  const nextPathIndex = Math.min(pathPoints.length - 1, pathIndex + 1);
-  const localProgress = pathIndex === nextPathIndex ? 0 : scaledPath - pathIndex;
+  const segmentCount = Math.max(0, pathPoints.length - 1);
+  const cycleMs = segmentCount ? segmentCount * 2 / HARVESTER_CELLS_PER_SECOND * 1000 : 1000;
+  const phase = state.settings.reducedMotion ? 0 : ((now + plotId * 137) % cycleMs) / cycleMs;
+  const loopDistance = phase * segmentCount * 2;
+  const movingForward = loopDistance <= segmentCount;
+  const pathDistance = movingForward ? loopDistance : segmentCount * 2 - loopDistance;
+  const pathIndex = segmentCount ? Math.min(segmentCount, Math.floor(pathDistance)) : 0;
+  const pathDirection = movingForward ? 1 : -1;
+  const nextPathIndex = segmentCount ? clamp(pathIndex + pathDirection, 0, segmentCount) : pathIndex;
+  const localProgress = pathIndex === nextPathIndex ? 0 : pathDistance - pathIndex;
   const currentPoint = pathPoints[pathIndex] || { x, y };
   const nextPoint = pathPoints[nextPathIndex] || currentPoint;
   const vehicleX = currentPoint.x + (nextPoint.x - currentPoint.x) * localProgress;
   const vehicleY = currentPoint.y + (nextPoint.y - currentPoint.y) * localProgress + 7;
-  const direction = nextPoint.x === currentPoint.x ? 1 : nextPoint.x >= currentPoint.x ? 1 : -1;
+  const previousPoint = pathPoints[Math.max(0, pathIndex - pathDirection)] || currentPoint;
+  const headingVector = { x: nextPoint.x - currentPoint.x, y: nextPoint.y - currentPoint.y };
+  if (!headingVector.x && !headingVector.y) {
+    headingVector.x = currentPoint.x - previousPoint.x;
+    headingVector.y = currentPoint.y - previousPoint.y;
+  }
+  const heading = Math.atan2(headingVector.y, headingVector.x);
   const forestry = device.targetType === "tree";
 
   ctx.save();
-  ctx.strokeStyle = forestry ? "rgba(132,92,54,.58)" : "rgba(239,189,75,.58)";
-  ctx.lineWidth = 2 / camera.scale;
-  ctx.setLineDash([7 / camera.scale, 8 / camera.scale]);
-  if (pathPoints.length > 1) {
-    ctx.beginPath();
-    ctx.moveTo(pathPoints[0].x, pathPoints[0].y + 7);
-    for (let index = 1; index < pathPoints.length; index += 1) ctx.lineTo(pathPoints[index].x, pathPoints[index].y + 7);
-    ctx.stroke();
-  }
-  ctx.setLineDash([]);
   ctx.fillStyle = "rgba(39,32,21,.25)";
   ctx.beginPath(); ctx.ellipse(vehicleX, vehicleY + 10, 22, 7, 0, 0, Math.PI * 2); ctx.fill();
 
@@ -1663,26 +1775,12 @@ function drawHarvesterOperation(device, plotId, x, y, geometry, now) {
     for (let particle = 0; particle < 5; particle += 1) {
       const lag = 11 + particle * 6;
       ctx.beginPath();
-      ctx.arc(vehicleX - direction * lag, vehicleY + 4 + (particle % 2) * 4, 1.8 + particle % 2, 0, Math.PI * 2);
+      ctx.arc(vehicleX - Math.cos(heading) * lag, vehicleY - Math.sin(heading) * lag + 4 + (particle % 2) * 4, 1.8 + particle % 2, 0, Math.PI * 2);
       ctx.fill();
     }
   }
 
-  ctx.translate(vehicleX, vehicleY - 6);
-  ctx.scale(direction, 1);
-  ctx.rotate(Math.sin(phase * Math.PI * 2) * .09);
-  const vehicleImage = images.get("combine-harvester.png");
-  if (vehicleImage) ctx.drawImage(vehicleImage, -21, -22, 42, 42);
-  else {
-    ctx.font = "31px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("🚜", 0, 9);
-  }
-  if (forestry) {
-    ctx.font = "13px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("🪵", -17, -8);
-  }
+  drawHarvesterVehicle(device, vehicleX, vehicleY - 6, heading, now);
   ctx.restore();
 }
 

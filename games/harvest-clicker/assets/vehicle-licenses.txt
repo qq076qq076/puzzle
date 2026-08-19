@@ -1,0 +1,10 @@
+自動化車輛圖示授權
+
+vehicle-tractor-farm.png
+來源：https://freegamesprites.com/en/assets/tractor-farm-vehicle
+來源頁標示：Creative Commons Zero (CC0)
+
+vehicle-tractor.png、vehicle-delivery.png、vehicle-tow.png
+來源：https://kenney.nl/assets/pixel-vehicle-pack
+下載頁：https://opengameart.org/content/pixel-vehicle-pack
+授權：Creative Commons Zero (CC0)

@@ -10,7 +10,7 @@
 
 - 植物：`lettuce-head.png`、`tomato-plant-staked.png`、`cabbage-head-row.png`、`wheat-stalk.png`、`corn-stalk-row.png`、`strawberry-plant.png`、`zucchini-plant.png`、`pumpkin-patch.png`、`eggplant-plant.png`、`lavender-bush.png`、`blueberry-bush.png`、`pepper-plant.png`、`rose-bush.png`、`sunflower-row.png`、`cotton-plant.png`、`sugar-cane.png`、`rice-paddy-bundle.png`、`grape-vine.png`、`vanilla-vine.png`、`coffee-bean-plant.png`
 - 農具：`vegetable-peeler.png`、`pruning-shears.png`、`hand-trowel.png`、`garden-spade.png`、`farm-scythe.png`、`garden-hoe.png`、`compost-pile-pitchfork.png`、`copper-pickaxe.png`、`iron-hoe.png`
-- 設備：`combine-harvester.png`、`watering-can-metal.png`、`sprinkler-head.png`
+- 設備：`combine-harvester.png`、`vehicle-tractor-farm.png`、`watering-can-metal.png`、`sprinkler-head.png`
 
 ## 林業擴充素材
 
@@ -41,3 +41,9 @@
 - 作者：isaiah658
 - 授權：[CC0（Public Domain）](https://creativecommons.org/publicdomain/zero/1.0/)，署名非必要。
 - 用途：`farmer-green-cap.png` 作為農夫的 3×4 方向行走圖；鋤田、澆水、擦汗與唱歌的手勢及特效由 Canvas 即時繪製。
+
+## 自動化車輛圖示與模型
+
+- `vehicle-tractor-farm.png` 來自 [FreeGameSprites — Tractor Farm Vehicle](https://freegamesprites.com/en/assets/tractor-farm-vehicle)，來源頁標示 CC0。
+- `vehicle-tractor.png`、`vehicle-delivery.png`、`vehicle-tow.png` 來自 [Kenney Pixel Vehicle Pack](https://kenney.nl/assets/pixel-vehicle-pack)，由 OpenGameArt 的 [Pixel Vehicle Pack](https://opengameart.org/content/pixel-vehicle-pack) 提供下載；授權為 CC0。
+- 商店與工具列使用上述不同車輛圖示；田間則以 Canvas 依設備型號繪製不同的 2.5D 車體、輪胎、車廂與伐木附件，並依行進方向旋轉，不重複使用單一側面圖。
