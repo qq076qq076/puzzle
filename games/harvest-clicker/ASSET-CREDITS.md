@@ -34,3 +34,10 @@
 - 原始檔：`Isometric/fenceLow*`、`fenceLowBroken*`、`fenceHigh*`、`fenceHighBroken*`、`woodWallGateOpen_N.png`、`hayBales_N.png`、`hayBalesStacked_N.png`、`sacksCrate_N.png`、`ladderStand_N.png`、`planksOld*`。
 - 專案檔位於 `assets/decorations/`；只裁除透明留白並重新命名，未改動畫風與內容。
 - 原始授權文字另存於 `assets/decorations/LICENSE.txt`。
+
+## 農夫角色
+
+- 來源：[OpenGameArt — Green Cap Character 16x18](https://opengameart.org/content/green-cap-character-16x18)
+- 作者：isaiah658
+- 授權：[CC0（Public Domain）](https://creativecommons.org/publicdomain/zero/1.0/)，署名非必要。
+- 用途：`farmer-green-cap.png` 作為農夫的 3×4 方向行走圖；鋤田、澆水、擦汗與唱歌的手勢及特效由 Canvas 即時繪製。

@@ -17,6 +17,7 @@ const HAS_SHARE_LINK = new URLSearchParams(window.location.hash.replace(/^#/, ""
 const SHARE_ID = window.PuzzleShare?.parseShareId(window.location.hash) || null;
 const READ_ONLY = HAS_SHARE_LINK;
 const ASSET_ROOT = "assets/";
+const FARMER_SPRITE = "farmer-green-cap.png";
 const TAB_ID = globalThis.crypto?.randomUUID?.() || `harvest-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const TILE_W = 96;
 const TILE_H = 48;
@@ -121,6 +122,11 @@ let sharedSourceRevision = -1;
 let sharedUpdatedAt = -1;
 let stopFirebaseStatus = null;
 const toolCursor = { x: 0, y: 0, visible: false, swingStartedAt: -Infinity };
+const farmer = {
+  x: 0, y: 0, targetX: 0, targetY: 0,
+  action: "walk", actionStartedAt: -Infinity, actionDuration: 0,
+  directionRow: 0, lastUpdateAt: -Infinity, initialized: false
+};
 
 function formatMoney(value) {
   return `${formatNumber(value)}$`;
@@ -153,6 +159,7 @@ function assetMarkup(fileName, fallback, className = "shop-art") {
 
 function preloadAssets() {
   const files = new Set();
+  files.add(FARMER_SPRITE);
   for (const item of [...PLANTS, ...TOOLS, ...HARVESTERS, ...SPRINKLERS, ...DECORATIONS]) {
     if (item.image) files.add(item.image);
     if (item.imageHorizontal) files.add(item.imageHorizontal);
@@ -723,6 +730,160 @@ function worldPoint(row, col) {
 
 function worldPointFromScreen(x, y) {
   return { x: (x - camera.x) / camera.scale, y: (y - camera.y) / camera.scale };
+}
+
+function chooseFarmerTarget() {
+  const plotIds = state?.ownedPlots || [];
+  if (!plotIds.length) return null;
+  const plotId = plotIds[Math.floor(Math.random() * plotIds.length)];
+  const indexes = indexesForPlot(plotId);
+  const index = indexes[Math.floor(Math.random() * indexes.length)];
+  return worldPoint(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE);
+}
+
+function chooseFarmerAction() {
+  const roll = Math.random();
+  if (roll < .28) return ["hoe", 1700 + Math.random() * 900];
+  if (roll < .53) return ["water", 1800 + Math.random() * 1100];
+  if (roll < .78) return ["rest", 1500 + Math.random() * 900];
+  if (roll < .92) return ["sing", 1700 + Math.random() * 1100];
+  return ["look", 1000 + Math.random() * 700];
+}
+
+function updateFarmer(now) {
+  if (!state?.ownedPlots?.length) return;
+  if (!farmer.initialized) {
+    const start = worldPoint(Math.floor(indexesForPlot(INITIAL_PLOT_ID)[4] / BOARD_SIZE), indexesForPlot(INITIAL_PLOT_ID)[4] % BOARD_SIZE);
+    Object.assign(farmer, { x: start.x, y: start.y, targetX: start.x, targetY: start.y, initialized: true, lastUpdateAt: now });
+  }
+  const elapsed = clamp(now - farmer.lastUpdateAt, 0, 80);
+  farmer.lastUpdateAt = now;
+  if (farmer.action !== "walk") {
+    if (now >= farmer.actionStartedAt + farmer.actionDuration) {
+      farmer.action = "walk";
+      const target = chooseFarmerTarget();
+      if (target) Object.assign(farmer, { targetX: target.x, targetY: target.y });
+    }
+    return;
+  }
+  const dx = farmer.targetX - farmer.x;
+  const dy = farmer.targetY - farmer.y;
+  const distance = Math.hypot(dx, dy);
+  if (distance < 3) {
+    farmer.x = farmer.targetX;
+    farmer.y = farmer.targetY;
+    const [action, duration] = chooseFarmerAction();
+    farmer.action = action;
+    farmer.actionStartedAt = now;
+    farmer.actionDuration = duration;
+    return;
+  }
+  farmer.directionRow = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 2 : 1) : (dy > 0 ? 0 : 3);
+  const speed = state.settings.reducedMotion ? .035 : .075;
+  const distanceStep = Math.min(distance, speed * elapsed);
+  farmer.x += dx / distance * distanceStep;
+  farmer.y += dy / distance * distanceStep;
+}
+
+function drawFarmerAction(action, x, contactY, progress) {
+  const swing = Math.sin(progress * Math.PI);
+  ctx.save();
+  ctx.lineCap = "round";
+  if (action === "hoe") {
+    ctx.translate(x + 12, contactY - 26);
+    ctx.rotate(-.62 + swing * 1.05);
+    ctx.strokeStyle = "#71462f";
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(24, 17); ctx.stroke();
+    ctx.strokeStyle = "#bdc6ab";
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(19, 14); ctx.lineTo(31, 9); ctx.stroke();
+    ctx.restore();
+    ctx.save();
+    ctx.globalAlpha = .5 + swing * .4;
+    ctx.strokeStyle = "#a96b43";
+    ctx.lineWidth = 2;
+    for (let mark = -1; mark <= 1; mark += 1) {
+      ctx.beginPath(); ctx.moveTo(x + mark * 8 - 5, contactY + 2); ctx.lineTo(x + mark * 8 + 4, contactY - 2); ctx.stroke();
+    }
+    ctx.restore();
+    return;
+  }
+  if (action === "water") {
+    ctx.translate(x + 14, contactY - 27);
+    ctx.rotate(.42 - swing * .72);
+    ctx.fillStyle = "#79bdc6";
+    ctx.strokeStyle = "#3d7474";
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(0, 8, 10, 7, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(7, 5); ctx.lineTo(22, -2); ctx.stroke();
+    ctx.restore();
+    if (!LOW_POWER_RENDER) {
+      ctx.fillStyle = "rgba(153,228,235,.92)";
+      for (let drop = 0; drop < 4; drop += 1) {
+        const dropX = x + 25 + drop * 6;
+        const dropY = contactY - 17 + ((nowSafeFarmerTime() / 130 + drop * 7) % 16);
+        ctx.beginPath(); ctx.arc(dropX, dropY, 2.1, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    return;
+  }
+  if (action === "rest") {
+    ctx.strokeStyle = "#f4d89b";
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(x - 17, contactY - 31); ctx.quadraticCurveTo(x - 5, contactY - 38, x + 3, contactY - 28); ctx.stroke();
+    ctx.fillStyle = "#96d7db";
+    ctx.beginPath(); ctx.arc(x + 19, contactY - 47 - swing * 3, 3.2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + 26, contactY - 39 - swing * 2, 2.2, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    return;
+  }
+  if (action === "sing") {
+    ctx.fillStyle = "rgba(255,250,226,.96)";
+    ctx.strokeStyle = "rgba(79,73,48,.38)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(x + 14, contactY - 65, 34, 23, 10); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#567b58";
+    ctx.font = "800 16px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("♪", x + 31, contactY - 53 + Math.sin(swing * Math.PI) * 2);
+    ctx.restore();
+    return;
+  }
+  ctx.restore();
+}
+
+function nowSafeFarmerTime() {
+  return farmer.lastUpdateAt > 0 ? farmer.lastUpdateAt : performance.now();
+}
+
+function drawFarmer(now) {
+  if (!farmer.initialized) return;
+  const image = images.get(FARMER_SPRITE);
+  const contactY = farmer.y + TILE_H * .42;
+  const actionProgress = farmer.action === "walk"
+    ? 0
+    : clamp((now - farmer.actionStartedAt) / Math.max(1, farmer.actionDuration), 0, 1);
+  const frame = farmer.action === "walk" ? Math.floor(now / 180) % 3 : 1;
+  const bounce = farmer.action === "walk" && !state.settings.reducedMotion ? Math.sin(now / 115) * 1.2 : 0;
+  ctx.save();
+  ctx.fillStyle = "rgba(37,30,20,.24)";
+  ctx.beginPath(); ctx.ellipse(farmer.x + 2, contactY + 1, 17, 5.5, 0, 0, Math.PI * 2); ctx.fill();
+  if (image) {
+    ctx.imageSmoothingEnabled = false;
+    ctx.globalAlpha = .98;
+    ctx.drawImage(image, frame * 16, farmer.directionRow * 18, 16, 18, farmer.x - 22, contactY - 52 + bounce, 44, 50);
+  } else {
+    ctx.fillStyle = "#f5c995";
+    ctx.beginPath(); ctx.arc(farmer.x, contactY - 35, 10, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#4c7f55";
+    ctx.beginPath(); ctx.arc(farmer.x, contactY - 42, 12, Math.PI, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#8b5a3b";
+    ctx.fillRect(farmer.x - 9, contactY - 26, 18, 20);
+  }
+  ctx.restore();
+  if (farmer.action !== "walk") drawFarmerAction(farmer.action, farmer.x, contactY, actionProgress);
 }
 
 function decorationSlotWorldPoint(slot) {
@@ -1809,6 +1970,7 @@ function drawFarm(now = performance.now()) {
   for (const plot of plotPaintOrder) drawPlotBase(plot);
   drawSideScenery();
   drawPlacedGroundDecorations();
+  updateFarmer(now);
 
   const order = cellPaintOrder();
   const sceneNodes = decorationSceneNodes();
@@ -1827,9 +1989,11 @@ function drawFarm(now = performance.now()) {
     sceneNodes.push({ kind: "plant", depth: point.y + metrics.contactY, x: point.x, cell, point });
     plantOverlays.push({ cell, point, metrics });
   }
+  sceneNodes.push({ kind: "farmer", depth: farmer.y + TILE_H * .42, x: farmer.x });
   sceneNodes.sort((a, b) => a.depth - b.depth || a.x - b.x);
   for (const node of sceneNodes) {
     if (node.kind === "plant") drawPlant(node.cell, node.point.x, node.point.y, now);
+    else if (node.kind === "farmer") drawFarmer(now);
     else drawDecorationItem(node.item, node.point.x, node.point.y, node.decoration.direction, 1);
   }
   for (const { cell, point, metrics } of plantOverlays) {

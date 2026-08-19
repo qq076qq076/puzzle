@@ -128,38 +128,39 @@ test("新增的十種作物全為樹木且具備獨立素材與有效數值", ()
   assert.ok(trees.every((tree) => Number.isSafeInteger(tree.seedCost) && Number.isSafeInteger(tree.coins)));
   assert.equal(getPlantFootprint("weed"), 1);
   assert.equal(getPlantFootprint("clover"), 3);
-  assert.deepEqual(trees.map((tree) => getPlantFootprint(tree)), [1, 3, 5, 7, 9, 11, 13, 15, 17, 19]);
+  assert.deepEqual(trees.map((tree) => getPlantFootprint(tree)), [1, 1, 2, 2, 3, 3, 4, 4, 5, 5]);
+  assert.ok(trees.every((tree) => getPlantFootprint(tree) >= 1 && getPlantFootprint(tree) <= 5));
   assert.ok(trees.every((tree) => tree.seedCost > 0 && tree.coins > tree.seedCost / 8));
 });
 
 test("樹木種子一次只種一棵，且依正方形占地完整驗證土地", () => {
   const state = createInitialState(0);
   const centerIndex = indexesForPlot(INITIAL_PLOT_ID)[4];
-  const tree = PLANTS.find((plant) => plant.id === "orange_tree");
+  const tree = PLANTS.find((plant) => plant.id === "cherry_tree");
   const footprintIndexes = getPlantPlacementIndexes(centerIndex, tree.id);
-  assert.equal(footprintIndexes.length, 9);
+  assert.equal(footprintIndexes.length, 4);
   assert.equal(sowPlantAt(state, centerIndex, tree.id), true);
   assert.ok(footprintIndexes.every((index) => state.cells[index].plantId === tree.id));
-  assert.equal(state.cells.filter((cell) => cell.plantId === tree.id).length, 9);
+  assert.equal(state.cells.filter((cell) => cell.plantId === tree.id).length, 4);
   assert.equal(state.cells[footprintIndexes[0]].plantRootIndex, footprintIndexes[0]);
   assert.equal(state.cells[footprintIndexes[0]].plantAnchorIndex, centerIndex);
 
   const edgeState = createInitialState(0);
-  assert.equal(sowPlantAt(edgeState, indexesForPlot(INITIAL_PLOT_ID)[0], "coconut_tree"), false);
-  assert.equal(getPlantPlacementIndexes(0, "orange_tree").length, 4);
+  assert.equal(sowPlantAt(edgeState, 0, "cypress_tree"), false);
+  assert.equal(getPlantPlacementIndexes(0, "cypress_tree").length, 9);
 });
 
 test("大樹占用多格但收割只結算一次樹木收益", () => {
   const state = createInitialState(0);
   const centerIndex = indexesForPlot(INITIAL_PLOT_ID)[4];
-  assert.equal(sowPlantAt(state, centerIndex, "orange_tree"), true);
-  const tree = PLANTS.find((plant) => plant.id === "orange_tree");
+  assert.equal(sowPlantAt(state, centerIndex, "cherry_tree"), true);
+  const tree = PLANTS.find((plant) => plant.id === "cherry_tree");
   const footprintIndexes = getPlantPlacementIndexes(centerIndex, tree.id);
   const rootIndex = footprintIndexes[0];
   state.cells[rootIndex].phase = "mature";
   state.cells[rootIndex].growthProgress = 1;
   state.cells[rootIndex].currentHp = 1;
-  state.equippedToolId = "steel_harvester";
+  state.equippedToolId = "small_knife";
   const result = manualHarvest(state, centerIndex);
   assert.equal(result.totalCoins, tree.coins);
   assert.equal(result.results.length, 1);
@@ -171,9 +172,9 @@ test("大樹占用多格但收割只結算一次樹木收益", () => {
 test("肥料可以從樹木所在的 3×3 地塊套用到整棵樹", () => {
   const state = createInitialState(0);
   const centerIndex = indexesForPlot(INITIAL_PLOT_ID)[4];
-  assert.equal(sowPlantAt(state, centerIndex, "orange_tree"), true);
+  assert.equal(sowPlantAt(state, centerIndex, "cherry_tree"), true);
   assert.equal(fertilizePlot(state, INITIAL_PLOT_ID, "quick"), true);
-  const treeIndexes = getPlantPlacementIndexes(centerIndex, "orange_tree");
+  const treeIndexes = getPlantPlacementIndexes(centerIndex, "cherry_tree");
   assert.ok(treeIndexes.every((index) => state.cells[index].fertilizerId === "quick"));
   assert.ok(treeIndexes.every((index) => state.cells[index].fertilizerRounds === 3));
 });
@@ -188,8 +189,9 @@ test("舊版以 3×3 種下的樹木會遷移成單棵樹", () => {
     };
   }
   normalizeStateData(state);
-  assert.equal(new Set(indexes.map((index) => state.cells[index].plantRootIndex)).size, 1);
-  assert.equal(new Set(indexes.map((index) => state.cells[index].plantAnchorIndex)).size, 1);
+  const migratedTreeIndexes = indexes.filter((index) => state.cells[index].plantId === "orange_tree");
+  assert.equal(migratedTreeIndexes.length, 1);
+  assert.equal(state.cells[migratedTreeIndexes[0]].plantRootIndex, migratedTreeIndexes[0]);
   const result = manualHarvest(state, indexes[4]);
   assert.equal(result.totalCoins, PLANTS.find((plant) => plant.id === "orange_tree").coins);
   assert.equal(state.harvestedCells, 1);
