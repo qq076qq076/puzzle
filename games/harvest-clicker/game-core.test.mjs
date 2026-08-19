@@ -7,6 +7,7 @@ await import("./data/automation.js");
 await import("./data/fertilizers.js");
 await import("./data/decorations.js");
 await import("./game-core.js");
+const { MONTHLY_EVENT_START_AT, MONTHLY_EVENT_END_AT, MONTHLY_EVENT_ID } = globalThis.HarvestStaticConfig;
 const {
   createInitialState, manualHarvest, simulateTo, sowPlot, sowPlantAt, fertilizePlot,
   getToolTargetIndexes, automationTargetIndexes, indexesForPlot, buyPlot, validateState,
@@ -212,16 +213,14 @@ test("新遊戲從中央 9×9 成熟雜草與小刀開始", () => {
   assert.ok(validateState(state));
 });
 
-test("開啟農場滿 30 天會在最上方土地贈送一棵成熟緋櫻果樹且只領一次", () => {
-  const startedAt = 1_000_000;
-  const state = createInitialState(startedAt);
-  const duration = 30 * 24 * 60 * 60 * 1000;
+test("限時活動期間開啟農場會在最上方土地贈送一棵成熟緋櫻果樹且只領一次", () => {
+  const state = createInitialState(0);
   assert.equal(getTopmostOwnedPlotId(state.ownedPlots), 30);
-  assert.equal(claimMonthlyCherryTreeReward(state, startedAt + duration - 1), false);
+  assert.equal(claimMonthlyCherryTreeReward(state, MONTHLY_EVENT_START_AT - 1), false);
 
-  const reward = claimMonthlyCherryTreeReward(state, startedAt + duration);
+  const reward = claimMonthlyCherryTreeReward(state, MONTHLY_EVENT_START_AT);
   assert.deepEqual(reward, {
-    eventId: "cherry-tree-30-day",
+    eventId: MONTHLY_EVENT_ID,
     plantId: "cherry_tree",
     plotId: 30,
     centerIndex: indexesForPlot(30)[4]
@@ -230,8 +229,10 @@ test("開啟農場滿 30 天會在最上方土地贈送一棵成熟緋櫻果樹�
   assert.equal(treeIndexes.length, 4);
   assert.ok(treeIndexes.every((index) => state.cells[index].plantId === "cherry_tree"));
   assert.ok(treeIndexes.every((index) => state.cells[index].phase === "mature"));
-  assert.equal(claimMonthlyCherryTreeReward(state, startedAt + duration + 1), false);
-  assert.equal(state.events["cherry-tree-30-day"].claimedAt, startedAt + duration);
+  assert.equal(claimMonthlyCherryTreeReward(state, MONTHLY_EVENT_START_AT + 1), false);
+  assert.equal(state.events[MONTHLY_EVENT_ID].claimedAt, MONTHLY_EVENT_START_AT);
+  const expiredState = createInitialState(0);
+  assert.equal(claimMonthlyCherryTreeReward(expiredState, MONTHLY_EVENT_END_AT), false);
 });
 
 test("小刀一次只收割一格並發放一次金幣", () => {

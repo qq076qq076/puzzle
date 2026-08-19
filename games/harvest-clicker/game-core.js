@@ -7,7 +7,7 @@ if (!STATIC_CONFIG || !STATIC_DATA) throw new Error("Harvest Clicker static sett
 const {
   BOARD_SIZE, PLOT_GRID_SIZE, INITIAL_PLOT_ID, INITIAL_PLOT_IDS, SAVE_VERSION,
   LAND_PRICE_BASE, LAND_PRICE_GROWTH, LAND_SIZE, LOWEST_GROWTH_MULTIPLIER,
-  MONTHLY_EVENT_ID, MONTHLY_EVENT_REWARD_PLANT_ID, MONTHLY_EVENT_DURATION_MS
+  MONTHLY_EVENT_ID, MONTHLY_EVENT_REWARD_PLANT_ID, MONTHLY_EVENT_START_AT, MONTHLY_EVENT_END_AT
 } = STATIC_CONFIG;
 const { PLANTS, TOOLS, HARVESTERS, SPRINKLERS, FERTILIZERS, DECORATIONS = [] } = STATIC_DATA;
 
@@ -609,8 +609,8 @@ function claimMonthlyCherryTreeReward(state, now = Date.now()) {
     claimedAt: 0, plotId: null, centerIndex: null, rewardPlantId: MONTHLY_EVENT_REWARD_PLANT_ID
   };
   if (Number(event.claimedAt) > 0) return false;
-  const startedAt = Number(state.accountStartedAt);
-  if (!Number.isFinite(startedAt) || Number(now) - startedAt < MONTHLY_EVENT_DURATION_MS) return false;
+  const currentTime = Number(now);
+  if (!Number.isFinite(currentTime) || currentTime < MONTHLY_EVENT_START_AT || currentTime >= MONTHLY_EVENT_END_AT) return false;
   const plotId = getTopmostOwnedPlotId(state.ownedPlots);
   const plant = getPlant(MONTHLY_EVENT_REWARD_PLANT_ID);
   if (plotId == null || !plant || !state.ownedPlots.includes(plotId)) return false;
@@ -624,7 +624,7 @@ function claimMonthlyCherryTreeReward(state, now = Date.now()) {
     cell.growthProgress = 1;
     cell.currentHp = plant.hp;
   }
-  event.claimedAt = Number(now);
+  event.claimedAt = currentTime;
   event.plotId = plotId;
   event.centerIndex = centerIndex;
   event.rewardPlantId = plant.id;
