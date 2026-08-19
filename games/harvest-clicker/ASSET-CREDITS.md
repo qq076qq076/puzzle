@@ -46,5 +46,6 @@
 
 - `kenney-tractor.png`、`kenney-tractor-shovel.png`、`kenney-delivery.png`、`kenney-delivery-flat.png`、`kenney-garbage-truck.png`、`kenney-truck-flat.png`、`kenney-truck.png` 來自 [Kenney Car Kit](https://kenney.nl/assets/car-kit)。
 - 專案使用 Car Kit 中由 3D 模型預先渲染的 `Previews/*.png`，保留透明背景與等角 2.5D 車體，並依自動化設備等級分配不同車型。
+- 每種車再以 Car Kit 的 GLB 模型離線渲染四個行進方向，輸出為同名的 `-down-left`、`-down-right`、`-up-left`、`-up-right` PNG。遊戲依棋盤路徑向量切換方向素材，不旋轉整張等角圖，因此車頭不會側向或倒退。
 - Kenney Car Kit 授權為 [Creative Commons CC0](https://creativecommons.org/publicdomain/zero/1.0/)，可用於個人與商業專案。
-- Canvas 會依車輛行進方向旋轉透明車體；伐木設備另外繪製圓鋸或木材載荷標記，讓功能與車型保持可辨識。
+- Canvas 會以統一的接地基準繪製方向素材；伐木設備另外繪製圓鋸或木材載荷標記，讓功能與車型保持可辨識。

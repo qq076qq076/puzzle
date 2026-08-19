@@ -54,6 +54,7 @@ test("所有商品售價與規格書一致且為有效金額", () => {
   assert.deepEqual(HARVESTERS.map((item) => item.cost), [25000, 120000, 450000, 1800000, 8000000, 25000000000, 180000000000]);
   assert.equal(new Set(HARVESTERS.map((item) => item.image)).size, HARVESTERS.length);
   assert.ok(HARVESTERS.every((item) => item.model));
+  assert.ok(HARVESTERS.every((item) => ["down-left", "down-right", "up-left", "up-right"].every((direction) => item.directionImages?.[direction])));
   assert.deepEqual(SPRINKLERS.map((item) => item.cost), [18000, 75000, 260000, 900000, 5500000]);
   assert.deepEqual(FERTILIZERS.map((item) => item.cost), [300, 1200, 6000, 28000, 120000, 300000, 900000, 2800000, 9000000, 30000000]);
   assert.deepEqual(FERTILIZERS.map((item) => item.rounds), [3, 4, 5, 5, 8, 6, 8, 9, 10, 12]);

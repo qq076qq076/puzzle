@@ -11,4 +11,5 @@ kenney-truck.png
 來源：https://kenney.nl/assets/car-kit
 下載檔案：https://kenney.nl/media/pages/assets/car-kit/1a312ec241-1775131960/kenney_car-kit.zip
 素材格式：Kenney Car Kit 的 Previews/*.png（由 3D 車輛模型預先渲染）
+方向素材：由 Kenney Car Kit 的 GLB 車輛模型離線渲染四向 PNG（檔名後綴 -down-left、-down-right、-up-left、-up-right）
 授權：Creative Commons Zero (CC0)

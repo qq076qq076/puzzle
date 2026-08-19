@@ -166,6 +166,9 @@ function preloadAssets() {
     if (item.image) files.add(item.image);
     if (item.imageHorizontal) files.add(item.imageHorizontal);
     if (item.imageVertical) files.add(item.imageVertical);
+    if (item.directionImages) {
+      for (const file of Object.values(item.directionImages)) files.add(file);
+    }
   }
   for (const file of files) {
     const image = new Image();
@@ -1655,6 +1658,17 @@ const KENNEY_VEHICLE_Y_OFFSETS = Object.freeze({
   "kenney-truck.png": -42
 });
 
+const KENNEY_DIRECTION_SPRITE_Y = -45;
+
+function vehicleDirectionKey(movement) {
+  const vx = Number(movement?.x) || 0;
+  const vy = Number(movement?.y) || 0;
+  if (vx < 0 && vy >= 0) return "down-left";
+  if (vx >= 0 && vy >= 0) return "down-right";
+  if (vx < 0) return "up-left";
+  return "up-right";
+}
+
 function drawVehicleWheel(x, y, color, highlight) {
   ctx.fillStyle = color;
   ctx.beginPath();
@@ -1700,18 +1714,18 @@ function drawKenneyVehicleAttachment(device, now) {
 function drawHarvesterVehicle(device, x, y, heading, now, movement = null) {
   const model = HARVESTER_MODELS[device.model] || HARVESTER_MODELS.combine;
   const pulse = state.settings.reducedMotion ? 0 : Math.sin(now / 160) * .8;
-  const image = device.image ? images.get(device.image) : null;
+  const directionImageFile = device.directionImages?.[vehicleDirectionKey(movement)];
+  const directionImage = directionImageFile ? images.get(directionImageFile) : null;
+  const image = directionImage || (device.image ? images.get(device.image) : null);
   ctx.save();
   ctx.translate(x, y);
   if (image) {
-    // The PNG is an isometric render, not a flat top-down sprite. Continuous
-    // rotation makes the cab lean and a 180° turn puts the baked shadow above
-    // the vehicle. Keep the model upright and mirror only its horizontal
-    // facing direction; the path can still move in all four grid directions.
-    const mirrorX = Number(movement?.x) > 0;
-    ctx.scale(mirrorX ? -1 : 1, 1);
+    // Direction renders keep the Kenney chassis upright while the front of
+    // the vehicle always follows the current board edge. This avoids the
+    // sideways/backwards look caused by rotating one baked isometric image.
+    if (!directionImage) ctx.scale(Number(movement?.x) > 0 ? -1 : 1, 1);
     ctx.imageSmoothingEnabled = true;
-    const spriteY = KENNEY_VEHICLE_Y_OFFSETS[device.image] ?? -44;
+    const spriteY = directionImage ? KENNEY_DIRECTION_SPRITE_Y : (KENNEY_VEHICLE_Y_OFFSETS[device.image] ?? -44);
     ctx.drawImage(image, -32, spriteY, 64, 64);
     drawKenneyVehicleAttachment(device, now);
     ctx.restore();
