@@ -12,7 +12,8 @@ const {
   getToolTargetIndexes, automationTargetIndexes, indexesForPlot, buyPlot, validateState,
   INITIAL_PLOT_ID, INITIAL_PLOT_IDS, BOARD_SIZE, PLOTS,
   PLANTS, TOOLS, HARVESTERS, SPRINKLERS, FERTILIZERS, DECORATIONS, getDecoration, getProductPrice,
-  getLandPrice, getPlantFootprint, getPlantPlacementIndexes, normalizeStateData, isFertilizerUnlocked
+  getLandPrice, getPlantFootprint, getPlantPlacementIndexes, normalizeStateData, isFertilizerUnlocked,
+  getTopmostOwnedPlotId, claimMonthlyCherryTreeReward
 } = globalThis.HarvestCore;
 
 test("舊存檔的胡蘿蔔植株與種子會無損轉成樁架番茄", () => {
@@ -209,6 +210,28 @@ test("新遊戲從中央 9×9 成熟雜草與小刀開始", () => {
   assert.equal(initialIndexes.length, 81);
   assert.ok(initialIndexes.every((index) => state.cells[index].phase === "mature"));
   assert.ok(validateState(state));
+});
+
+test("開啟農場滿 30 天會在最上方土地贈送一棵成熟緋櫻果樹且只領一次", () => {
+  const startedAt = 1_000_000;
+  const state = createInitialState(startedAt);
+  const duration = 30 * 24 * 60 * 60 * 1000;
+  assert.equal(getTopmostOwnedPlotId(state.ownedPlots), 30);
+  assert.equal(claimMonthlyCherryTreeReward(state, startedAt + duration - 1), false);
+
+  const reward = claimMonthlyCherryTreeReward(state, startedAt + duration);
+  assert.deepEqual(reward, {
+    eventId: "cherry-tree-30-day",
+    plantId: "cherry_tree",
+    plotId: 30,
+    centerIndex: indexesForPlot(30)[4]
+  });
+  const treeIndexes = getPlantPlacementIndexes(reward.centerIndex, "cherry_tree");
+  assert.equal(treeIndexes.length, 4);
+  assert.ok(treeIndexes.every((index) => state.cells[index].plantId === "cherry_tree"));
+  assert.ok(treeIndexes.every((index) => state.cells[index].phase === "mature"));
+  assert.equal(claimMonthlyCherryTreeReward(state, startedAt + duration + 1), false);
+  assert.equal(state.events["cherry-tree-30-day"].claimedAt, startedAt + duration);
 });
 
 test("小刀一次只收割一格並發放一次金幣", () => {

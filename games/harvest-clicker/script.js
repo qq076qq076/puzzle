@@ -6,7 +6,7 @@ const {
   fertilizePlot, buyPlot, formatNumber, formatTime, getPlant, getTool,
   getHarvester, getSprinkler, getFertilizer, getDecoration, getProductPrice, getLandPrice, plotIdForIndex, indexesForPlot,
   automationTargetIndexes, getPlantFootprint, getPlantPlacementIndexes,
-  isToolUnlocked, isPlantUnlocked, isFertilizerUnlocked, isAutomationUnlocked,
+  isToolUnlocked, isPlantUnlocked, isFertilizerUnlocked, isAutomationUnlocked, claimMonthlyCherryTreeReward,
   growthDurationSeconds, normalizeStateData
 } = globalThis.HarvestCore;
 
@@ -38,6 +38,7 @@ const elements = {
   toast: $("#toast"), backdrop: $("#shop-backdrop"),
   mobileShop: $("#mobile-shop-button"),
   offlineDialog: $("#offline-dialog"), settingsDialog: $("#settings-dialog"),
+  monthlyEventDialog: $("#monthly-event-dialog"), monthlyEventArt: $("#monthly-event-art"),
   settingSound: $("#setting-sound"), settingMotion: $("#setting-motion"),
   importInput: $("#import-input"), shopDialog: $("#shop-dialog"),
   shopDialogArt: $("#shop-dialog-art"), shopDialogTitle: $("#shop-dialog-title"),
@@ -173,9 +174,13 @@ function preloadAssets() {
   }
 }
 
-function normalizeLoadedState(candidate) {
+function normalizeLoadedState(candidate, fallbackStartedAt = 0) {
+  const hadAccountStartedAt = Number.isFinite(Number(candidate?.accountStartedAt));
   const parsed = normalizeStateData(candidate);
   if (!validateState(parsed)) return null;
+  if (!hadAccountStartedAt && Number.isFinite(Number(fallbackStartedAt)) && Number(fallbackStartedAt) > 0) {
+    parsed.accountStartedAt = Number(fallbackStartedAt);
+  }
   parsed.inventory ||= {};
   parsed.harvesters ||= [];
   parsed.sprinklers ||= [];
@@ -212,7 +217,7 @@ function parseLocalCheckpoint(raw) {
   try {
     const stored = JSON.parse(raw);
     const envelope = stored && stored.version === 1 && stored.data ? stored : { version: 1, data: stored };
-    const data = normalizeLoadedState(envelope.data);
+    const data = normalizeLoadedState(envelope.data, envelope.createdAt);
     if (!data) return null;
     return {
       version: 1,
@@ -303,7 +308,9 @@ async function syncCloudState(gate) {
 
   let remote = null;
   try { remote = await window.PuzzleFirebase.load(CLOUD_SAVE_KEY); } catch (error) { /* Local save remains available. */ }
-  const remoteState = remote ? normalizeLoadedState(remote.data) : null;
+  const remoteState = remote
+    ? normalizeLoadedState(remote.data, Number(remote.clientCreatedAt) || Number(remote.createdAt) || 0)
+    : null;
   const remoteSavedAt = Number(remote?.savedAt) || Number(remote?.clientSavedAt) || 0;
   const shouldUseRemote = Boolean(
     remoteState &&
@@ -446,13 +453,44 @@ function syncNewestLocalCheckpoint() {
   if (checkpoint) handleIncomingCheckpoint(checkpoint);
 }
 
+function openDialogWhenAvailable(dialog) {
+  if (!dialog) return;
+  const blocker = [...document.querySelectorAll("dialog[open]")].find((item) => item !== dialog);
+  if (blocker) {
+    blocker.addEventListener("close", () => openDialogWhenAvailable(dialog), { once: true });
+    return;
+  }
+  if (!dialog.open) dialog.showModal();
+}
+
 function showOfflineSummary(summary) {
   window.setTimeout(() => {
     $("#offline-time").textContent = `你離開了 ${formatTime(summary.elapsedMs / 1000)}，期間的生長與設備作業已完成。`;
     $("#offline-harvests").textContent = `${formatNumber(summary.harvested)} 格`;
     $("#offline-gold").textContent = `＋${formatMoney(summary.gold)}`;
-    if (!elements.offlineDialog.open) elements.offlineDialog.showModal();
+    openDialogWhenAvailable(elements.offlineDialog);
   }, 120);
+}
+
+function showMonthlyEventReward(reward) {
+  const plant = getPlant(reward?.plantId || "cherry_tree");
+  if (!plant || !elements.monthlyEventDialog) return;
+  elements.monthlyEventArt.innerHTML = assetMarkup(plant.image, plant.emoji, "event-art");
+  openDialogWhenAvailable(elements.monthlyEventDialog);
+}
+
+function maybeClaimMonthlyEvent() {
+  if (READ_ONLY) return false;
+  const reward = claimMonthlyCherryTreeReward(state, Date.now());
+  if (!reward) return false;
+  saveNow(true, { allowInactive: true });
+  renderHeader();
+  renderShop();
+  renderQuickbar();
+  focusPlot(reward.plotId);
+  playTone("purchase");
+  showMonthlyEventReward(reward);
+  return true;
 }
 
 function showToast(message) {
@@ -3241,7 +3279,9 @@ async function initializeGame() {
     }
   }, 500);
   window.setInterval(() => { if (isActiveTab()) saveNow(); }, 10000);
-  cloudSyncPromise = syncCloudState(cloudSyncGate);
+  cloudSyncPromise = syncCloudState(cloudSyncGate).then(() => {
+    maybeClaimMonthlyEvent();
+  });
   window.PuzzleFirebase?.registerSaveFlusher?.(() => cloudSyncPromise.then(() => {
     if (state && isActiveTab()) saveNow(true);
     return flushCloudSave();

@@ -6,7 +6,8 @@ const STATIC_DATA = globalThis.HarvestStaticData;
 if (!STATIC_CONFIG || !STATIC_DATA) throw new Error("Harvest Clicker static settings are not loaded");
 const {
   BOARD_SIZE, PLOT_GRID_SIZE, INITIAL_PLOT_ID, INITIAL_PLOT_IDS, SAVE_VERSION,
-  LAND_PRICE_BASE, LAND_PRICE_GROWTH, LAND_SIZE, LOWEST_GROWTH_MULTIPLIER
+  LAND_PRICE_BASE, LAND_PRICE_GROWTH, LAND_SIZE, LOWEST_GROWTH_MULTIPLIER,
+  MONTHLY_EVENT_ID, MONTHLY_EVENT_REWARD_PLANT_ID, MONTHLY_EVENT_DURATION_MS
 } = STATIC_CONFIG;
 const { PLANTS, TOOLS, HARVESTERS, SPRINKLERS, FERTILIZERS, DECORATIONS = [] } = STATIC_DATA;
 
@@ -171,6 +172,7 @@ function indexesForPlot(plotId) {
 function createInitialState(now = Date.now()) {
   return {
     schemaVersion: SAVE_VERSION,
+    accountStartedAt: now,
     lastSimulatedAt: now,
     gold: 0,
     lifetimeGold: 0,
@@ -194,6 +196,9 @@ function createInitialState(now = Date.now()) {
     harvesters: [],
     sprinklers: [],
     decorations: [],
+    events: {
+      [MONTHLY_EVENT_ID]: { claimedAt: 0, plotId: null, centerIndex: null, rewardPlantId: MONTHLY_EVENT_REWARD_PLANT_ID }
+    },
     settings: { sound: true, reducedMotion: false },
     tutorialStep: 0,
     stats: { manualClicks: 0, offlineGold: 0 }
@@ -587,6 +592,45 @@ function sowPlantAt(state, centerIndex, plantId) {
   return true;
 }
 
+function getTopmostOwnedPlotId(ownedPlots) {
+  return [...new Set(Array.isArray(ownedPlots) ? ownedPlots : [])]
+    .filter((plotId) => Number.isInteger(plotId) && plotId >= 0 && plotId < PLOTS.length)
+    .sort((a, b) => {
+      const aRow = Math.floor(a / PLOT_GRID_SIZE); const aCol = a % PLOT_GRID_SIZE;
+      const bRow = Math.floor(b / PLOT_GRID_SIZE); const bCol = b % PLOT_GRID_SIZE;
+      return aRow + aCol - bRow - bCol || aRow - bRow || aCol - bCol;
+    })[0] ?? null;
+}
+
+function claimMonthlyCherryTreeReward(state, now = Date.now()) {
+  if (!state || !Array.isArray(state.ownedPlots)) return false;
+  state.events ||= {};
+  const event = state.events[MONTHLY_EVENT_ID] ||= {
+    claimedAt: 0, plotId: null, centerIndex: null, rewardPlantId: MONTHLY_EVENT_REWARD_PLANT_ID
+  };
+  if (Number(event.claimedAt) > 0) return false;
+  const startedAt = Number(state.accountStartedAt);
+  if (!Number.isFinite(startedAt) || Number(now) - startedAt < MONTHLY_EVENT_DURATION_MS) return false;
+  const plotId = getTopmostOwnedPlotId(state.ownedPlots);
+  const plant = getPlant(MONTHLY_EVENT_REWARD_PLANT_ID);
+  if (plotId == null || !plant || !state.ownedPlots.includes(plotId)) return false;
+  const centerIndex = indexesForPlot(plotId)[4];
+  if (!sowPlantAt(state, centerIndex, plant.id)) return false;
+  const plantedIndexes = getPlantPlacementIndexes(centerIndex, plant.id);
+  for (const index of plantedIndexes) {
+    const cell = state.cells[index];
+    if (!cell) continue;
+    cell.phase = "mature";
+    cell.growthProgress = 1;
+    cell.currentHp = plant.hp;
+  }
+  event.claimedAt = Number(now);
+  event.plotId = plotId;
+  event.centerIndex = centerIndex;
+  event.rewardPlantId = plant.id;
+  return { eventId: MONTHLY_EVENT_ID, plantId: plant.id, plotId, centerIndex };
+}
+
 function fertilizePlot(state, plotId, fertilizerId) {
   const fertilizer = getFertilizer(fertilizerId);
   if (!state.ownedPlots.includes(plotId) || !fertilizer) return false;
@@ -754,7 +798,12 @@ function normalizeStateData(state) {
   migrateLegacyTreeFootprints(state);
   normalizeTreeFootprintSizes(state);
   if (!state || !Array.isArray(state.cells)) return state;
+  if (!Number.isFinite(Number(state.accountStartedAt))) state.accountStartedAt = Number(state.lastSimulatedAt) || Date.now();
   if (!Array.isArray(state.decorations)) state.decorations = [];
+  state.events ||= {};
+  if (!state.events[MONTHLY_EVENT_ID] || typeof state.events[MONTHLY_EVENT_ID] !== "object") {
+    state.events[MONTHLY_EVENT_ID] = { claimedAt: 0, plotId: null, centerIndex: null, rewardPlantId: MONTHLY_EVENT_REWARD_PLANT_ID };
+  }
   for (const cell of state.cells) {
     if (!cell) continue;
     if (cell.fertilizerId && getFertilizer(cell.fertilizerId)) {
@@ -811,7 +860,7 @@ globalThis.HarvestCore = Object.freeze({
   indexesForPlot, getLandPrice, getPlantFootprint, getPlantPlacementIndexes, createInitialState, isAutomationUnlocked,
   isToolUnlocked, isPlantUnlocked, isFertilizerUnlocked,
   getToolTargetIndexes, automationTargetIndexes, manualHarvest, growthDurationSeconds,
-  simulateTo, sowPlot, sowPlantAt, fertilizePlot, buyPlot, formatNumber,
+  simulateTo, sowPlot, sowPlantAt, getTopmostOwnedPlotId, claimMonthlyCherryTreeReward, fertilizePlot, buyPlot, formatNumber,
   formatTime, migrateLegacyCropIds, normalizeStateData, validateState
 });
 }(globalThis));
