@@ -405,10 +405,11 @@
     return publicData;
   }
 
-  function syncOwnedShare(user, gameKey, checkpoint) {
+  function syncOwnedShare(user, gameKey, checkpoint, options) {
     if (!user || user.isAnonymous || !checkpoint?.data) return Promise.resolve(false);
+    const force = options?.force === true;
     const sourceRevision = Math.max(0, Math.floor(Number(checkpoint.serverRevision) || 0));
-    if (!sourceRevision) return Promise.resolve(false);
+    if (!sourceRevision && !force) return Promise.resolve(false);
     const controlReference = shareControlDocument(user, gameKey);
     return getDocument(controlReference).then(function (controlSnapshot) {
       if (!controlSnapshot.exists()) return false;
@@ -419,12 +420,16 @@
         return transaction.get(publicReference).then(function (publicSnapshot) {
           const current = publicSnapshot.exists() ? publicSnapshot.data() : null;
           const currentRevision = Number(current?.data?.[SHARE_REVISION_FIELD]) || Number(current?.sourceRevision) || 0;
-          if (current && (current.gameId !== gameKey || currentRevision >= sourceRevision)) return false;
+          if (current && current.gameId !== gameKey) return false;
+          if (!force && current && currentRevision >= sourceRevision) return false;
+          const nextSourceRevision = force
+            ? Math.max(sourceRevision, currentRevision + 1, 1)
+            : sourceRevision;
           const now = serverTimestamp();
           const publicValue = {
             version: 1,
             gameId: gameKey,
-            data: createPublicShareData(checkpoint.data, sourceRevision),
+            data: createPublicShareData(checkpoint.data, nextSourceRevision),
             updatedAt: now
           };
           publicValue.createdAt = publicSnapshot.exists() ? current.createdAt : now;
@@ -436,12 +441,16 @@
       return getDocument(publicReference).then(function (publicSnapshot) {
         const current = publicSnapshot.exists() ? publicSnapshot.data() : null;
         const currentRevision = Number(current?.data?.[SHARE_REVISION_FIELD]) || Number(current?.sourceRevision) || 0;
-        if (current && (current.gameId !== gameKey || currentRevision >= sourceRevision)) return false;
+        if (current && current.gameId !== gameKey) return false;
+        if (!force && current && currentRevision >= sourceRevision) return false;
+        const nextSourceRevision = force
+          ? Math.max(sourceRevision, currentRevision + 1, 1)
+          : sourceRevision;
         const now = serverTimestamp();
         const publicValue = {
           version: 1,
           gameId: gameKey,
-          data: createPublicShareData(checkpoint.data, sourceRevision),
+          data: createPublicShareData(checkpoint.data, nextSourceRevision),
           updatedAt: now
         };
         publicValue.createdAt = publicSnapshot.exists() ? current.createdAt : now;
@@ -481,7 +490,11 @@
       requireShareOwner(user);
       if (!firestore || !makeWriteBatch || !makeCollection) throw new Error("Firebase 尚未準備完成，請稍候再試。");
       return readSaveForUser(user, gameKey).then(function (checkpoint) {
-        const publicData = checkpoint?.data || data;
+        // Re-publishing is an explicit request to share the current farm. A
+        // stale private checkpoint must not win over the state supplied by the
+        // page, otherwise a failed private save leaves the public URL stuck on
+        // the original starter farm forever.
+        const publicData = cloneData(data);
         if (new Blob([JSON.stringify(publicData)]).size > 900 * 1024) throw new Error("農場資料太大，暫時無法建立分享。");
         const controlReference = shareControlDocument(user, gameKey);
         return getDocument(controlReference).then(function (controlSnapshot) {
@@ -496,8 +509,12 @@
           }
           return getDocument(publicReference).then(function (publicSnapshot) {
             if (controlSnapshot.exists() && publicSnapshot.exists()) {
-              const sync = checkpoint ? syncOwnedShare(user, gameKey, checkpoint) : Promise.resolve(false);
-              return sync.then(function () {
+              const sync = syncOwnedShare(user, gameKey, {
+                data: publicData,
+                serverRevision: Math.max(1, Number(checkpoint?.serverRevision) || 0)
+              }, { force: true });
+              return sync.then(function (synced) {
+                if (!synced) throw new Error("公開分享農場沒有成功更新，請稍後再試。");
                 return { shareId: shareId, gameId: gameKey, updatedAt: Date.now() };
               });
             }
@@ -507,7 +524,7 @@
             const publicValue = {
               version: 1,
               gameId: gameKey,
-              data: createPublicShareData(publicData, checkpoint?.serverRevision),
+              data: createPublicShareData(publicData, Math.max(0, Number(checkpoint?.serverRevision) || 0)),
               updatedAt: now
             };
             if (!controlSnapshot.exists()) controlValue.createdAt = now;
