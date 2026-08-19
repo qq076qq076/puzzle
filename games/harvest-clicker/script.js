@@ -1500,11 +1500,50 @@ function drawDeviceBadge(device, x, y, accent) {
   ctx.restore();
 }
 
-function drawHarvesterOperation(device, plotId, x, y, now) {
+function automationRangeGeometry(device, plotId, centerIndex) {
+  const safeCenterIndex = Number.isInteger(centerIndex) && centerIndex >= 0 && centerIndex < BOARD_SIZE * BOARD_SIZE
+    ? centerIndex
+    : indexesForPlot(plotId)[4];
+  const targets = automationTargetIndexes(device?.range, plotId, state.ownedPlots, safeCenterIndex);
+  if (!targets.length) return null;
+  const points = targets.map((index) => worldPoint(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE));
+  const anchor = worldPoint(Math.floor(safeCenterIndex / BOARD_SIZE), safeCenterIndex % BOARD_SIZE);
+  const minX = Math.min(...points.map((point) => point.x));
+  const maxX = Math.max(...points.map((point) => point.x));
+  const minY = Math.min(...points.map((point) => point.y));
+  const maxY = Math.max(...points.map((point) => point.y));
+  return {
+    targets,
+    // The operation path is derived from the same cell set used by the
+    // simulator, so a 1×1/3×3/5×5 machine no longer gets a guessed ellipse.
+    radiusX: Math.max(TILE_W / 2, Math.max(Math.abs(anchor.x - minX), Math.abs(maxX - anchor.x)) + TILE_W / 2),
+    radiusY: Math.max(TILE_H / 2, Math.max(Math.abs(anchor.y - minY), Math.abs(maxY - anchor.y)) + TILE_H / 2)
+  };
+}
+
+function drawSelectedAutomationRange(kind, device, plotId, geometry, now) {
+  const selected = selection?.kind === kind && selection.id === device?.id && selection.sourcePlot === plotId;
+  if (!selected) return;
+  if (!geometry) return;
+  const pulse = state.settings.reducedMotion ? .16 : .11 + (Math.sin(now / 120) + 1) * .035;
+  ctx.save();
+  ctx.fillStyle = kind === "sprinkler" ? `rgba(126,218,238,${pulse})` : `rgba(255,211,89,${pulse})`;
+  ctx.strokeStyle = kind === "sprinkler" ? "rgba(183,244,255,.88)" : "rgba(255,235,141,.9)";
+  ctx.lineWidth = 2 / camera.scale;
+  for (const index of geometry.targets) {
+    const point = worldPoint(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE);
+    pathCellSurface(ctx, point.x, point.y);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawHarvesterOperation(device, plotId, x, y, geometry, now) {
   const phase = state.settings.reducedMotion ? .12 : (now / Math.max(3800, 9200 - device.tier * 520) + plotId * .137) % 1;
   const angle = phase * Math.PI * 2;
-  const radiusX = 67 + Math.min(9, device.range) * 2;
-  const radiusY = 29 + Math.min(9, device.range) * .9;
+  const radiusX = geometry?.radiusX || TILE_W / 2;
+  const radiusY = geometry?.radiusY || TILE_H / 2;
   const vehicleX = x + Math.cos(angle) * radiusX;
   const vehicleY = y + 7 + Math.sin(angle) * radiusY;
   const direction = Math.cos(angle) >= 0 ? 1 : -1;
@@ -1547,10 +1586,10 @@ function drawHarvesterOperation(device, plotId, x, y, now) {
   ctx.restore();
 }
 
-function drawSprinklerOperation(device, plotId, x, y, now) {
+function drawSprinklerOperation(device, plotId, x, y, geometry, now) {
   const phase = state.settings.reducedMotion ? 0 : now / 720 + plotId;
-  const reachX = 42 + device.range * 4;
-  const reachY = 15 + device.range * 1.6;
+  const reachX = geometry?.radiusX || TILE_W / 2;
+  const reachY = geometry?.radiusY || TILE_H / 2;
   ctx.save();
   ctx.strokeStyle = "rgba(148,226,241,.72)";
   ctx.fillStyle = "rgba(196,242,250,.84)";
@@ -1588,8 +1627,15 @@ function drawDevices(plotId, x, y, now) {
 
   const harvesterPoint = harvesterState ? deviceAnchorPoint(harvesterState, { x, y }) : null;
   const sprinklerPoint = sprinklerState ? deviceAnchorPoint(sprinklerState, { x, y }) : null;
-  if (harvester) drawHarvesterOperation(harvester, plotId, harvesterPoint.x, harvesterPoint.y, now);
-  if (sprinkler) drawSprinklerOperation(sprinkler, plotId, sprinklerPoint.x, sprinklerPoint.y, now);
+  const defaultCenterIndex = indexesForPlot(plotId)[4];
+  const harvesterCenterIndex = Number.isInteger(harvesterState?.centerIndex) ? harvesterState.centerIndex : defaultCenterIndex;
+  const sprinklerCenterIndex = Number.isInteger(sprinklerState?.centerIndex) ? sprinklerState.centerIndex : defaultCenterIndex;
+  const harvesterGeometry = harvester ? automationRangeGeometry(harvester, plotId, harvesterCenterIndex) : null;
+  const sprinklerGeometry = sprinkler ? automationRangeGeometry(sprinkler, plotId, sprinklerCenterIndex) : null;
+  if (harvester) drawSelectedAutomationRange("harvester", harvester, plotId, harvesterGeometry, now);
+  if (sprinkler) drawSelectedAutomationRange("sprinkler", sprinkler, plotId, sprinklerGeometry, now);
+  if (harvester) drawHarvesterOperation(harvester, plotId, harvesterPoint.x, harvesterPoint.y, harvesterGeometry, now);
+  if (sprinkler) drawSprinklerOperation(sprinkler, plotId, sprinklerPoint.x, sprinklerPoint.y, sprinklerGeometry, now);
   const sameAnchor = harvesterPoint && sprinklerPoint && harvesterPoint.x === sprinklerPoint.x && harvesterPoint.y === sprinklerPoint.y;
   if (harvester) drawDeviceBadge(harvester, harvesterPoint.x + (sameAnchor ? -25 : 0), harvesterPoint.y - 38, "rgba(226,174,67,.82)");
   if (sprinkler) drawDeviceBadge(sprinkler, sprinklerPoint.x + (sameAnchor ? 25 : 0), sprinklerPoint.y - 38, "rgba(105,197,218,.82)");
@@ -3032,7 +3078,7 @@ elements.quickbar.addEventListener("click", (event) => {
   selection = sameSelection ? null : nextSelection;
   closeLandPopover();
   renderAll();
-  if (nextSelection.sourcePlot != null && focusPlot(nextSelection.sourcePlot)) {
+  if (!sameSelection && nextSelection.sourcePlot != null && focusPlot(nextSelection.sourcePlot)) {
     const device = nextSelection.kind === "harvester" ? getHarvester(nextSelection.id) : getSprinkler(nextSelection.id);
     const plot = PLOTS.find((candidate) => candidate.id === nextSelection.sourcePlot);
     showToast(`${device?.name || "設備"}位於${plot?.name || "這塊土地"}`);
