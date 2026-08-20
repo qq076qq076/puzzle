@@ -665,14 +665,6 @@
     throw new Error("不支援的社群登入方式。");
   }
 
-  function isCredentialConflict(error) {
-    return error && [
-      "auth/credential-already-in-use",
-      "auth/provider-already-linked",
-      "auth/account-exists-with-different-credential"
-    ].includes(error.code);
-  }
-
   function signInSocialAccount(providerName) {
     return ready.then(function () {
       if (!authApi || !authSdk || !currentUser) throw new Error("Firebase 尚未準備完成，請稍候再試。");
@@ -681,16 +673,9 @@
       return flushPendingSaves().then(function () {
         return previousUser.isAnonymous ? readAllSavesForUser(previousUser) : [];
       }).then(function (saves) {
-        if (!previousUser.isAnonymous) {
-          return authSdk.signInWithPopup(authApi, provider).then(function (result) { return result.user; });
-        }
-        return authSdk.linkWithPopup(previousUser, provider).then(function (result) {
-          return result.user;
-        }).catch(function (error) {
-          if (!isCredentialConflict(error)) throw error;
-          return authSdk.signInWithPopup(authApi, provider).then(function (result) {
-            return mergeSavesIntoUser(saves, result.user).then(function () { return result.user; });
-          });
+        return authSdk.signInWithPopup(authApi, provider).then(function (result) {
+          if (!previousUser.isAnonymous) return result.user;
+          return mergeSavesIntoUser(saves, result.user).then(function () { return result.user; });
         });
       }).then(function (user) {
         currentUser = user;
@@ -774,6 +759,7 @@
     const positionStorageKey = "puzzle-account-position.v1";
     let dragState = null;
     let suppressNextClick = false;
+    let authActionInFlight = false;
 
     function clampPosition(left, top) {
       const rect = trigger.getBoundingClientRect();
@@ -898,6 +884,8 @@
 
     root.querySelectorAll("[data-provider]").forEach(function (button) {
       button.addEventListener("click", function () {
+        if (authActionInFlight) return;
+        authActionInFlight = true;
         errorElement.textContent = "";
         root.classList.add("puzzle-account__busy");
         signInSocialAccount(button.dataset.provider).then(function () {
@@ -906,6 +894,7 @@
         }).catch(function (error) {
           errorElement.textContent = formatAuthError(error);
         }).finally(function () {
+          authActionInFlight = false;
           root.classList.remove("puzzle-account__busy");
         });
       });
@@ -913,6 +902,8 @@
 
     form.addEventListener("submit", function (event) {
       event.preventDefault();
+      if (authActionInFlight) return;
+      authActionInFlight = true;
       errorElement.textContent = "";
       const mode = event.submitter && event.submitter.dataset.mode === "register" ? "register" : "login";
       const email = emailInput.value.trim();
@@ -925,6 +916,7 @@
       }).catch(function (error) {
         errorElement.textContent = formatAuthError(error);
       }).finally(function () {
+        authActionInFlight = false;
         root.classList.remove("puzzle-account__busy");
       });
     });
