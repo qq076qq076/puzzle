@@ -102,6 +102,7 @@ const TAB_ID = globalThis.crypto?.randomUUID?.() || `dice-${Date.now()}-${Math.r
   let pointerStart = null;
   let canvasDragState = null;
   let trayDragState = null;
+  let dragHoverCell = null;
   let uiDirty = true;
   let profile = loadProfile();
   let localCloudCreatedAt = readLocalCloudCreatedAt();
@@ -1952,12 +1953,14 @@ const TAB_ID = globalThis.crypto?.randomUUID?.() || `dice-${Date.now()}-${Math.r
     const verticalOffset = event.pointerType === "touch" ? -52 : -18;
     elements.dragPreview.style.left = event.clientX + "px";
     elements.dragPreview.style.top = event.clientY + verticalOffset + "px";
+    dragHoverCell = getCellFromPointer(event);
   }
 
   function hideDragPreview() {
     elements.dragPreview.hidden = true;
     elements.dragPreview.innerHTML = "";
     document.body.classList.remove("is-dragging");
+    dragHoverCell = null;
   }
 
   function hasPointerMoved(startX, startY, event) {
@@ -2235,6 +2238,7 @@ const TAB_ID = globalThis.crypto?.randomUUID?.() || `dice-${Date.now()}-${Math.r
     drawGate();
     drawSelectedRange();
     state.towers.forEach(drawTower);
+    drawDragDropPreview();
     state.enemies.forEach(function (enemy) {
       if (!enemy.dead && enemy.movementDelayRemaining <= 0) drawEnemy(enemy);
     });
@@ -2322,6 +2326,37 @@ const TAB_ID = globalThis.crypto?.randomUUID?.() || `dice-${Date.now()}-${Math.r
     ctx.strokeStyle = "rgba(255, 212, 119, 0.58)";
     ctx.lineWidth = 1.5;
     ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawDragDropPreview() {
+    const drag = trayDragState && trayDragState.moved
+      ? trayDragState
+      : canvasDragState && canvasDragState.moved
+        ? canvasDragState
+        : null;
+    if (!drag || !dragHoverCell || !isLegalDragTarget(dragHoverCell.x, dragHoverCell.y)) return;
+    const type = TOWER_TYPES[drag.type];
+    if (!type) return;
+    const center = gridCenter(dragHoverCell.x, dragHoverCell.y);
+    const towerSize = window.innerWidth <= MOBILE_TOWER_BREAKPOINT
+      ? MOBILE_TOWER_VISUAL_SIZE
+      : TOWER_VISUAL_SIZE;
+    const size = canvasMetrics.cell * towerSize;
+    ctx.save();
+    ctx.globalAlpha = 0.38;
+    ctx.translate(center.x, center.y);
+    ctx.shadowColor = type.color;
+    ctx.shadowBlur = canvasMetrics.cell * 0.2;
+    roundedRect(ctx, -size / 2, -size / 2, size, size, canvasMetrics.cell * 0.12);
+    ctx.fillStyle = type.color;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.setLineDash([canvasMetrics.cell * 0.06, canvasMetrics.cell * 0.05]);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+    ctx.lineWidth = Math.max(2, canvasMetrics.cell * 0.035);
+    ctx.stroke();
+    drawDieIconFace(type, drag.tier, size);
     ctx.restore();
   }
 
