@@ -7,7 +7,7 @@ const {
   getHarvester, getSprinkler, getFertilizer, getDecoration, getProductPrice, getLandPrice, plotIdForIndex, indexesForPlot,
   automationTargetIndexes, getPlantFootprint, getPlantPlacementIndexes,
   isToolUnlocked, isPlantUnlocked, isFertilizerUnlocked, isAutomationUnlocked, claimMonthlyCherryTreeReward,
-  growthDurationSeconds, normalizeStateData
+  growthDurationSeconds, getFertilizerEffect, normalizeStateData
 } = globalThis.HarvestCore;
 
 const STORAGE_KEY = "puzzle-club-save:harvest-clicker:v4";
@@ -2068,7 +2068,7 @@ function fertilizerWorkBounds(plotId, fallbackX, fallbackY) {
 function drawFertilizerOperation(plotId, x, y, now) {
   const fertilizedEntries = indexesForPlot(plotId)
     .map((index) => ({ index, cell: state.cells[index] }))
-    .filter(({ cell }) => cell?.fertilizerId);
+    .filter(({ cell }) => getFertilizerEffect(cell).count > 0);
   if (!fertilizedEntries.length) return;
   const rootIndexes = [...new Set(fertilizedEntries.map(({ index, cell }) => Number.isInteger(cell.plantRootIndex) ? cell.plantRootIndex : index))];
   const treeRootIndex = rootIndexes.find((rootIndex) => getPlant(state.cells[rootIndex]?.plantId)?.type === "tree");
@@ -2081,9 +2081,10 @@ function drawFertilizerOperation(plotId, x, y, now) {
     x = anchorPoint.x;
     y = anchorPoint.y;
   }
-  const fertilizer = getFertilizer(state.cells[treeRootIndex ?? fertilizedEntries[0].index].fertilizerId);
+  const fertilizerEffect = getFertilizerEffect(state.cells[treeRootIndex ?? fertilizedEntries[0].index]);
+  const fertilizer = getFertilizer(fertilizerEffect.stacks[0]?.id);
   if (!fertilizer) return;
-  const rounds = Math.max(...fertilizedEntries.map(({ cell }) => cell.fertilizerRounds));
+  const rounds = Math.max(...fertilizedEntries.map(({ cell }) => getFertilizerEffect(cell).rounds));
   const bounds = fertilizerWorkBounds(plotId, x, y);
   const cycle = state.settings.reducedMotion ? .5 : (now / 6200 + plotId * .071) % 1;
   const laneProgress = cycle * 3;
@@ -2141,7 +2142,7 @@ function drawFertilizerOperation(plotId, x, y, now) {
   ctx.lineWidth = 1 / camera.scale;
   ctx.beginPath(); ctx.roundRect(machineX - 18, machineY - 32, 36, 15, 7); ctx.fill(); ctx.stroke();
   ctx.fillStyle = "#624728";
-  ctx.fillText(`${fertilizer.emoji} ×${rounds}`, machineX, machineY - 24.5);
+  ctx.fillText(`${fertilizer.emoji}${fertilizerEffect.count > 1 ? ` ×${fertilizerEffect.count}` : ""} · ${rounds}`, machineX, machineY - 24.5);
   ctx.restore();
 }
 
@@ -2491,9 +2492,10 @@ function drawFarm(now = performance.now()) {
       const plant = getPlant(cell.plantId);
       if (cell.currentHp < plant.hp) drawBar(point.x, statusBarY, cell.currentHp / plant.hp, "#ffce60");
     }
-    if (cell.fertilizerId) {
+    const fertilizerEffect = getFertilizerEffect(cell);
+    if (fertilizerEffect.count) {
       ctx.font = "13px sans-serif";
-      ctx.fillText(`✦${cell.fertilizerRounds}`, point.x - 31, point.y - 15);
+      ctx.fillText(`✦${fertilizerEffect.count} · ${fertilizerEffect.rounds}`, point.x - 31, point.y - 15);
     }
   }
 
@@ -2627,7 +2629,7 @@ function selectionActionPreview(plotId) {
       const footprint = getPlantFootprint(plant);
       const targetIndexes = getPlantPlacementIndexes(centerIndex, plant.id);
       const owned = targetIndexes.length === footprint ** 2 && targetIndexes.every((index) => state.ownedPlots.includes(plotIdForIndex(index)));
-      const replacing = targetIndexes.some((index) => state.cells[index]?.plantId !== "weed" || state.cells[index]?.fertilizerId);
+      const replacing = targetIndexes.some((index) => state.cells[index]?.plantId !== "weed" || getFertilizerEffect(state.cells[index]).count);
       return {
         icon: plant.emoji,
         image: plant.image,
@@ -2639,7 +2641,7 @@ function selectionActionPreview(plotId) {
         disabled: !owned
       };
     }
-    const replacing = indexes.some((index) => state.cells[index].plantId !== "weed" || state.cells[index].fertilizerId);
+    const replacing = indexes.some((index) => state.cells[index].plantId !== "weed" || getFertilizerEffect(state.cells[index]).count);
     return {
       icon: plant.emoji,
       image: plant.image,
@@ -2653,11 +2655,11 @@ function selectionActionPreview(plotId) {
   if (selection.kind === "fertilizer") {
     const fertilizer = getFertilizer(selection.id);
     if (!fertilizer || !isValidSelectionPlot(plotId)) return null;
-    const replacing = indexes.some((index) => state.cells[index].fertilizerId);
+    const stackCount = Math.max(...indexes.map((index) => getFertilizerEffect(state.cells[index]).count));
     return {
       icon: fertilizer.emoji,
       title: `在${plot.name}施用${fertilizer.name}？`,
-      text: `立即作用於選取區塊內的作物；若包含樹木則套用整棵樹：生長 ×${fertilizer.growthMultiplier}、金幣 ×${fertilizer.coinMultiplier}，持續 ${fertilizer.rounds} 輪。${replacing ? "現有肥料與剩餘輪數會被覆蓋。" : ""}`,
+      text: `立即追加到選取區塊內的作物；若包含樹木則套用整棵樹：本次生長 ×${fertilizer.growthMultiplier}、金幣 ×${fertilizer.coinMultiplier}，持續 ${fertilizer.rounds} 輪。${stackCount ? `目前已有 ${stackCount} 層，追加後效果會疊加但邊際遞減。` : ""}`,
       button: "確認施肥",
       disabled: false
     };
@@ -2849,7 +2851,7 @@ function shopProductDescription(kind, item) {
   }
   if (kind === "harvester") return `用途：配置到已購土地內任一中心格後，自動攻擊範圍內的成熟${item.targetType === "tree" ? "樹木，不會處理一般作物" : "作物"}，離線也會工作。範圍 ${item.range}×${item.range}（最多 ${item.range ** 2} 格），每 ${item.intervalSeconds} 秒造成 ${item.damage} 傷害。`;
   if (kind === "sprinkler") return `用途：配置到已購土地內任一中心格後，持續加速範圍內作物，離線生長同樣有效。範圍 ${item.range}×${item.range}（最多 ${item.range ** 2} 格），生長時間 ×${item.growthMultiplier}。`;
-  return `用途：${item.purpose} 選取後施用於一塊 3×3 作物；若區塊內有樹木則套用整棵樹，當下立即生效。生長 ×${item.growthMultiplier}、金幣 ×${item.coinMultiplier}，持續 ${item.rounds} 輪。`;
+  return `用途：${item.purpose} 選取後追加施用於一塊 3×3 作物；若區塊內有樹木則套用整棵樹，當下立即生效。生長 ×${item.growthMultiplier}、金幣 ×${item.coinMultiplier}，持續 ${item.rounds} 輪。同一格可疊加多份肥料，後續效果會邊際遞減。`;
 }
 
 function shopDecorationDescription(item) {
@@ -3221,7 +3223,8 @@ function useSelection(plotId) {
     if (!consumeInventory("fertilizer", fertilizerId)) return;
     fertilizePlot(state, plotId, fertilizerId);
     triggerDeviceAnimation("fertilizer", plotId);
-    showToast(`${getFertilizer(fertilizerId).name}已施用，施肥機開始運作 ${getFertilizer(fertilizerId).rounds} 輪`);
+    const stackCount = Math.max(...indexesForPlot(plotId).map((index) => getFertilizerEffect(state.cells[index]).count));
+    showToast(`${getFertilizer(fertilizerId).name}已追加，施肥機目前 ${stackCount} 層；效果會邊際遞減`);
     selection = null;
     feedbackSound = "fertilizer";
   } else if (selection.kind === "harvester" || selection.kind === "sprinkler") {

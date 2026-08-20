@@ -142,6 +142,7 @@ const harvesterById = new Map(HARVESTERS.map((item) => [item.id, item]));
 const sprinklerById = new Map(SPRINKLERS.map((item) => [item.id, item]));
 const fertilizerById = new Map(FERTILIZERS.map((item) => [item.id, item]));
 const decorationById = new Map(DECORATIONS.map((item) => [item.id, item]));
+const FERTILIZER_STACK_DECAY = 0.62;
 
 function getPlant(id) { return plantById.get(id); }
 function getTool(id) { return toolById.get(id); }
@@ -150,6 +151,58 @@ function getSprinkler(id) { return sprinklerById.get(id); }
 function getFertilizer(id) { return fertilizerById.get(id); }
 function getDecoration(id) { return decorationById.get(id); }
 function getProductPrice(kind, item) { return kind === "seed" ? item?.seedCost : item?.cost; }
+
+function fertilizerStacksForCell(cell) {
+  if (!cell) return [];
+  const source = Array.isArray(cell.fertilizerStacks) && cell.fertilizerStacks.length
+    ? cell.fertilizerStacks
+    : cell.fertilizerId && getFertilizer(cell.fertilizerId)
+      ? [{ id: cell.fertilizerId, rounds: Number.isInteger(cell.fertilizerRounds) ? cell.fertilizerRounds : 1 }]
+      : [];
+  return source
+    .map((stack) => ({ id: stack?.id, rounds: Math.floor(Number(stack?.rounds) || 0) }))
+    .filter((stack) => getFertilizer(stack.id) && stack.rounds > 0);
+}
+
+function syncLegacyFertilizerFields(cell, stacks = fertilizerStacksForCell(cell)) {
+  if (!cell) return [];
+  cell.fertilizerStacks = stacks.map((stack) => ({ id: stack.id, rounds: stack.rounds }));
+  const primary = cell.fertilizerStacks[0];
+  cell.fertilizerId = primary?.id || null;
+  cell.fertilizerRounds = primary?.rounds || 0;
+  return cell.fertilizerStacks;
+}
+
+function getFertilizerEffect(cell) {
+  const stacks = fertilizerStacksForCell(cell)
+    .sort((left, right) => {
+      const leftItem = getFertilizer(left.id);
+      const rightItem = getFertilizer(right.id);
+      return (1 - (rightItem?.growthMultiplier || 1)) - (1 - (leftItem?.growthMultiplier || 1));
+    });
+  let growthMultiplier = 1;
+  let coinMultiplier = 1;
+  stacks.forEach((stack, index) => {
+    const fertilizer = getFertilizer(stack.id);
+    const weight = FERTILIZER_STACK_DECAY ** index;
+    growthMultiplier -= (1 - fertilizer.growthMultiplier) * weight;
+    coinMultiplier += (fertilizer.coinMultiplier - 1) * weight;
+  });
+  return {
+    stacks,
+    growthMultiplier: Math.max(LOWEST_GROWTH_MULTIPLIER, growthMultiplier),
+    coinMultiplier: Math.max(1, coinMultiplier),
+    count: stacks.length,
+    rounds: stacks.reduce((total, stack) => Math.max(total, stack.rounds), 0)
+  };
+}
+
+function consumeFertilizerRound(cell) {
+  const stacks = fertilizerStacksForCell(cell)
+    .map((stack) => ({ ...stack, rounds: stack.rounds - 1 }))
+    .filter((stack) => stack.rounds > 0);
+  return syncLegacyFertilizerFields(cell, stacks);
+}
 
 function plotIdForIndex(index) {
   const row = Math.floor(index / BOARD_SIZE);
@@ -190,7 +243,8 @@ function createInitialState(now = Date.now()) {
         currentHp: owned ? 1 : 0,
         nextGrowthMultiplier: 1,
         fertilizerId: null,
-        fertilizerRounds: 0
+        fertilizerRounds: 0,
+        fertilizerStacks: []
       };
     }),
     harvesters: [],
@@ -351,9 +405,8 @@ function getDeviceStateForIndex(state, list, getter, index, cell = null) {
 
 function awardHarvest(state, cell, regrowthMultiplier, rootIndex) {
   const plant = getPlant(cell.plantId) || PLANTS[0];
-  const remainingRounds = Number.isInteger(cell.fertilizerRounds) ? cell.fertilizerRounds : (cell.fertilizerId ? 1 : 0);
-  const fertilizer = remainingRounds > 0 && cell.fertilizerId ? getFertilizer(cell.fertilizerId) : null;
-  const coins = Math.floor(plant.coins * (fertilizer?.coinMultiplier || 1));
+  const fertilizerEffect = getFertilizerEffect(cell);
+  const coins = Math.floor(plant.coins * fertilizerEffect.coinMultiplier);
   state.gold += coins;
   state.lifetimeGold += coins;
   state.harvestedCells += 1;
@@ -366,11 +419,7 @@ function awardHarvest(state, cell, regrowthMultiplier, rootIndex) {
     occupiedCell.growthProgress = 0;
     occupiedCell.currentHp = 0;
     occupiedCell.nextGrowthMultiplier = regrowthMultiplier;
-    if (fertilizer && remainingRounds > 1) occupiedCell.fertilizerRounds = remainingRounds - 1;
-    else {
-      occupiedCell.fertilizerId = null;
-      occupiedCell.fertilizerRounds = 0;
-    }
+    consumeFertilizerRound(occupiedCell);
   }
   return coins;
 }
@@ -407,7 +456,7 @@ function getSprinklerForIndex(state, index, cell = null) {
 function growthDurationSeconds(state, cell, plotId, index = indexesForPlot(plotId)[4]) {
   const plant = getPlant(cell.plantId) || PLANTS[0];
   const sprinkler = getSprinklerForIndex(state, index, cell);
-  const fertilizer = cell.fertilizerId && cell.plantId !== "weed" ? getFertilizer(cell.fertilizerId) : null;
+  const fertilizer = cell.plantId !== "weed" ? getFertilizerEffect(cell) : null;
   const multiplier = (cell.nextGrowthMultiplier || 1) * (sprinkler?.growthMultiplier || 1) * (fertilizer?.growthMultiplier || 1);
   return plant.growSeconds * Math.max(LOWEST_GROWTH_MULTIPLIER, multiplier);
 }
@@ -462,7 +511,7 @@ function simulateAutoCell(state, cell, plotId, index, machineState, from, to, su
   summary.harvested += 1;
 
   let lastHarvestAt = firstHarvestAt;
-  while (cell.fertilizerId) {
+  while (fertilizerStacksForCell(cell).length) {
     const fertilizedDuration = growthDurationSeconds(state, cell, plotId, index) * 1000;
     const fertilizedHits = Math.max(1, Math.ceil(plant.hp / machine.damage));
     const fertilizedFirstHitOffset = Math.ceil(fertilizedDuration / interval) * interval;
@@ -475,7 +524,7 @@ function simulateAutoCell(state, cell, plotId, index, machineState, from, to, su
     lastHarvestAt = nextHarvestAt;
   }
 
-  if (!cell.fertilizerId) {
+  if (!fertilizerStacksForCell(cell).length) {
     const stableDuration = growthDurationSeconds(state, cell, plotId, index) * 1000;
     const stableHits = Math.max(1, Math.ceil(plant.hp / machine.damage));
     const stableFirstHitOffset = Math.ceil(stableDuration / interval) * interval;
@@ -552,6 +601,7 @@ function makeGrowingCell(plantId, metadata = {}) {
     nextGrowthMultiplier: 1,
     fertilizerId: null,
     fertilizerRounds: 0,
+    fertilizerStacks: [],
     ...metadata
   };
 }
@@ -561,7 +611,7 @@ function clearPlantFootprint(state, rootIndex) {
   for (const index of indexes) {
     state.cells[index] = {
       plantId: "weed", phase: "mature", growthProgress: 1,
-      currentHp: 1, nextGrowthMultiplier: 1, fertilizerId: null, fertilizerRounds: 0
+      currentHp: 1, nextGrowthMultiplier: 1, fertilizerId: null, fertilizerRounds: 0, fertilizerStacks: []
     };
   }
 }
@@ -624,8 +674,10 @@ function fertilizePlot(state, plotId, fertilizerId) {
   for (const rootIndex of roots) {
     const occupiedIndexes = occupiedIndexesForRoot(state, rootIndex);
     for (const index of occupiedIndexes.length ? occupiedIndexes : [rootIndex]) {
-      state.cells[index].fertilizerId = fertilizerId;
-      state.cells[index].fertilizerRounds = fertilizer.rounds;
+      const cell = state.cells[index];
+      const stacks = fertilizerStacksForCell(cell);
+      stacks.push({ id: fertilizerId, rounds: fertilizer.rounds });
+      syncLegacyFertilizerFields(cell, stacks);
     }
   }
   return true;
@@ -640,7 +692,7 @@ function buyPlot(state, plotId) {
   for (const index of indexesForPlot(plotId)) {
     state.cells[index] = {
       plantId: "weed", phase: "growing", growthProgress: 0,
-      currentHp: 0, nextGrowthMultiplier: 1, fertilizerId: null, fertilizerRounds: 0
+      currentHp: 0, nextGrowthMultiplier: 1, fertilizerId: null, fertilizerRounds: 0, fertilizerStacks: []
     };
   }
   return true;
@@ -691,7 +743,8 @@ function normalizeTreeFootprintSizes(state) {
       currentHp: owned ? 1 : 0,
       nextGrowthMultiplier: 1,
       fertilizerId: null,
-      fertilizerRounds: 0
+      fertilizerRounds: 0,
+      fertilizerStacks: []
     };
   };
   for (let index = 0; index < state.cells.length; index += 1) {
@@ -788,12 +841,7 @@ function normalizeStateData(state) {
   }
   for (const cell of state.cells) {
     if (!cell) continue;
-    if (cell.fertilizerId && getFertilizer(cell.fertilizerId)) {
-      if (!Number.isInteger(cell.fertilizerRounds) || cell.fertilizerRounds < 1) cell.fertilizerRounds = 1;
-    } else {
-      cell.fertilizerId = null;
-      cell.fertilizerRounds = 0;
-    }
+    syncLegacyFertilizerFields(cell, fertilizerStacksForCell(cell));
   }
   return state;
 }
@@ -842,6 +890,7 @@ globalThis.HarvestCore = Object.freeze({
   indexesForPlot, getLandPrice, getPlantFootprint, getPlantPlacementIndexes, createInitialState, isAutomationUnlocked,
   isToolUnlocked, isPlantUnlocked, isFertilizerUnlocked,
   getToolTargetIndexes, automationTargetIndexes, manualHarvest, growthDurationSeconds,
+  getFertilizerEffect,
   simulateTo, sowPlot, sowPlantAt, claimMonthlyCherryTreeReward, fertilizePlot, buyPlot, formatNumber,
   formatTime, migrateLegacyCropIds, normalizeStateData, validateState
 });

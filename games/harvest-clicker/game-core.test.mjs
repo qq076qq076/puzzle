@@ -13,7 +13,7 @@ const {
   getToolTargetIndexes, automationTargetIndexes, indexesForPlot, buyPlot, validateState,
   INITIAL_PLOT_ID, INITIAL_PLOT_IDS, BOARD_SIZE, PLOTS,
   PLANTS, TOOLS, HARVESTERS, SPRINKLERS, FERTILIZERS, DECORATIONS, getDecoration, getProductPrice,
-  getLandPrice, getPlantFootprint, getPlantPlacementIndexes, normalizeStateData, isFertilizerUnlocked,
+  getLandPrice, getPlantFootprint, getPlantPlacementIndexes, getFertilizerEffect, normalizeStateData, isFertilizerUnlocked,
   claimMonthlyCherryTreeReward
 } = globalThis.HarvestCore;
 
@@ -354,6 +354,28 @@ test("肥料立即加速當下作物並持續指定收割輪數", () => {
   assert.equal(summary.gold, 171);
   assert.ok(indexesForPlot(INITIAL_PLOT_ID).every((index) => state.cells[index].fertilizerId === null));
   assert.ok(indexesForPlot(INITIAL_PLOT_ID).every((index) => state.cells[index].fertilizerRounds === 0));
+});
+
+test("同一格肥料可以疊加且後續效果邊際遞減", () => {
+  const state = createInitialState(0);
+  sowPlot(state, INITIAL_PLOT_ID, "clover");
+  const index = indexesForPlot(INITIAL_PLOT_ID)[0];
+  fertilizePlot(state, INITIAL_PLOT_ID, "quick");
+  const first = getFertilizerEffect(state.cells[index]);
+  fertilizePlot(state, INITIAL_PLOT_ID, "leaf");
+  const stacked = getFertilizerEffect(state.cells[index]);
+  assert.equal(stacked.count, 2);
+  assert.equal(state.cells[index].fertilizerStacks.length, 2);
+  assert.ok(stacked.growthMultiplier < first.growthMultiplier);
+  assert.ok(stacked.growthMultiplier > 0.2);
+  assert.ok(stacked.coinMultiplier > first.coinMultiplier);
+
+  state.cells[index].phase = "mature";
+  state.cells[index].currentHp = 2;
+  manualHarvest(state, index);
+  manualHarvest(state, index);
+  assert.ok(state.cells[index].fertilizerStacks.every((stack) => stack.rounds > 0));
+  assert.equal(state.cells[index].fertilizerRounds, state.cells[index].fertilizerStacks[0].rounds);
 });
 
 test("土地可任選位置，價格只依已擁有數量增加", () => {
