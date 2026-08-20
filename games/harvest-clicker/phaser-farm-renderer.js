@@ -127,6 +127,7 @@
     destroyPlantObjects() {
       for (const object of this.plantObjects.values()) {
         object.sprite?.destroy();
+        object.graphic?.destroy();
         object.label?.destroy();
       }
       this.plantObjects.clear();
@@ -152,7 +153,8 @@
       const sprite = this.textures.exists(textureKey)
         ? this.add.image(0, 0, textureKey)
         : null;
-      const label = sprite ? null : this.add.text(0, 0, plant.emoji || "🌱", {
+      const graphic = sprite || plant.id !== "weed" ? null : this.add.graphics();
+      const label = sprite || graphic ? null : this.add.text(0, 0, plant.emoji || "🌱", {
         fontFamily: "Apple Color Emoji, Segoe UI Emoji, sans-serif",
         fontSize: "34px",
         color: "#fffaf0",
@@ -160,7 +162,7 @@
         strokeThickness: 4
       }).setOrigin(.5, 1);
       sprite?.setOrigin(.5, 1);
-      object = { sprite, label, key };
+      object = { sprite, graphic, label, key };
       this.plantObjects.set(key, object);
       return object;
     }
@@ -169,6 +171,7 @@
       for (const [key, object] of this.plantObjects) {
         if (usedKeys.has(key)) continue;
         object.sprite?.setVisible(false);
+        object.graphic?.setVisible(false);
         object.label?.setVisible(false);
       }
     }
@@ -277,6 +280,7 @@
       if (!this.isWorldVisible(point.x, point.y, TILE_W * 5)) {
         const offscreen = this.plantObjects.get(objectKey);
         offscreen?.sprite?.setVisible(false);
+        offscreen?.graphic?.setVisible(false);
         offscreen?.label?.setVisible(false);
         usedKeys.add(objectKey);
         return;
@@ -306,6 +310,22 @@
         object.sprite.setDisplaySize(width, height);
         object.sprite.setAlpha(cell.phase === "mature" ? 1 : .82);
         object.sprite.setDepth(point.y + contactY);
+      } else if (object.graphic) {
+        object.graphic.clear();
+        object.graphic.setVisible(true).setPosition(point.x, point.y + contactY);
+        object.graphic.setDepth(point.y + contactY);
+        const leafScale = Math.max(.35, growthScale);
+        object.graphic.fillStyle(0x6f9c4d, cell.phase === "mature" ? 1 : .82);
+        object.graphic.fillEllipse(-7 * leafScale, -17 * leafScale, 15 * leafScale, 7 * leafScale);
+        object.graphic.fillEllipse(7 * leafScale, -22 * leafScale, 15 * leafScale, 7 * leafScale);
+        object.graphic.fillEllipse(-2 * leafScale, -29 * leafScale, 14 * leafScale, 7 * leafScale);
+        object.graphic.lineStyle(2, 0x4d7138, .9);
+        object.graphic.beginPath();
+        object.graphic.moveTo(0, 0);
+        object.graphic.lineTo(0, -31 * leafScale);
+        object.graphic.strokePath();
+        object.graphic.fillStyle(0xf1e5a0, cell.phase === "mature" ? .95 : .55);
+        object.graphic.fillCircle(0, -34 * leafScale, 3.2 * leafScale);
       } else {
         object.label.setVisible(true);
         object.label.setPosition(point.x, point.y + contactY);
@@ -740,8 +760,10 @@
       const target = document.querySelector("#farm-canvas");
       if (!source || !target || typeof globalThis.PointerEvent !== "function") return;
       source.tabIndex = 0;
+      source.style.touchAction = "none";
       source.setAttribute("aria-label", target.getAttribute("aria-label") || "農田");
       const forwardPointer = (type, event) => {
+        if (type === "pointerdown" || type === "pointermove" || type === "pointerup") event.preventDefault();
         if (type === "pointerdown") {
           source.focus({ preventScroll: true });
           try { source.setPointerCapture(event.pointerId); } catch (error) { /* Browser may not expose capture for synthetic input. */ }
