@@ -1176,14 +1176,24 @@ function decorationSlotPlotId(slot) {
   return plotIdForIndex(decorationSlotAdjacentIndexes(slot)[0] ?? -1);
 }
 
-function isDecorationSlotAvailable(slot, decorationId = selection?.id) {
+function decorationPlacementStatus(slot, decorationId = selection?.id) {
   const item = getDecoration(decorationId);
-  if (!slot || !item || item.slotType !== slot.slotType) return false;
+  if (!slot || !item) return { valid: false, reason: "請靠近種植格之間的格縫" };
+  if (item.slotType !== slot.slotType) {
+    return { valid: false, reason: item.slotType === "edge" ? "這件裝飾要放在田埂邊線" : "這件裝飾要放在四格交叉點" };
+  }
   const adjacent = decorationSlotAdjacentIndexes(slot);
-  if (adjacent.length !== (slot.slotType === "corner" ? 4 : 2)) return false;
-  if (!adjacent.every((index) => state.ownedPlots.includes(plotIdForIndex(index)))) return false;
-  if (adjacent.some((index) => getPlant(state.cells[index]?.plantId)?.type === "tree")) return false;
-  return !state.decorations.some((placed) => placedDecorationSlotKey(placed) === decorationSlotKey(slot));
+  if (adjacent.length !== (slot.slotType === "corner" ? 4 : 2)) return { valid: false, reason: "裝飾不能超出農田邊界" };
+  if (!adjacent.every((index) => state.ownedPlots.includes(plotIdForIndex(index)))) return { valid: false, reason: "裝飾兩側的土地都必須先購買" };
+  if (adjacent.some((index) => getPlant(state.cells[index]?.plantId)?.type === "tree")) return { valid: false, reason: "這個位置會碰到樹木，請換一個格縫" };
+  if (state.decorations.some((placed) => placedDecorationSlotKey(placed) === decorationSlotKey(slot))) {
+    return { valid: false, reason: "這個位置已經有裝飾" };
+  }
+  return { valid: true, reason: "" };
+}
+
+function isDecorationSlotAvailable(slot, decorationId = selection?.id) {
+  return decorationPlacementStatus(slot, decorationId).valid;
 }
 
 function decorationSlotAtScreen(x, y) {
@@ -1193,7 +1203,9 @@ function decorationSlotAtScreen(x, y) {
   const rowBase = Math.floor(rowFloat);
   const colBase = Math.floor(colFloat);
   const candidates = [];
+  const selectedDecoration = selection?.kind === "decoration" ? getDecoration(selection.id) : null;
   const addCandidate = (slot) => {
+    if (selectedDecoration && slot.slotType !== selectedDecoration.slotType) return;
     const point = decorationSlotWorldPoint(slot);
     if (!point) return;
     const distance = Math.hypot(world.x - point.x, world.y - point.y);
@@ -1213,7 +1225,8 @@ function decorationSlotAtScreen(x, y) {
     }
   }
   const best = candidates.sort((a, b) => a.distance - b.distance)[0];
-  return best && best.distance <= 25 / camera.scale ? best.slot : null;
+  const snapRadius = (LOW_POWER_RENDER ? 38 : 28) / camera.scale;
+  return best && best.distance <= snapRadius ? best.slot : null;
 }
 
 function drawDecorationItem(item, x, y, direction = "horizontal", alpha = 1) {
@@ -1256,8 +1269,10 @@ function drawDecorationItem(item, x, y, direction = "horizontal", alpha = 1) {
 function drawDecorationSlotPreview(slot, item, valid) {
   const point = decorationSlotWorldPoint(slot);
   if (!point || !item) return;
+  const width = item.renderWidth || (item.slotType === "edge" ? 62 : 48);
   ctx.save();
-  ctx.globalAlpha = .94;
+  ctx.globalAlpha = .9;
+  ctx.fillStyle = valid ? "rgba(125,224,145,.22)" : "rgba(242,111,91,.22)";
   ctx.strokeStyle = valid ? "#fff0a3" : "#ff9a7a";
   ctx.lineWidth = 3 / camera.scale;
   ctx.setLineDash([6 / camera.scale, 5 / camera.scale]);
@@ -1265,15 +1280,18 @@ function drawDecorationSlotPreview(slot, item, valid) {
     const angle = slot.direction === "vertical" ? -Math.atan2(TILE_H, TILE_W) : Math.atan2(TILE_H, TILE_W);
     ctx.translate(point.x, point.y);
     ctx.rotate(angle);
-    ctx.strokeRect(-27, -8, 54, 16);
+    const footprintHeight = Math.max(16, Math.min(26, width * .32));
+    ctx.fillRect(-width / 2, -footprintHeight / 2, width, footprintHeight);
+    ctx.strokeRect(-width / 2, -footprintHeight / 2, width, footprintHeight);
   } else {
     ctx.beginPath();
-    ctx.arc(point.x, point.y, 18, 0, Math.PI * 2);
+    ctx.ellipse(point.x, point.y, width / 2, Math.max(11, width * .23), 0, 0, Math.PI * 2);
+    ctx.fill();
     ctx.stroke();
   }
   ctx.setLineDash([]);
   ctx.restore();
-  drawDecorationItem(item, point.x, point.y, slot.direction, valid ? .92 : .45);
+  drawDecorationItem(item, point.x, point.y, slot.direction, valid ? .62 : .34);
 }
 
 function farmSurfaceElement() {
@@ -2590,6 +2608,10 @@ function drawFarm(now = performance.now()) {
       pendingActionPlotId,
       pendingActionIndex,
       pendingDecorationSlot,
+      hoverDecorationSlot,
+      decorationPreviewValid: selection?.kind === "decoration"
+        ? isDecorationSlotAvailable(pendingDecorationSlot || hoverDecorationSlot, selection.id)
+        : false,
       hoverIndex,
       keyboardIndex,
       focusedPlotId,
@@ -3520,8 +3542,9 @@ function handleDecorationBoardClick(x, y) {
     return;
   }
   if (selection.kind !== "decoration") return;
-  if (!isDecorationSlotAvailable(slot, selection.id)) {
-    showToast("這個槽位需要已購土地，且不能與樹木或其他裝飾重疊");
+  const placement = decorationPlacementStatus(slot, selection.id);
+  if (!placement.valid) {
+    showToast(placement.reason);
     return;
   }
   stageDecorationSelection(slot);

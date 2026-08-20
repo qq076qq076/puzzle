@@ -519,17 +519,48 @@
       return worldPoint(slot.row + .5, slot.col);
     }
 
-    drawDecorations(state, core) {
+    drawDecorationFootprint(slot, item, valid) {
+      const point = this.decorationPoint(slot);
+      if (!point || !item) return;
+      const width = Math.max(36, safeNumber(item.renderWidth, item.slotType === "edge" ? 62 : 48));
+      const color = valid ? 0x9bea9f : 0xff896f;
+      this.overlays.fillStyle(color, .2);
+      this.overlays.lineStyle(2.5, color, .92);
+      if (item.slotType === "edge") {
+        const angle = slot.direction === "vertical" ? -Math.atan2(TILE_H, TILE_W) : Math.atan2(TILE_H, TILE_W);
+        const halfWidth = width / 2;
+        const halfHeight = Math.max(8, Math.min(13, width * .16));
+        const along = { x: Math.cos(angle), y: Math.sin(angle) };
+        const across = { x: -along.y, y: along.x };
+        const corners = [
+          { x: point.x - along.x * halfWidth - across.x * halfHeight, y: point.y - along.y * halfWidth - across.y * halfHeight },
+          { x: point.x + along.x * halfWidth - across.x * halfHeight, y: point.y + along.y * halfWidth - across.y * halfHeight },
+          { x: point.x + along.x * halfWidth + across.x * halfHeight, y: point.y + along.y * halfWidth + across.y * halfHeight },
+          { x: point.x - along.x * halfWidth + across.x * halfHeight, y: point.y - along.y * halfWidth + across.y * halfHeight }
+        ];
+        this.overlays.beginPath();
+        this.overlays.moveTo(corners[0].x, corners[0].y);
+        for (let index = 1; index < corners.length; index += 1) this.overlays.lineTo(corners[index].x, corners[index].y);
+        this.overlays.closePath();
+        this.overlays.fillPath();
+        this.overlays.strokePath();
+        return;
+      }
+      this.overlays.fillEllipse(point.x, point.y, width, Math.max(22, width * .46));
+      this.overlays.strokeEllipse(point.x, point.y, width, Math.max(22, width * .46));
+    }
+
+    drawDecorations(snapshot, core) {
+      const state = snapshot.state;
       const used = new Set();
-      for (const [index, placed] of (state.decorations || []).entries()) {
+      const drawOne = (placed, key, alpha = 1, tint = null) => {
         const item = core.getDecoration(placed.id);
         const point = this.decorationPoint(placed);
-        if (!item || !point) continue;
-        const key = `${placed.id}:${placed.row}:${placed.col}:${placed.direction || ""}:${index}`;
+        if (!item || !point) return;
         used.add(key);
         if (!this.isWorldVisible(point.x, point.y, TILE_W * 2)) {
           this.decorationObjects.get(key)?.setVisible(false);
-          continue;
+          return;
         }
         let object = this.decorationObjects.get(key);
         const file = placed.direction === "vertical" ? item.imageVertical || item.image : item.imageHorizontal || item.image;
@@ -546,9 +577,21 @@
         const height = image ? width / Math.max(.4, safeNumber(image.naturalWidth / image.naturalHeight, 1)) : width;
         object.setPosition(point.x, point.y + safeNumber(item.contactOffsetY, 8));
         object.setDisplaySize(width, height);
-        object.setAlpha(1);
+        object.setAlpha(alpha);
+        if (tint != null) object.setTint?.(tint);
+        else object.clearTint?.();
         object.setDepth(point.y + safeNumber(item.contactOffsetY, 8) + (item.layer === "ground" ? -100 : 100));
         object.setVisible(true);
+      };
+      for (const [index, placed] of (state.decorations || []).entries()) {
+        drawOne(placed, `${placed.id}:${placed.row}:${placed.col}:${placed.direction || ""}:${index}`);
+      }
+      const previewSlot = snapshot.pendingDecorationSlot || snapshot.hoverDecorationSlot;
+      if (snapshot.selection?.kind === "decoration" && previewSlot) {
+        const preview = { ...previewSlot, id: snapshot.selection.id };
+        const valid = Boolean(snapshot.decorationPreviewValid);
+        this.drawDecorationFootprint(previewSlot, core.getDecoration(snapshot.selection.id), valid);
+        drawOne(preview, "__decoration-preview__", valid ? .62 : .34, valid ? 0xffffff : 0xff8f78);
       }
       for (const [key, object] of this.decorationObjects) {
         if (used.has(key)) continue;
@@ -576,6 +619,9 @@
     }
 
     drawSelection(snapshot, state, core, boardSize) {
+      // Decoration placement has its own footprint-sized highlight and ghost
+      // sprite. Do not also paint the hovered crop cell or an entire 3×3 plot.
+      if (snapshot.selection?.kind === "decoration") return;
       const center = Number.isInteger(snapshot.pendingActionIndex) ? snapshot.pendingActionIndex : snapshot.hoverIndex;
       if (!Number.isInteger(center) || center < 0) return;
       const point = worldPoint(Math.floor(center / boardSize), center % boardSize);
@@ -725,7 +771,7 @@
         this.drawPlant(index, snapshot.state.cells[index], boardSize, core, snapshot.now || performance.now(), usedKeys);
       }
       this.hideUnusedPlantObjects(usedKeys);
-      this.drawDecorations(snapshot.state, core);
+      this.drawDecorations(snapshot, core);
       this.drawAutomation(snapshot.state, core, boardSize, snapshot.now || performance.now(), snapshot);
       this.drawFarmer(snapshot.farmer, snapshot.now || performance.now(), snapshot.reducedMotion);
       this.drawSelection(snapshot, snapshot.state, core, boardSize);
