@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#183f2c" />
     <meta name="description" content="格田收割記：點擊收割棋盤上的作物，購買農具、種子與自動化設備，讓農場在離線時繼續生長。" />
     <title>格田收割記 · Harvest Clicker</title>
-    <link rel="stylesheet" href="style.css?v=20260819-8" />
+    <link rel="stylesheet" href="style.css?v=20260820-9" />
   </head>
   <body>
     <main class="harvest-page">
@@ -109,6 +109,20 @@
       </form>
     </dialog>
 
+    <dialog class="game-dialog device-action-dialog" id="device-action-dialog">
+      <form method="dialog">
+        <button class="dialog-close" value="close" aria-label="關閉設備選單">×</button>
+        <div class="shop-dialog-art" id="device-action-art" aria-hidden="true"></div>
+        <p class="dialog-kicker">INSTALLED AUTOMATION</p>
+        <h2 id="device-action-title">自動化設備</h2>
+        <p id="device-action-copy"></p>
+        <div class="device-action-actions">
+          <button class="device-recall-button" id="device-recall-button" type="button">收回工具列</button>
+          <button class="device-sell-button" id="device-sell-button" type="button">賣出設備</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog class="game-dialog" id="offline-dialog">
       <form method="dialog">
         <span class="dialog-icon" aria-hidden="true">☀️</span>
@@ -193,6 +207,6 @@
     <script src="../share-utils.js?v=20260818-3"></script>
     <script src="../firebase-config.js?v=20260818-3"></script>
     <script src="../firebase-runtime.js?v=20260819-6"></script>
-    <script src="script.js?v=20260820-15"></script>
+    <script src="script.js?v=20260820-16"></script>
   </body>
 </html>

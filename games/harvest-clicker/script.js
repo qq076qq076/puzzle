@@ -27,6 +27,7 @@ const CELL_SURFACE_H = 38;
 const HARVESTER_CELLS_PER_SECOND = 2;
 const MIN_ZOOM = 0.35;
 const MAX_ZOOM = 2.4;
+const AUTOMATION_SELL_RATE = 0.6;
 const $ = (selector) => document.querySelector(selector);
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const LOW_POWER_RENDER = Boolean(window.matchMedia?.("(pointer: coarse)")?.matches || (navigator.hardwareConcurrency || 8) <= 4);
@@ -45,6 +46,9 @@ const elements = {
   shopDialogArt: $("#shop-dialog-art"), shopDialogTitle: $("#shop-dialog-title"),
   shopDialogCopy: $("#shop-dialog-copy"), shopDialogPrice: $("#shop-dialog-price"),
   shopDialogBuy: $("#shop-dialog-buy"),
+  deviceActionDialog: $("#device-action-dialog"), deviceActionArt: $("#device-action-art"),
+  deviceActionTitle: $("#device-action-title"), deviceActionCopy: $("#device-action-copy"),
+  deviceRecall: $("#device-recall-button"), deviceSell: $("#device-sell-button"),
   landPopover: $("#land-popover"), landIcon: $("#land-state-icon"),
   landTitle: $("#land-title"), landCondition: $("#land-condition"),
   landPrice: $("#land-price"), landBuy: $("#land-buy-button"),
@@ -85,6 +89,8 @@ let pendingActionPlotId = null;
 let pendingActionIndex = null;
 let pendingDecorationSlot = null;
 let selectedShopProduct = null;
+let automationActionTarget = null;
+let automationInstanceSequence = 0;
 let keyboardIndex = indexesForPlot(INITIAL_PLOT_ID)[4];
 let toastTimer = 0;
 let audioContext = null;
@@ -181,10 +187,34 @@ function preloadAssets() {
   }
 }
 
+function makeAutomationInstanceId(kind) {
+  automationInstanceSequence += 1;
+  return `${kind}-${TAB_ID}-${automationInstanceSequence}`;
+}
+
+function ensureAutomationInstances(candidate) {
+  const seen = new Set();
+  for (const [kind, listKey] of [["harvester", "harvesters"], ["sprinkler", "sprinklers"]]) {
+    if (!Array.isArray(candidate?.[listKey])) continue;
+    candidate[listKey].forEach((placed, index) => {
+      if (!placed || typeof placed !== "object") return;
+      let instanceId = typeof placed.instanceId === "string" ? placed.instanceId.trim() : "";
+      if (!instanceId || seen.has(instanceId)) {
+        const center = Number.isInteger(placed.centerIndex) ? placed.centerIndex : "center";
+        instanceId = `${kind}-${placed.id || "device"}-${placed.plotId ?? "plot"}-${center}-${index}`;
+      }
+      seen.add(instanceId);
+      placed.instanceId = instanceId;
+    });
+  }
+  return candidate;
+}
+
 function normalizeLoadedState(candidate, fallbackStartedAt = 0) {
   const hadAccountStartedAt = Number.isFinite(Number(candidate?.accountStartedAt));
   const parsed = normalizeStateData(candidate);
   if (!validateState(parsed)) return null;
+  ensureAutomationInstances(parsed);
   if (!hadAccountStartedAt && Number.isFinite(Number(fallbackStartedAt)) && Number(fallbackStartedAt) > 0) {
     parsed.accountStartedAt = Number(fallbackStartedAt);
   }
@@ -2022,6 +2052,19 @@ function drawDevices(plotId, x, y, now) {
   if (sprinkler) drawDeviceBadge(sprinkler, sprinklerPoint.x + (sameAnchor ? 25 : 0), sprinklerPoint.y - 38, "rgba(105,197,218,.82)");
 }
 
+function fertilizerWorkBounds(plotId, fallbackX, fallbackY) {
+  const indexes = Number.isInteger(plotId) ? indexesForPlot(plotId) : [];
+  const points = indexes.length
+    ? indexes.map((index) => worldPoint(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE))
+    : [{ x: fallbackX, y: fallbackY }];
+  return {
+    minX: Math.min(...points.map((point) => point.x)) - TILE_W * .26,
+    maxX: Math.max(...points.map((point) => point.x)) + TILE_W * .26,
+    minY: Math.min(...points.map((point) => point.y)) - TILE_H * .18,
+    maxY: Math.max(...points.map((point) => point.y)) + TILE_H * .18
+  };
+}
+
 function drawFertilizerOperation(plotId, x, y, now) {
   const fertilizedEntries = indexesForPlot(plotId)
     .map((index) => ({ index, cell: state.cells[index] }))
@@ -2041,14 +2084,18 @@ function drawFertilizerOperation(plotId, x, y, now) {
   const fertilizer = getFertilizer(state.cells[treeRootIndex ?? fertilizedEntries[0].index].fertilizerId);
   if (!fertilizer) return;
   const rounds = Math.max(...fertilizedEntries.map(({ cell }) => cell.fertilizerRounds));
+  const bounds = fertilizerWorkBounds(plotId, x, y);
   const cycle = state.settings.reducedMotion ? .5 : (now / 6200 + plotId * .071) % 1;
   const laneProgress = cycle * 3;
   const lane = Math.min(2, Math.floor(laneProgress));
   const localProgress = laneProgress - lane;
   const direction = lane % 2 === 0 ? 1 : -1;
   const travel = direction > 0 ? localProgress : 1 - localProgress;
-  const machineX = x - 58 + travel * 116;
-  const machineY = y - 2 + (lane - 1) * 15;
+  const travelStart = bounds.minX + TILE_W * .2;
+  const travelEnd = bounds.maxX - TILE_W * .2;
+  const laneHeight = Math.max(TILE_H * .55, (bounds.maxY - bounds.minY) / 3);
+  const machineX = travelStart + travel * Math.max(TILE_W, travelEnd - travelStart);
+  const machineY = bounds.minY + laneHeight * (lane + .5);
   const wheelSpin = state.settings.reducedMotion ? 0 : now / 95 * direction;
 
   ctx.save();
@@ -2257,24 +2304,31 @@ function drawActionAnimations(now) {
     ctx.save();
     ctx.translate(burst.x, burst.y - 8);
     if (burst.kind === "fertilizer") {
+      const bounds = fertilizerWorkBounds(burst.plotId, burst.x, burst.y);
+      const startX = bounds.minX - burst.x + TILE_W * .2;
+      const endX = bounds.maxX - burst.x - TILE_W * .2;
+      const laneHeight = Math.max(TILE_H * .55, (bounds.maxY - bounds.minY) / 3);
       ctx.strokeStyle = `rgba(147,102,55,${fade * .86})`;
       ctx.fillStyle = `rgba(215,174,89,${fade * .92})`;
-      ctx.lineWidth = 3 / camera.scale;
+      ctx.lineWidth = 2.5 / camera.scale;
       for (let lane = -1; lane <= 1; lane += 1) {
-        const sweep = (progress * 2 - 1) * 72 * (lane % 2 ? -1 : 1);
+        const laneY = bounds.minY - burst.y + (lane + 1.5) * laneHeight;
+        const direction = lane % 2 ? -1 : 1;
+        const travel = direction > 0 ? progress : 1 - progress;
+        const sweep = startX + travel * Math.max(TILE_W, endX - startX);
         ctx.beginPath();
-        ctx.moveTo(-70, lane * 16 + 16);
-        ctx.lineTo(70, lane * 16 + 16);
+        ctx.moveTo(startX, laneY);
+        ctx.lineTo(endX, laneY);
         ctx.stroke();
         ctx.beginPath();
-        ctx.arc(sweep, lane * 16 + 10, 6 + fade * 5, 0, Math.PI * 2);
+        ctx.arc(sweep, laneY - 4, 6 + fade * 5, 0, Math.PI * 2);
         ctx.fill();
       }
-      for (let grain = 0; grain < (LOW_POWER_RENDER ? 7 : 15); grain += 1) {
-        const angle = grain * Math.PI * 2 / 15;
-        const radius = 15 + progress * (35 + grain % 4 * 8);
+      for (let grain = 0; grain < (LOW_POWER_RENDER ? 4 : 8); grain += 1) {
+        const angle = grain * Math.PI * 2 / 8;
+        const radius = 12 + progress * (24 + grain % 3 * 7);
         ctx.beginPath();
-        ctx.arc(Math.cos(angle) * radius, 10 + Math.sin(angle) * radius * .36, 2.2, 0, Math.PI * 2);
+        ctx.arc(Math.cos(angle) * radius, Math.sin(angle) * radius * .3, 1.8, 0, Math.PI * 2);
         ctx.fill();
       }
     } else if (burst.kind === "sprinkler") {
@@ -2836,6 +2890,12 @@ function quickButton({ image, emoji, title, attributes, count, equipped, selecte
   return `<button class="quick-item ${equipped ? "is-equipped" : ""} ${selected ? "is-selected" : ""}" type="button" title="${title}" aria-label="${title}" ${attributes}>${art}${count ? `<small>${count}</small>` : ""}${installed ? '<span class="installed-dot"></span>' : ""}</button>`;
 }
 
+function stableAutomationOrder(left, right) {
+  const a = String(left?.instanceId || `${left?.id || ""}-${left?.plotId || ""}`);
+  const b = String(right?.instanceId || `${right?.id || ""}-${right?.plotId || ""}`);
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 function renderQuickbar() {
   if (READ_ONLY) {
     elements.quickbar.innerHTML = '<div class="readonly-quickbar">拖曳移動 · 滾輪或雙指縮放 · 點擊作物查看目前狀態</div>';
@@ -2872,13 +2932,15 @@ function renderQuickbar() {
     const count = inventoryCount(`sprinkler_${item.id}`);
     if (count) items.push(quickButton({ image: item.image, emoji: item.emoji, title: `${item.name} ×${count}`, attributes: `data-inventory-kind="sprinkler" data-inventory-id="${item.id}"`, count, selected: selection?.kind === "sprinkler" && selection.id === item.id && selection.sourcePlot == null }));
   }
-  for (const placed of state.harvesters) {
+  for (const placed of [...state.harvesters].sort(stableAutomationOrder)) {
     const item = getHarvester(placed.id);
-    items.push(quickButton({ image: item.image, emoji: item.emoji, title: `${item.name}｜點擊定位，可再選土地移動`, attributes: `data-installed-kind="harvester" data-inventory-id="${item.id}" data-source-plot="${placed.plotId}"`, installed: true, selected: selection?.kind === "harvester" && selection.sourcePlot === placed.plotId }));
+    if (!item) continue;
+    items.push(quickButton({ image: item.image, emoji: item.emoji, title: `${item.name}｜第一次點擊定位，再點擊管理設備`, attributes: `data-installed-kind="harvester" data-inventory-id="${item.id}" data-source-plot="${placed.plotId}" data-source-instance="${placed.instanceId || ""}"`, installed: true, selected: selection?.kind === "harvester" && selection.sourceInstanceId === placed.instanceId }));
   }
-  for (const placed of state.sprinklers) {
+  for (const placed of [...state.sprinklers].sort(stableAutomationOrder)) {
     const item = getSprinkler(placed.id);
-    items.push(quickButton({ image: item.image, emoji: item.emoji, title: `${item.name}｜點擊定位，可再選土地移動`, attributes: `data-installed-kind="sprinkler" data-inventory-id="${item.id}" data-source-plot="${placed.plotId}"`, installed: true, selected: selection?.kind === "sprinkler" && selection.sourcePlot === placed.plotId }));
+    if (!item) continue;
+    items.push(quickButton({ image: item.image, emoji: item.emoji, title: `${item.name}｜第一次點擊定位，再點擊管理設備`, attributes: `data-installed-kind="sprinkler" data-inventory-id="${item.id}" data-source-plot="${placed.plotId}" data-source-instance="${placed.instanceId || ""}"`, installed: true, selected: selection?.kind === "sprinkler" && selection.sourceInstanceId === placed.instanceId }));
   }
   const cancel = selection ? '<button class="quick-item quick-cancel" type="button" data-cancel-selection aria-label="取消使用物品">×</button>' : "";
   elements.quickbar.innerHTML = tools.join("") + (items.length ? '<span class="quick-divider" aria-hidden="true"></span>' + items.join("") : "") + cancel;
@@ -2957,24 +3019,129 @@ function consumeInventory(kind, id) {
 function placeDevice(kind, id, plotId, centerIndex = indexesForPlot(plotId)[4]) {
   const list = kind === "harvester" ? state.harvesters : state.sprinklers;
   const currentAtTarget = list.find((item) => item.plotId === plotId);
-  if (selection.sourcePlot === plotId) { selection = null; showToast("設備留在原地"); return false; }
+  const source = selection.sourcePlot != null
+    ? list.find((item) => selection.sourceInstanceId && item.instanceId === selection.sourceInstanceId)
+      || list.find((item) => item.plotId === selection.sourcePlot)
+    : null;
+  if (selection.sourcePlot === plotId && (!selection.sourceInstanceId || source?.instanceId === selection.sourceInstanceId)) {
+    selection = null; showToast("設備留在原地"); return false;
+  }
   if (currentAtTarget) {
     state.inventory[`${kind}_${currentAtTarget.id}`] = inventoryCount(`${kind}_${currentAtTarget.id}`) + 1;
     list.splice(list.indexOf(currentAtTarget), 1);
   }
   if (selection.sourcePlot != null) {
-    const source = list.find((item) => item.plotId === selection.sourcePlot);
-    if (source) list.splice(list.indexOf(source), 1);
+    if (!source) {
+      selection = null;
+      showToast("找不到要移動的設備，請重新選取");
+      return false;
+    }
+    list.splice(list.indexOf(source), 1);
   } else if (!consumeInventory(kind, id)) {
     showToast("工具列中已沒有這件設備");
     selection = null;
     return false;
   }
-  if (kind === "harvester") list.push({ id, plotId, centerIndex, nextRunAt: Date.now() + getHarvester(id).intervalSeconds * 1000 });
-  else list.push({ id, plotId, centerIndex });
+  const instanceId = source?.instanceId || makeAutomationInstanceId(kind);
+  if (kind === "harvester") list.push({ id, instanceId, plotId, centerIndex, nextRunAt: source?.nextRunAt || Date.now() + getHarvester(id).intervalSeconds * 1000 });
+  else list.push({ id, instanceId, plotId, centerIndex });
   showToast(`${kind === "harvester" ? getHarvester(id).name : getSprinkler(id).name}已配置`);
   selection = null;
   return true;
+}
+
+function automationList(kind) {
+  return kind === "harvester" ? state.harvesters : state.sprinklers;
+}
+
+function findPlacedAutomation(target) {
+  if (!target) return null;
+  const list = automationList(target.kind);
+  return list.find((placed) => target.instanceId && placed.instanceId === target.instanceId)
+    || list.find((placed) => placed.plotId === target.plotId && placed.id === target.id)
+    || null;
+}
+
+function automationSellValue(kind, id) {
+  const item = kind === "harvester" ? getHarvester(id) : getSprinkler(id);
+  return Math.max(1, Math.floor((Number(item?.cost) || 0) * AUTOMATION_SELL_RATE));
+}
+
+function closeAutomationAction() {
+  automationActionTarget = null;
+  if (elements.deviceActionDialog?.open) elements.deviceActionDialog.close();
+}
+
+function openAutomationAction(target) {
+  if (READ_ONLY) return;
+  const placed = findPlacedAutomation(target);
+  const item = target.kind === "harvester" ? getHarvester(target.id) : getSprinkler(target.id);
+  if (!placed || !item) return;
+  automationActionTarget = {
+    kind: target.kind,
+    id: placed.id,
+    plotId: placed.plotId,
+    instanceId: placed.instanceId
+  };
+  selection = null;
+  closeActionConfirm();
+  const plot = PLOTS.find((candidate) => candidate.id === placed.plotId);
+  elements.deviceActionArt.innerHTML = assetMarkup(item.image, item.emoji);
+  elements.deviceActionTitle.textContent = item.name;
+  elements.deviceActionCopy.textContent = `${plot?.name || "這塊土地"} · ${item.range}×${item.range} 作用範圍。收回會保留設備；賣出返還購買價的 ${Math.round(AUTOMATION_SELL_RATE * 100)}%，共 ${formatMoney(automationSellValue(target.kind, item.id))}。`;
+  elements.deviceRecall.textContent = "收回工具列";
+  elements.deviceSell.textContent = `賣出並取得 ${formatMoney(automationSellValue(target.kind, item.id))}`;
+  renderAll();
+  openDialogWhenAvailable(elements.deviceActionDialog);
+}
+
+function removePlacedAutomation(action) {
+  const placed = findPlacedAutomation(action);
+  if (!placed) {
+    closeAutomationAction();
+    showToast("這件設備已不在農場");
+    renderAll();
+    return null;
+  }
+  const list = automationList(action.kind);
+  list.splice(list.indexOf(placed), 1);
+  selection = null;
+  closeActionConfirm();
+  return placed;
+}
+
+function recallAutomation() {
+  if (READ_ONLY || !automationActionTarget) return;
+  const action = { ...automationActionTarget };
+  const placed = removePlacedAutomation(action);
+  if (!placed) return;
+  state.inventory[`${action.kind}_${placed.id}`] = inventoryCount(`${action.kind}_${placed.id}`) + 1;
+  closeAutomationAction();
+  playTone("place");
+  showToast(`${action.kind === "harvester" ? getHarvester(placed.id)?.name : getSprinkler(placed.id)?.name}已收回工具列`);
+  saveNow(true);
+  renderAll();
+}
+
+function sellAutomation() {
+  if (READ_ONLY || !automationActionTarget) return;
+  const action = { ...automationActionTarget };
+  const placed = findPlacedAutomation(action);
+  const item = action.kind === "harvester" ? getHarvester(action.id) : getSprinkler(action.id);
+  const refund = automationSellValue(action.kind, action.id);
+  if (!placed || !item) {
+    closeAutomationAction();
+    renderAll();
+    return;
+  }
+  if (!window.confirm(`確定賣出「${item.name}」並取得 ${formatMoney(refund)} 嗎？`)) return;
+  if (!removePlacedAutomation(action)) return;
+  state.gold += refund;
+  closeAutomationAction();
+  playTone("purchase");
+  showToast(`${item.name}已賣出，取得 ${formatMoney(refund)}`);
+  saveNow(true);
+  renderAll();
 }
 
 function triggerPlantingAnimation(indexes, plantId) {
@@ -3000,7 +3167,7 @@ function triggerPlantingAnimation(indexes, plantId) {
 
 function triggerDeviceAnimation(kind, plotId, centerIndex = indexesForPlot(plotId)[4]) {
   const point = worldPoint(Math.floor(centerIndex / BOARD_SIZE), centerIndex % BOARD_SIZE);
-  deviceBursts.push({ kind, x: point.x, y: point.y, startedAt: performance.now() });
+  deviceBursts.push({ kind, plotId, x: point.x, y: point.y, startedAt: performance.now() });
 }
 
 function useSelection(plotId) {
@@ -3440,6 +3607,14 @@ elements.actionConfirmButton.addEventListener("click", () => {
   if (pendingActionPlotId == null || elements.actionConfirmButton.disabled) return;
   useSelection(pendingActionPlotId);
 });
+elements.deviceActionDialog?.addEventListener("close", () => {
+  automationActionTarget = null;
+  selection = null;
+  closeActionConfirm();
+  renderAll();
+});
+elements.deviceRecall?.addEventListener("click", recallAutomation);
+elements.deviceSell?.addEventListener("click", sellAutomation);
 
 elements.quickbar.addEventListener("click", (event) => {
   if (READ_ONLY) return;
@@ -3462,9 +3637,15 @@ elements.quickbar.addEventListener("click", (event) => {
   const nextSelection = {
     kind: item.dataset.inventoryKind || item.dataset.installedKind,
     id: item.dataset.inventoryId,
-    sourcePlot: item.dataset.sourcePlot == null ? null : Number(item.dataset.sourcePlot)
+    sourcePlot: item.dataset.sourcePlot == null ? null : Number(item.dataset.sourcePlot),
+    sourceInstanceId: item.dataset.sourceInstance == null ? null : item.dataset.sourceInstance
   };
-  const sameSelection = selection && selection.kind === nextSelection.kind && selection.id === nextSelection.id && selection.sourcePlot === nextSelection.sourcePlot;
+  const sameSelection = selection && selection.kind === nextSelection.kind && selection.id === nextSelection.id
+    && selection.sourcePlot === nextSelection.sourcePlot && selection.sourceInstanceId === nextSelection.sourceInstanceId;
+  if (item.dataset.installedKind && sameSelection) {
+    openAutomationAction(nextSelection);
+    return;
+  }
   closeActionConfirm();
   selection = sameSelection ? null : nextSelection;
   closeLandPopover();
