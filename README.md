@@ -54,7 +54,7 @@ users/{uid}/saves/{gameId}
 firebase deploy --only auth,firestore:rules
 ```
 
-Firebase SDK 會從瀏覽器 module CDN 載入；使用本機 `file://` 開啟時請改用上面的 `python3 -m http.server 8000`。一般操作沿用短暫佇列同步，種植、施肥與配置設備會立即寫入；同帳號的其他裝置透過 Firestore 即時監聽收到較新版本並自動重繪。`localStorage` 仍會保留作為離線與連線失敗時的 fallback。
+Firebase SDK 會從瀏覽器 module CDN 載入；使用本機 `file://` 開啟時請改用上面的 `python3 -m http.server 8000`。收割、購地、商店購物與自動收成等金幣變動會立即寫入本地與雲端；種植、施肥與配置設備也會立即寫入，其他一般操作沿用短暫佇列同步。同帳號的其他裝置透過 Firestore 即時監聽收到較新版本並自動重繪。`localStorage` 仍會保留作為離線與連線失敗時的 fallback。
 
 登入與跨裝置測試：在裝置 A 開啟遊戲右上角的「登入雲端」，優先選 Google 或 Facebook；第一次登入會將目前匿名存檔連結到社群帳號。在裝置 B 開啟同一網站並登入相同帳號，頁面重新載入後會確認 `users/{uid}/saves/{gameId}` 的雲端存檔；只有雲端的伺服器 `savedAt` 確實較新時才載入，不再用不同裝置的 `createdAt` 阻擋新進度。登入前會先等待目前遊戲的本地存檔與待寫入雲端佇列完成，避免登入瞬間遺失最新操作。每筆存檔使用伺服器時間、伺服器版本號與樂觀鎖，避免較舊分頁覆蓋較新資料。右上角會顯示帳號名稱並可點開登出。登入後每次本地 autosave 都會同步到雲端。Email 登入可按「使用 Email 登入」展開。同一個農場開啟多個分頁時，只有目前作用中的分頁會自動存檔；背景分頁收到較新存檔會載入，前景分頁若有未保存變更則會先詢問。
 

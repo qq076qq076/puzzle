@@ -2938,7 +2938,7 @@ function buyItem(kind, id) {
     showToast(`${item.name}已放入下方工具列`);
   }
   playTone("purchase");
-  saveNow();
+  saveNow(true);
   if (elements.shopDialog.open) elements.shopDialog.close();
   selectedShopProduct = null;
   renderAll();
@@ -3126,7 +3126,7 @@ function purchaseSelectedLand() {
   closeLandPopover();
   playTone("purchase");
   showToast(`${plot.name}已加入農場`);
-  saveNow();
+  saveNow(true);
   renderAll();
   window.setTimeout(focusOwnedFarm, 80);
 }
@@ -3266,7 +3266,7 @@ function handleBoardClick(index) {
     const plant = getPlant(state.cells[index].plantId);
     showToast(`${plant?.name || "這株植物"}還要 ${formatGrowthCountdown(remainingGrowthTime(index))}成熟`);
   }
-  saveNow();
+  saveNow(true);
 }
 
 function canvasPosition(event) {
@@ -3642,6 +3642,9 @@ async function initializeGame() {
     renderHeader();
     if (summary.gold || summary.harvested) {
       renderShop(); renderQuickbar();
+      // Automated harvest can also change the player's balance. Persist the
+      // result immediately instead of waiting for the ten-second autosave.
+      saveNow(true);
     }
   }, 500);
   window.setInterval(() => { if (isActiveTab()) saveNow(); }, 10000);
