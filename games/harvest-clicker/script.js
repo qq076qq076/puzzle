@@ -129,8 +129,7 @@ let localClientSavedAt = 0;
 let localServerSavedAt = 0;
 let localServerRevision = 0;
 let localRevision = 0;
-let initialLocalCreatedAt = 0;
-let initialLocalSavedAt = 0;
+let localSyncedRevision = 0;
 let lastPersistedState = "";
 let cloudReady = !window.PuzzleFirebase?.enabled;
 let cloudSaveTimer = null;
@@ -295,12 +294,15 @@ function applyLoadedState(candidate, showSummary = true, simulate = true) {
   const parsed = normalizeLoadedState(candidate);
   if (!parsed) return false;
   state = parsed;
-  if (simulate) {
-    const summary = simulateTo(state, Date.now());
-    state.stats.offlineGold = (state.stats.offlineGold || 0) + summary.gold;
-    if (showSummary && (summary.elapsedMs >= 60000 || summary.gold > 0)) showOfflineSummary(summary);
-  }
+  if (simulate) simulateLoadedState(showSummary);
   return true;
+}
+
+function simulateLoadedState(showSummary = true) {
+  const summary = simulateTo(state, Date.now());
+  state.stats.offlineGold = (state.stats.offlineGold || 0) + summary.gold;
+  if (showSummary && (summary.elapsedMs >= 60000 || summary.gold > 0)) showOfflineSummary(summary);
+  return summary;
 }
 
 function stateSnapshot() {
@@ -332,6 +334,7 @@ function remoteSaveCheckpoint(remote) {
     serverSavedAt: Number(remote.serverSavedAt) || Number(remote.savedAt) || 0,
     serverRevision: Number(remote.serverRevision) || 0,
     revision: Number(remote.clientRevision) || 0,
+    syncedRevision: Number(remote.clientRevision) || 0,
     writerId: remote.clientWriterId || "",
     data: remote.data
   };
@@ -346,6 +349,7 @@ function applyRemoteCloudSave(remote, showMessage = true) {
   localServerSavedAt = checkpoint.serverSavedAt || localServerSavedAt;
   localServerRevision = checkpoint.serverRevision || localServerRevision;
   localRevision = checkpoint.revision || localRevision;
+  localSyncedRevision = checkpoint.syncedRevision || 0;
   lastPersistedState = stateSnapshot();
   cloudSavePending = null;
   window.clearTimeout(cloudSaveTimer);
@@ -423,6 +427,7 @@ function parseLocalCheckpoint(raw) {
       serverSavedAt: Number(envelope.serverSavedAt) || 0,
       serverRevision: Number(envelope.serverRevision) || 0,
       revision: Number(envelope.revision) || 0,
+      syncedRevision: globalThis.HarvestSaveResolution.inferredSyncedRevision(envelope),
       writerId: envelope.writerId || "",
       data
     };
@@ -472,13 +477,15 @@ function flushCloudSave() {
       const serverSavedAt = Number(result.checkpoint.serverSavedAt) || Number(result.checkpoint.savedAt) || 0;
       localServerSavedAt = serverSavedAt;
       localServerRevision = Number(result.checkpoint.serverRevision) || localServerRevision;
+      localSyncedRevision = snapshot.revision;
       localSavedAt = serverSavedAt || current.savedAt;
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
           ...current,
           savedAt: localSavedAt,
           serverSavedAt: localServerSavedAt,
-          serverRevision: localServerRevision
+          serverRevision: localServerRevision,
+          syncedRevision: localSyncedRevision
         }));
       } catch (error) { /* Local storage is optional. */ }
     }
@@ -495,78 +502,72 @@ function flushCloudSave() {
   return cloudSaveInFlight;
 }
 
-async function syncCloudState(gate) {
-  if (READ_ONLY) {
-    gate?.close();
-    return;
-  }
-  if (!window.PuzzleFirebase?.enabled) {
-    cloudReady = true;
-    gate?.close();
-    return;
-  }
-
-  let remote = null;
-  try { remote = await window.PuzzleFirebase.load(CLOUD_SAVE_KEY); } catch (error) { /* Local save remains available. */ }
-  const remoteState = remote
-    ? normalizeLoadedState(remote.data, Number(remote.clientCreatedAt) || Number(remote.createdAt) || 0)
-    : null;
-  const remoteSavedAt = Number(remote?.savedAt) || Number(remote?.clientSavedAt) || 0;
-  const shouldUseRemote = Boolean(
-    remoteState &&
-    (!initialLocalSavedAt || remoteSavedAt > initialLocalSavedAt)
-  );
-
-  if (shouldUseRemote) {
-    applyLoadedState(remoteState, true);
-    localCreatedAt = Number(remote?.clientCreatedAt) || localCreatedAt || Date.now();
-    localSavedAt = remoteSavedAt;
-    localClientSavedAt = Number(remote?.clientSavedAt) || remoteSavedAt;
-    localServerSavedAt = Number(remote?.serverSavedAt) || 0;
-    localServerRevision = Number(remote?.serverRevision) || 0;
-    localRevision = Number(remote?.clientRevision) || localRevision;
-    saveNow(false);
-  }
-
-  cloudReady = true;
-  if (!shouldUseRemote) queueCloudSave(true);
-  gate?.close();
-  renderAll();
-}
-
-function loadState() {
+function readStoredCheckpoint() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY) || LEGACY_STORAGE_KEYS.map((key) => localStorage.getItem(key)).find(Boolean);
-    if (raw) {
-      const checkpoint = parseLocalCheckpoint(raw);
-      if (checkpoint && applyLoadedState(checkpoint.data)) {
-        localCreatedAt = checkpoint.createdAt || Number(state.lastSimulatedAt) || 0;
-        localSavedAt = checkpoint.savedAt || Number(state.lastSimulatedAt) || 0;
-        localClientSavedAt = checkpoint.clientSavedAt || localSavedAt;
-        localServerSavedAt = checkpoint.serverSavedAt || 0;
-        localServerRevision = checkpoint.serverRevision || 0;
-        localRevision = checkpoint.revision;
-        initialLocalCreatedAt = localCreatedAt;
-        initialLocalSavedAt = localSavedAt;
-        lastPersistedState = stateSnapshot();
-        saveNow(false);
-        return;
-      }
-    }
+    return raw ? parseLocalCheckpoint(raw) : null;
   } catch (error) {
     console.warn("無法讀取農場存檔", error);
+    return null;
   }
-  state = createInitialState(Date.now());
-  localCreatedAt = Date.now();
-  localSavedAt = 0;
-  localClientSavedAt = 0;
-  localServerSavedAt = 0;
-  localServerRevision = 0;
-  localRevision = 0;
-  initialLocalCreatedAt = localCreatedAt;
-  initialLocalSavedAt = 0;
+}
+
+function assignCheckpointMetadata(checkpoint) {
+  localCreatedAt = checkpoint?.createdAt || Number(state?.lastSimulatedAt) || Date.now();
+  localSavedAt = checkpoint?.savedAt || 0;
+  localClientSavedAt = checkpoint?.clientSavedAt || localSavedAt;
+  localServerSavedAt = checkpoint?.serverSavedAt || 0;
+  localServerRevision = checkpoint?.serverRevision || 0;
+  localRevision = checkpoint?.revision || 0;
+  localSyncedRevision = checkpoint?.syncedRevision || 0;
+}
+
+async function bootstrapState(gate) {
+  const local = readStoredCheckpoint();
+  let remote = null;
+  let cloudLoadFailed = false;
+  if (window.PuzzleFirebase?.enabled) {
+    try {
+      const loaded = await window.PuzzleFirebase.load(CLOUD_SAVE_KEY);
+      const normalizedRemoteState = loaded?.data
+        ? normalizeLoadedState(loaded.data, Number(loaded.clientCreatedAt) || Number(loaded.createdAt) || 0)
+        : null;
+      remote = normalizedRemoteState ? { ...remoteSaveCheckpoint(loaded), data: normalizedRemoteState } : null;
+      cloudLoadFailed = !loaded && window.PuzzleFirebase.getStatus?.().status === "error";
+    } catch (error) {
+      cloudLoadFailed = true;
+      console.warn("無法在啟動時比較雲端農場，暫時只使用本機存檔", error);
+    }
+  }
+
+  const resolution = globalThis.HarvestSaveResolution.resolveBootstrapCheckpoint(local, remote);
+  let checkpoint = resolution.checkpoint;
+  let source = resolution.source;
+  if (source === "conflict") {
+    const useRemote = window.confirm("偵測到本機與雲端都有新的農場進度。\n\n確定：載入雲端進度\n取消：保留本機進度");
+    source = useRemote ? "remote" : "local";
+    checkpoint = useRemote ? remote : local;
+  }
+
+  if (checkpoint && applyLoadedState(checkpoint.data, false, false)) {
+    assignCheckpointMetadata(checkpoint);
+  } else {
+    state = createInitialState(Date.now());
+    assignCheckpointMetadata(null);
+    source = "new";
+  }
+
+  if (source === "local" && remote && Number(remote.serverRevision) > localServerRevision) {
+    localServerRevision = Number(remote.serverRevision) || 0;
+    localServerSavedAt = Number(remote.serverSavedAt) || 0;
+  }
+
+  const summary = simulateLoadedState(false);
+  cloudReady = !cloudLoadFailed;
   lastPersistedState = "";
-  saveNow(true);
+  saveNow(Boolean(window.PuzzleFirebase?.enabled && !cloudLoadFailed), { allowInactive: true, forceOverwrite: true });
+  gate?.close();
+  return { summary, cloudLoadFailed };
 }
 
 function saveNow(forceCloud = false, { allowInactive = false, forceOverwrite = false } = {}) {
@@ -590,6 +591,7 @@ function saveNow(forceCloud = false, { allowInactive = false, forceOverwrite = f
       serverSavedAt: localServerSavedAt,
       serverRevision: localServerRevision,
       revision: localRevision,
+      syncedRevision: localSyncedRevision,
       writerId: TAB_ID,
       data: JSON.parse(JSON.stringify(state))
     };
@@ -611,6 +613,7 @@ function adoptLocalCheckpoint(checkpoint, showMessage = false) {
   localServerSavedAt = checkpoint.serverSavedAt || 0;
   localServerRevision = checkpoint.serverRevision || 0;
   localRevision = checkpoint.revision;
+  localSyncedRevision = checkpoint.syncedRevision || 0;
   lastPersistedState = stateSnapshot();
   cloudSavePending = null;
   window.clearTimeout(cloudSaveTimer);
@@ -624,6 +627,7 @@ function adoptLocalCheckpoint(checkpoint, showMessage = false) {
       serverSavedAt: localServerSavedAt,
       serverRevision: localServerRevision,
       revision: localRevision,
+      syncedRevision: localSyncedRevision,
       writerId: checkpoint.writerId || TAB_ID,
       data: state
     }));
@@ -3947,11 +3951,20 @@ new ResizeObserver(resizeCanvas).observe(elements.canvasShell);
 let cloudSyncPromise = Promise.resolve();
 
 async function initializeGame() {
+  let offlineSummary = null;
+  let cloudLoadFailed = false;
   if (READ_ONLY) await loadSharedFarm(cloudSyncGate);
-  else loadState();
+  else {
+    const bootstrap = await bootstrapState(cloudSyncGate);
+    offlineSummary = bootstrap.summary;
+    cloudLoadFailed = bootstrap.cloudLoadFailed;
+  }
   renderAll();
   resizeCanvas();
   window.requestAnimationFrame(drawFarm);
+  if (offlineSummary && (offlineSummary.elapsedMs >= 60000 || offlineSummary.gold > 0)) {
+    showOfflineSummary(offlineSummary);
+  }
 
   if (READ_ONLY) {
     window.setInterval(() => {
@@ -3972,8 +3985,8 @@ async function initializeGame() {
     }
   }, 500);
   window.setInterval(() => { if (isActiveTab()) saveNow(); }, 10000);
-  cloudSyncPromise = syncCloudState(cloudSyncGate).then(() => {
-    startCloudSaveWatcher();
+  cloudSyncPromise = (cloudLoadFailed ? Promise.resolve() : flushCloudSave()).then(() => {
+    if (!cloudLoadFailed) startCloudSaveWatcher();
     maybeClaimMonthlyEvent();
   });
   window.PuzzleFirebase?.registerSaveFlusher?.(() => cloudSyncPromise.then(() => {
