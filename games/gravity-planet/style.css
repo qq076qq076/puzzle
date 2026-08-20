@@ -383,7 +383,7 @@ h1 span { color: var(--cyan); }
 .dpad button:nth-child(3) { grid-column: 2; grid-row: 2; }
 .dpad button:nth-child(4) { grid-column: 3; grid-row: 2; }
 .dpad button.active, .dpad button:active { color: var(--cyan); background: rgba(98, 230, 255, 0.13); }
-.mobile-dpad { display: none; }
+.mobile-joystick { display: none; }
 .record-card { display: block; }
 .record-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-top: 7px; color: var(--muted); font-size: 0.65rem; }
 .record-row strong { color: var(--text); font-size: 0.9rem; }
@@ -427,33 +427,53 @@ h1 span { color: var(--cyan); }
   .control-card { min-height: 73px; }
   .how-card { display: flex; }
   .how-card > .dpad { display: none; }
-  .mobile-dpad {
+  .mobile-joystick {
     position: absolute;
     z-index: 7;
     right: 13px;
     bottom: 19px;
-    display: grid;
-    grid-template-columns: repeat(3, 46px);
-    grid-template-rows: repeat(2, 46px);
-    gap: 5px;
-    padding: 8px;
-    border: 1px solid rgba(184, 207, 255, 0.16);
-    border-radius: 18px;
-    background: rgba(8, 14, 38, 0.38);
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
-    backdrop-filter: blur(8px);
+    display: block;
+    width: 136px;
+    height: 136px;
+    touch-action: none;
+    user-select: none;
+  }
+  .joystick-base {
+    position: absolute;
+    inset: 0;
+    border: 1px solid rgba(184, 207, 255, 0.24);
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 50% 43%, rgba(98, 230, 255, 0.1), transparent 34%),
+      radial-gradient(circle, rgba(8, 14, 38, 0.7) 0 55%, rgba(8, 14, 38, 0.36) 56% 72%, rgba(98, 230, 255, 0.08) 73% 74%, rgba(8, 14, 38, 0.2) 75%);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 24px rgba(98, 230, 255, 0.08);
+    cursor: grab;
     touch-action: none;
   }
-  .mobile-dpad button {
-    border-radius: 13px;
-    color: rgba(238, 242, 255, 0.78);
-    background: rgba(16, 27, 61, 0.62);
-    font-size: 1.05rem;
+  .joystick-base:active { cursor: grabbing; }
+  .joystick-base::after {
+    position: absolute;
+    inset: 17px;
+    border: 1px dashed rgba(184, 207, 255, 0.12);
+    border-radius: 50%;
+    content: "";
+    pointer-events: none;
   }
-  .mobile-dpad button.active, .mobile-dpad button:active {
-    color: #061020;
-    background: rgba(98, 230, 255, 0.88);
-    box-shadow: 0 0 18px rgba(98, 230, 255, 0.32);
+  .joystick-stick {
+    --stick-x: 0px;
+    --stick-y: 0px;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 58px;
+    height: 58px;
+    border: 1px solid rgba(190, 248, 255, 0.74);
+    border-radius: 50%;
+    background: radial-gradient(circle at 34% 28%, #d8fbff 0 5%, #75e8ff 28%, #3777d1 72%, #243a83 100%);
+    box-shadow: 0 8px 17px rgba(0, 0, 0, 0.34), 0 0 22px rgba(98, 230, 255, 0.36), inset 0 2px 4px rgba(255, 255, 255, 0.52);
+    pointer-events: none;
+    transform: translate(calc(-50% + var(--stick-x)), calc(-50% + var(--stick-y)));
+    transition: transform 100ms ease-out;
   }
   .page-footer { font-size: 0.52rem; }
 }

@@ -80,10 +80,15 @@ const BOSS_FIRST_DELAY = 32;
 const BOSS_COOLDOWN = 48;
 const input = new Set();
 const directionMap = { up: "up", down: "down", left: "left", right: "right" };
+const joystickInput = new THREE.Vector2();
+let joystickPointerId = null;
 
 const ui = {
   container: document.querySelector("#scene-container"),
   canvasFrame: document.querySelector("#canvas-frame"),
+  mobileJoystick: document.querySelector("#mobile-joystick"),
+  joystickBase: document.querySelector("#joystick-base"),
+  joystickStick: document.querySelector("#joystick-stick"),
   pauseButton: document.querySelector("#pause-button"),
   resumeButton: document.querySelector("#resume-button"),
   restartButton: document.querySelector("#restart-button"),
@@ -1390,9 +1395,9 @@ function takeHit(body) {
 function updatePlayer(delta) {
   const player = state.player;
   const movement = new THREE.Vector3(
-    (input.has("right") ? 1 : 0) - (input.has("left") ? 1 : 0),
+    (input.has("right") ? 1 : 0) - (input.has("left") ? 1 : 0) + joystickInput.x,
     0,
-    (input.has("down") ? 1 : 0) - (input.has("up") ? 1 : 0),
+    (input.has("down") ? 1 : 0) - (input.has("up") ? 1 : 0) + joystickInput.y,
   );
   if (movement.lengthSq() > 0) movement.normalize();
   const playerSpeed = 12.5;
@@ -1995,6 +2000,7 @@ function restartGame() {
   state.player.comboTimer = 0;
   Object.keys(state.player.perks).forEach((key) => { state.player.perks[key] = 0; });
   input.clear();
+  resetJoystick();
   ui.sceneToast.innerHTML = "";
   updateGridDensity();
   updateInfiniteWorld();
@@ -2111,6 +2117,35 @@ function restoreGame(saved) {
   updateUi(true);
 }
 
+function resetJoystick() {
+  joystickPointerId = null;
+  joystickInput.set(0, 0);
+  if (ui.joystickStick) {
+    ui.joystickStick.style.setProperty("--stick-x", "0px");
+    ui.joystickStick.style.setProperty("--stick-y", "0px");
+  }
+}
+
+function updateJoystick(event) {
+  if (!ui.joystickBase || event.pointerId !== joystickPointerId) return;
+  const rect = ui.joystickBase.getBoundingClientRect();
+  const centerX = rect.left + rect.width * 0.5;
+  const centerY = rect.top + rect.height * 0.5;
+  const stickRadius = (ui.joystickStick?.getBoundingClientRect().width || 54) * 0.5;
+  const maxRadius = Math.max(1, rect.width * 0.5 - stickRadius - 8);
+  let offsetX = event.clientX - centerX;
+  let offsetY = event.clientY - centerY;
+  const distance = Math.hypot(offsetX, offsetY);
+  if (distance > maxRadius) {
+    const ratio = maxRadius / distance;
+    offsetX *= ratio;
+    offsetY *= ratio;
+  }
+  joystickInput.set(offsetX / maxRadius, offsetY / maxRadius);
+  ui.joystickStick?.style.setProperty("--stick-x", `${offsetX}px`);
+  ui.joystickStick?.style.setProperty("--stick-y", `${offsetY}px`);
+}
+
 function setupInput() {
   const keyDirections = { ArrowUp: "up", w: "up", W: "up", ArrowDown: "down", s: "down", S: "down", ArrowLeft: "left", a: "left", A: "left", ArrowRight: "right", d: "right", D: "right" };
   window.addEventListener("keydown", (event) => {
@@ -2129,7 +2164,10 @@ function setupInput() {
   window.addEventListener("keyup", (event) => {
     if (keyDirections[event.key]) input.delete(keyDirections[event.key]);
   });
-  window.addEventListener("blur", () => input.clear());
+  window.addEventListener("blur", () => {
+    input.clear();
+    resetJoystick();
+  });
 
   document.querySelectorAll(".dpad button").forEach((button) => {
     const direction = directionMap[button.dataset.dir];
@@ -2145,6 +2183,28 @@ function setupInput() {
     button.addEventListener("lostpointercapture", release);
     button.addEventListener("pointerleave", (event) => { if (event.buttons === 0) release(); });
   });
+
+  if (ui.joystickBase) {
+    ui.joystickBase.addEventListener("pointerdown", (event) => {
+      if (joystickPointerId !== null) return;
+      event.preventDefault();
+      joystickPointerId = event.pointerId;
+      ui.joystickBase.setPointerCapture?.(event.pointerId);
+      updateJoystick(event);
+    });
+    ui.joystickBase.addEventListener("pointermove", (event) => {
+      event.preventDefault();
+      updateJoystick(event);
+    });
+    const releaseJoystick = (event) => {
+      if (event.pointerId !== joystickPointerId) return;
+      event.preventDefault();
+      resetJoystick();
+    };
+    ui.joystickBase.addEventListener("pointerup", releaseJoystick);
+    ui.joystickBase.addEventListener("pointercancel", releaseJoystick);
+    ui.joystickBase.addEventListener("lostpointercapture", releaseJoystick);
+  }
 }
 
 function resize() {
