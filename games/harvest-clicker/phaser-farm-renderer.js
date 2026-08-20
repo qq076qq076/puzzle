@@ -86,6 +86,10 @@
     }
 
     create() {
+      // The app camera stores a top-left screen offset. Phaser cameras zoom
+      // around the viewport center by default, which adds a scale-dependent
+      // offset and makes pointer hit tests drift after zooming.
+      this.cameras.main.setOrigin(0, 0);
       this.ground = this.add.graphics();
       this.cells = this.add.graphics();
       this.shadow = this.add.graphics();
