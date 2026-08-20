@@ -191,16 +191,28 @@
       };
     }
 
-    isWorldVisible(x, y, padding = TILE_W * 2) {
+    visibleWorldBounds(padding = TILE_W * 2) {
       const snapshot = this.snapshot;
-      if (!snapshot) return true;
-      const scale = Math.max(.01, safeNumber(snapshot.camera?.scale, 1));
-      const screenX = x * scale + safeNumber(snapshot.camera?.x);
-      const screenY = y * scale + safeNumber(snapshot.camera?.y);
-      const pad = padding * scale;
-      const width = Math.max(1, this.parent?.clientWidth || 1);
-      const height = Math.max(1, this.parent?.clientHeight || 1);
-      return screenX >= -pad && screenX <= width + pad && screenY >= -pad && screenY <= height + pad;
+      const camera = this.cameras?.main;
+      const scale = Math.max(.01, safeNumber(camera?.zoom, safeNumber(snapshot?.camera?.scale, 1)));
+      // Use Phaser's actual camera scroll and viewport dimensions. Comparing
+      // against the DOM size plus the app camera offset can drift when the
+      // Scale Manager resizes the canvas or when the viewport has a CSS offset.
+      const scrollX = safeNumber(camera?.scrollX, -safeNumber(snapshot?.camera?.x) / scale);
+      const scrollY = safeNumber(camera?.scrollY, -safeNumber(snapshot?.camera?.y) / scale);
+      const viewportWidth = Math.max(1, safeNumber(camera?.width, this.parent?.clientWidth || 1));
+      const viewportHeight = Math.max(1, safeNumber(camera?.height, this.parent?.clientHeight || 1));
+      return {
+        left: scrollX - padding,
+        right: scrollX + viewportWidth / scale + padding,
+        top: scrollY - padding,
+        bottom: scrollY + viewportHeight / scale + padding
+      };
+    }
+
+    isWorldVisible(x, y, padding = TILE_W * 2) {
+      const bounds = this.visibleWorldBounds(padding);
+      return x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom;
     }
 
     farmSignature(state) {
