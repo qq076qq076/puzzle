@@ -143,7 +143,7 @@ const sprinklerById = new Map(SPRINKLERS.map((item) => [item.id, item]));
 const fertilizerById = new Map(FERTILIZERS.map((item) => [item.id, item]));
 const decorationById = new Map(DECORATIONS.map((item) => [item.id, item]));
 const plotIndexesById = new Map();
-const FERTILIZER_STACK_DECAY = 0.62;
+const FERTILIZER_COIN_STACK_DECAY = 0.62;
 
 function getPlant(id) { return plantById.get(id); }
 function getTool(id) { return toolById.get(id); }
@@ -181,12 +181,17 @@ function getFertilizerEffect(cell) {
       const rightItem = getFertilizer(right.id);
       return (1 - (rightItem?.growthMultiplier || 1)) - (1 - (leftItem?.growthMultiplier || 1));
     });
-  let growthMultiplier = 1;
+  // Every fertilizer layer applies its complete growth-time reduction. The
+  // result is a direct product of the configured multipliers, with no hidden
+  // diminishing weight between layers.
+  const growthMultiplier = stacks.reduce((multiplier, stack) => {
+    const fertilizer = getFertilizer(stack.id);
+    return multiplier * (fertilizer?.growthMultiplier || 1);
+  }, 1);
   let coinMultiplier = 1;
   stacks.forEach((stack, index) => {
     const fertilizer = getFertilizer(stack.id);
-    const weight = FERTILIZER_STACK_DECAY ** index;
-    growthMultiplier -= (1 - fertilizer.growthMultiplier) * weight;
+    const weight = FERTILIZER_COIN_STACK_DECAY ** index;
     coinMultiplier += (fertilizer.coinMultiplier - 1) * weight;
   });
   return {
@@ -352,14 +357,18 @@ function automationTargetIndexes(range, plotId, ownedPlots, centerIndex = indexe
 }
 
 function getAutomationToolbarAction(currentSelection, nextSelection, installed = false) {
-  const sameSelection = Boolean(currentSelection && nextSelection
+  const sameIdentity = Boolean(currentSelection && nextSelection
     && currentSelection.kind === nextSelection.kind
     && currentSelection.id === nextSelection.id
-    && currentSelection.sourcePlot === nextSelection.sourcePlot
-    && currentSelection.sourceInstanceId === nextSelection.sourceInstanceId);
+    && (currentSelection.sourceInstanceId && nextSelection.sourceInstanceId
+      ? currentSelection.sourceInstanceId === nextSelection.sourceInstanceId
+      : currentSelection.sourcePlot === nextSelection.sourcePlot));
+  const sameSelection = Boolean(sameIdentity
+    && (currentSelection.sourcePlot === nextSelection.sourcePlot
+      || (currentSelection.sourceInstanceId && nextSelection.sourceInstanceId)));
   return {
     sameSelection,
-    shouldManage: Boolean(installed && sameSelection && nextSelection?.sourceInstanceId)
+    shouldManage: Boolean(installed && sameIdentity && nextSelection?.sourcePlot != null)
   };
 }
 

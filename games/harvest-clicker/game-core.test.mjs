@@ -289,6 +289,14 @@ test("已配置設備第一次點擊定位，第二次點擊同一實例才開�
     sameSelection: false,
     shouldManage: false
   });
+  assert.deepEqual(getAutomationToolbarAction(
+    { kind: "harvester", id: "clockwork", sourcePlot: INITIAL_PLOT_ID, sourceInstanceId: null },
+    { kind: "harvester", id: "clockwork", sourcePlot: INITIAL_PLOT_ID, sourceInstanceId: null },
+    true
+  ), {
+    sameSelection: true,
+    shouldManage: true
+  });
 });
 
 test("林業自動設備只採伐樹木，不會攻擊一般作物", () => {
@@ -393,7 +401,7 @@ test("肥料立即加速當下作物並持續指定收割輪數", () => {
   assert.ok(indexesForPlot(INITIAL_PLOT_ID).every((index) => state.cells[index].fertilizerRounds === 0));
 });
 
-test("同一格肥料可以疊加且後續效果邊際遞減", () => {
+test("同一格肥料的生長時間按每層倍率直接相乘", () => {
   const state = createInitialState(0);
   sowPlot(state, INITIAL_PLOT_ID, "clover");
   const index = indexesForPlot(INITIAL_PLOT_ID)[0];
@@ -410,7 +418,8 @@ test("同一格肥料可以疊加且後續效果邊際遞減", () => {
   assert.equal(state.cells[index].fertilizerStacks.length, 3);
   assert.ok(secondDuration < firstDuration);
   assert.ok(thirdDuration < secondDuration);
-  assert.ok(firstDuration - secondDuration > secondDuration - thirdDuration);
+  assert.ok(Math.abs(secondDuration / firstDuration - 0.75) < 1e-9);
+  assert.ok(Math.abs(thirdDuration / secondDuration - 0.75) < 1e-9);
   assert.ok(second.coinMultiplier > first.coinMultiplier);
   assert.ok(third.coinMultiplier > second.coinMultiplier);
   assert.ok(second.coinMultiplier - first.coinMultiplier > third.coinMultiplier - second.coinMultiplier);

@@ -2720,7 +2720,7 @@ function selectionActionPreview(plotId) {
     return {
       icon: fertilizer.emoji,
       title: `在${plot.name}施用${fertilizer.name}？`,
-      text: `立即追加到選取區塊內的作物；若包含樹木則套用整棵樹：本次生長 ×${fertilizer.growthMultiplier}、金幣 ×${fertilizer.coinMultiplier}，持續 ${fertilizer.rounds} 輪。${stackCount ? `目前已有 ${stackCount} 層，追加後效果會疊加但邊際遞減。` : ""}`,
+      text: `立即追加到選取區塊內的作物；若包含樹木則套用整棵樹：本次生長時間 ×${fertilizer.growthMultiplier}、金幣 ×${fertilizer.coinMultiplier}，持續 ${fertilizer.rounds} 輪。${stackCount ? `目前已有 ${stackCount} 層，追加後生長時間會再乘上本次倍率。` : ""}`,
       button: "確認施肥",
       disabled: false
     };
@@ -2912,7 +2912,7 @@ function shopProductDescription(kind, item) {
   }
   if (kind === "harvester") return `用途：配置到已購土地內任一中心格後，自動攻擊範圍內的成熟${item.targetType === "tree" ? "樹木，不會處理一般作物" : "作物"}，離線也會工作。範圍 ${item.range}×${item.range}（最多 ${item.range ** 2} 格），每 ${item.intervalSeconds} 秒造成 ${item.damage} 傷害。`;
   if (kind === "sprinkler") return `用途：配置到已購土地內任一中心格後，持續加速範圍內作物，離線生長同樣有效。範圍 ${item.range}×${item.range}（最多 ${item.range ** 2} 格），生長時間 ×${item.growthMultiplier}。`;
-  return `用途：${item.purpose} 選取後追加施用於一塊 3×3 作物；若區塊內有樹木則套用整棵樹，當下立即生效。生長 ×${item.growthMultiplier}、金幣 ×${item.coinMultiplier}，持續 ${item.rounds} 輪。同一格可疊加多份肥料，後續效果會邊際遞減。`;
+  return `用途：${item.purpose} 選取後追加施用於一塊 3×3 作物；若區塊內有樹木則套用整棵樹，當下立即生效。生長時間 ×${item.growthMultiplier}、金幣 ×${item.coinMultiplier}，持續 ${item.rounds} 輪。同一格可疊加多份肥料，生長時間會依每層倍率直接相乘。`;
 }
 
 function shopDecorationDescription(item) {
@@ -2964,6 +2964,7 @@ function renderQuickbar() {
     elements.quickbar.innerHTML = '<div class="readonly-quickbar">拖曳移動 · 滾輪或雙指縮放 · 點擊作物查看目前狀態</div>';
     return;
   }
+  ensureAutomationInstances(state);
   const tools = TOOLS.filter((tool) => state.ownedToolIds.includes(tool.id)).map((tool) => quickButton({
     image: tool.image, emoji: tool.emoji, title: `${tool.name}｜${tool.damage} 傷害`, attributes: `data-tool-id="${tool.id}"`, equipped: tool.id === state.equippedToolId
   }));
@@ -2998,12 +2999,12 @@ function renderQuickbar() {
   for (const placed of [...state.harvesters].sort(stableAutomationOrder)) {
     const item = getHarvester(placed.id);
     if (!item) continue;
-    items.push(quickButton({ image: item.image, emoji: item.emoji, title: `${item.name}｜第一次點擊定位，再點擊管理設備`, attributes: `data-installed-kind="harvester" data-inventory-id="${item.id}" data-source-plot="${placed.plotId}" data-source-instance="${placed.instanceId || ""}"`, installed: true, selected: selection?.kind === "harvester" && selection.sourceInstanceId === placed.instanceId }));
+    items.push(quickButton({ image: item.image, emoji: item.emoji, title: `${item.name}｜第一次點擊定位，再點擊管理設備`, attributes: `data-installed-kind="harvester" data-inventory-id="${item.id}" data-source-plot="${placed.plotId}" data-source-instance="${placed.instanceId || ""}"`, installed: true, selected: selection?.kind === "harvester" && selection.id === placed.id && (selection.sourceInstanceId ? selection.sourceInstanceId === placed.instanceId : selection.sourcePlot === placed.plotId) }));
   }
   for (const placed of [...state.sprinklers].sort(stableAutomationOrder)) {
     const item = getSprinkler(placed.id);
     if (!item) continue;
-    items.push(quickButton({ image: item.image, emoji: item.emoji, title: `${item.name}｜第一次點擊定位，再點擊管理設備`, attributes: `data-installed-kind="sprinkler" data-inventory-id="${item.id}" data-source-plot="${placed.plotId}" data-source-instance="${placed.instanceId || ""}"`, installed: true, selected: selection?.kind === "sprinkler" && selection.sourceInstanceId === placed.instanceId }));
+    items.push(quickButton({ image: item.image, emoji: item.emoji, title: `${item.name}｜第一次點擊定位，再點擊管理設備`, attributes: `data-installed-kind="sprinkler" data-inventory-id="${item.id}" data-source-plot="${placed.plotId}" data-source-instance="${placed.instanceId || ""}"`, installed: true, selected: selection?.kind === "sprinkler" && selection.id === placed.id && (selection.sourceInstanceId ? selection.sourceInstanceId === placed.instanceId : selection.sourcePlot === placed.plotId) }));
   }
   const cancel = selection ? '<button class="quick-item quick-cancel" type="button" data-cancel-selection aria-label="取消使用物品">×</button>' : "";
   elements.quickbar.innerHTML = tools.join("") + (items.length ? '<span class="quick-divider" aria-hidden="true"></span>' + items.join("") : "") + cancel;
@@ -3285,7 +3286,7 @@ function useSelection(plotId) {
     fertilizePlot(state, plotId, fertilizerId);
     triggerDeviceAnimation("fertilizer", plotId);
     const stackCount = Math.max(...indexesForPlot(plotId).map((index) => getFertilizerEffect(state.cells[index]).count));
-    showToast(`${getFertilizer(fertilizerId).name}已追加，施肥機目前 ${stackCount} 層；效果會邊際遞減`);
+    showToast(`${getFertilizer(fertilizerId).name}已追加，施肥機目前 ${stackCount} 層；生長時間按倍率相乘`);
     selection = null;
     feedbackSound = "fertilizer";
   } else if (selection.kind === "harvester" || selection.kind === "sprinkler") {
@@ -3775,6 +3776,7 @@ elements.importInput.addEventListener("change", async () => {
   try {
     const imported = normalizeStateData(JSON.parse(await file.text()));
     if (!validateState(imported)) throw new Error("invalid save");
+    ensureAutomationInstances(imported);
     if (!window.confirm(`匯入後會覆蓋目前農場。存檔金幣：${formatMoney(imported.gold)}，確定繼續嗎？`)) return;
     state = imported;
     state.inventory ||= {};
