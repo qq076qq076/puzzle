@@ -73,6 +73,7 @@ const deviceBursts = [];
 const activePointers = new Map();
 const TALL_PLANT_IDS = new Set(["corn", "wheat", "lavender", "cotton", "sugarcane", "grape", "vanilla", "coffee"]);
 const ALL_PLOT_IDS = PLOTS.map((plot) => plot.id);
+const PLOT_GEOMETRY_CACHE = new Map();
 const CELL_PAINT_ORDER = Array.from({ length: BOARD_SIZE * BOARD_SIZE }, (_, index) => index)
   .sort((a, b) => {
     const aRow = Math.floor(a / BOARD_SIZE); const aCol = a % BOARD_SIZE;
@@ -1327,13 +1328,15 @@ function pathCellSurface(context, x, y) {
 }
 
 function plotGeometry(plotId) {
+  const cached = PLOT_GEOMETRY_CACHE.get(plotId);
+  if (cached) return cached;
   const plotRow = Math.floor(plotId / PLOT_GRID_SIZE) * 3;
   const plotCol = (plotId % PLOT_GRID_SIZE) * 3;
   const topCell = worldPoint(plotRow, plotCol);
   const rightCell = worldPoint(plotRow, plotCol + 2);
   const bottomCell = worldPoint(plotRow + 2, plotCol + 2);
   const leftCell = worldPoint(plotRow + 2, plotCol);
-  return {
+  const geometry = {
     plotRow,
     plotCol,
     top: { x: topCell.x, y: topCell.y - TILE_H / 2 },
@@ -1342,6 +1345,16 @@ function plotGeometry(plotId) {
     left: { x: leftCell.x - TILE_W / 2, y: leftCell.y },
     center: worldPoint(plotRow + 1, plotCol + 1)
   };
+  PLOT_GEOMETRY_CACHE.set(plotId, geometry);
+  return geometry;
+}
+
+function isWorldPointVisible(x, y, padding = TILE_W * 2.5) {
+  const screenX = x * camera.scale + camera.x;
+  const screenY = y * camera.scale + camera.y;
+  const scaledPadding = padding * camera.scale;
+  return screenX >= -scaledPadding && screenX <= canvasWidth + scaledPadding
+    && screenY >= -scaledPadding && screenY <= canvasHeight + scaledPadding;
 }
 
 function pathPlotTop(geometry) {
@@ -1353,9 +1366,9 @@ function pathPlotTop(geometry) {
   ctx.closePath();
 }
 
-function drawPlotBase(plot) {
+function drawPlotBase(plot, ownedPlots) {
   const geometry = plotGeometry(plot.id);
-  const owned = state.ownedPlots.includes(plot.id);
+  const owned = ownedPlots.has(plot.id);
   const areaSelection = isRangeSelection() || isFootprintPlantSelection();
   const selectedTarget = selection && !areaSelection && pendingActionPlotId === plot.id;
   const selectable = selection && !areaSelection && !selectedTarget && isValidSelectionPlot(plot.id);
@@ -1708,27 +1721,71 @@ function automationCellPath(targets) {
   return path;
 }
 
+function automationPathMotion(path, fallbackX, fallbackY, now, phaseOffset, cellsPerSecond, restingPhase = 0) {
+  const points = path.map((index) => worldPoint(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE));
+  const segmentCount = Math.max(0, points.length - 1);
+  const cycleMs = segmentCount ? segmentCount * 2 / cellsPerSecond * 1000 : 1000;
+  const phase = state.settings.reducedMotion ? restingPhase : ((now + phaseOffset) % cycleMs) / cycleMs;
+  const loopDistance = phase * segmentCount * 2;
+  const movingForward = loopDistance <= segmentCount;
+  const pathDistance = movingForward ? loopDistance : segmentCount * 2 - loopDistance;
+  const pathIndex = segmentCount ? Math.min(segmentCount, Math.floor(pathDistance)) : 0;
+  const endIndex = segmentCount ? clamp(pathIndex + 1, 0, segmentCount) : pathIndex;
+  const progress = pathIndex === endIndex ? 0 : pathDistance - pathIndex;
+  const start = points[pathIndex] || { x: fallbackX, y: fallbackY };
+  const end = points[endIndex] || start;
+  const movement = movingForward
+    ? { x: end.x - start.x, y: end.y - start.y }
+    : { x: start.x - end.x, y: start.y - end.y };
+  if (!movement.x && !movement.y && points.length > 1) {
+    const previous = points[Math.max(0, pathIndex - 1)] || start;
+    movement.x = start.x - previous.x;
+    movement.y = start.y - previous.y;
+    if (!movingForward) {
+      movement.x *= -1;
+      movement.y *= -1;
+    }
+  }
+  if (!movement.x && !movement.y) movement.x = 1;
+  return {
+    x: start.x + (end.x - start.x) * progress,
+    y: start.y + (end.y - start.y) * progress,
+    movement,
+    heading: Math.atan2(movement.y, movement.x)
+  };
+}
+
 function automationRangeGeometry(device, plotId, centerIndex) {
   const safeCenterIndex = Number.isInteger(centerIndex) && centerIndex >= 0 && centerIndex < BOARD_SIZE * BOARD_SIZE
     ? centerIndex
     : indexesForPlot(plotId)[4];
   const targets = automationTargetIndexes(device?.range, plotId, state.ownedPlots, safeCenterIndex);
   if (!targets.length) return null;
-  const points = targets.map((index) => worldPoint(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE));
   const anchor = worldPoint(Math.floor(safeCenterIndex / BOARD_SIZE), safeCenterIndex % BOARD_SIZE);
-  const minX = Math.min(...points.map((point) => point.x));
-  const maxX = Math.max(...points.map((point) => point.x));
-  const minY = Math.min(...points.map((point) => point.y));
-  const maxY = Math.max(...points.map((point) => point.y));
-  const rows = targets.map((index) => Math.floor(index / BOARD_SIZE));
-  const cols = targets.map((index) => index % BOARD_SIZE);
+  let minX = Infinity; let maxX = -Infinity;
+  let minY = Infinity; let maxY = -Infinity;
+  let minRow = BOARD_SIZE; let maxRow = -1;
+  let minCol = BOARD_SIZE; let maxCol = -1;
+  for (const index of targets) {
+    const row = Math.floor(index / BOARD_SIZE);
+    const col = index % BOARD_SIZE;
+    const point = worldPoint(row, col);
+    if (point.x < minX) minX = point.x;
+    if (point.x > maxX) maxX = point.x;
+    if (point.y < minY) minY = point.y;
+    if (point.y > maxY) maxY = point.y;
+    if (row < minRow) minRow = row;
+    if (row > maxRow) maxRow = row;
+    if (col < minCol) minCol = col;
+    if (col > maxCol) maxCol = col;
+  }
   return {
     targets,
     path: automationCellPath(targets),
-    minRow: Math.min(...rows),
-    maxRow: Math.max(...rows),
-    minCol: Math.min(...cols),
-    maxCol: Math.max(...cols),
+    minRow,
+    maxRow,
+    minCol,
+    maxCol,
     // The operation path is derived from the same cell set used by the
     // simulator, so a machine no longer gets a guessed ellipse.
     radiusX: Math.max(TILE_W / 2, Math.max(Math.abs(anchor.x - minX), Math.abs(maxX - anchor.x)) + TILE_W / 2),
@@ -1950,34 +2007,11 @@ function drawHarvesterVehicle(device, x, y, heading, now, movement = null) {
 
 function drawHarvesterOperation(device, plotId, x, y, geometry, now) {
   const path = geometry?.path || [];
-  const pathPoints = path.map((index) => worldPoint(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE));
-  const segmentCount = Math.max(0, pathPoints.length - 1);
-  const cycleMs = segmentCount ? segmentCount * 2 / HARVESTER_CELLS_PER_SECOND * 1000 : 1000;
-  const phase = state.settings.reducedMotion ? 0 : ((now + plotId * 137) % cycleMs) / cycleMs;
-  const loopDistance = phase * segmentCount * 2;
-  const movingForward = loopDistance <= segmentCount;
-  const pathDistance = movingForward ? loopDistance : segmentCount * 2 - loopDistance;
-  const pathIndex = segmentCount ? Math.min(segmentCount, Math.floor(pathDistance)) : 0;
-  // Interpolate position on the same segment for both directions. The old
-  // reverse branch used `pathIndex - 1` as the visual endpoint, so the car
-  // could jump onto the previous segment while its front pointed elsewhere.
-  const segmentEndIndex = segmentCount ? clamp(pathIndex + 1, 0, segmentCount) : pathIndex;
-  const localProgress = pathIndex === segmentEndIndex ? 0 : pathDistance - pathIndex;
-  const segmentStart = pathPoints[pathIndex] || { x, y };
-  const segmentEnd = pathPoints[segmentEndIndex] || segmentStart;
-  const vehicleX = segmentStart.x + (segmentEnd.x - segmentStart.x) * localProgress;
-  const vehicleY = segmentStart.y + (segmentEnd.y - segmentStart.y) * localProgress + 7;
-  const forwardVector = { x: segmentEnd.x - segmentStart.x, y: segmentEnd.y - segmentStart.y };
-  const headingVector = movingForward
-    ? forwardVector
-    : { x: -forwardVector.x, y: -forwardVector.y };
-  if (!headingVector.x && !headingVector.y && pathPoints.length > 1) {
-    const previous = pathPoints[Math.max(0, pathIndex - 1)] || segmentStart;
-    const fallback = { x: segmentStart.x - previous.x, y: segmentStart.y - previous.y };
-    headingVector.x = movingForward ? fallback.x : -fallback.x;
-    headingVector.y = movingForward ? fallback.y : -fallback.y;
-  }
-  const heading = Math.atan2(headingVector.y, headingVector.x);
+  const motion = automationPathMotion(path, x, y, now, plotId * 137, HARVESTER_CELLS_PER_SECOND);
+  const vehicleX = motion.x;
+  const vehicleY = motion.y + 7;
+  const headingVector = motion.movement;
+  const heading = motion.heading;
   const forestry = device.targetType === "tree";
 
   ctx.save();
@@ -2030,9 +2064,7 @@ function deviceAnchorPoint(placed, fallback) {
   return worldPoint(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE);
 }
 
-function drawDevices(plotId, x, y, now) {
-  const harvesterState = state.harvesters.find((item) => item.plotId === plotId);
-  const sprinklerState = state.sprinklers.find((item) => item.plotId === plotId);
+function drawDevices(plotId, x, y, now, harvesterState, sprinklerState) {
   const harvester = harvesterState ? getHarvester(harvesterState.id) : null;
   const sprinkler = sprinklerState ? getSprinkler(sprinklerState.id) : null;
   if (!harvester && !sprinkler) return;
@@ -2053,45 +2085,39 @@ function drawDevices(plotId, x, y, now) {
   if (sprinkler) drawDeviceBadge(sprinkler, sprinklerPoint.x + (sameAnchor ? 25 : 0), sprinklerPoint.y - 38, "rgba(105,197,218,.82)");
 }
 
-function drawFertilizerOperation(plotId, x, y, now) {
-  const fertilizedEntries = indexesForPlot(plotId)
-    .map((index) => ({ index, cell: state.cells[index] }))
-    .filter(({ cell }) => getFertilizerEffect(cell).count > 0);
-  if (!fertilizedEntries.length) return;
+function firstAutomationByPlot(placements) {
+  const byPlot = new Map();
+  for (const placed of placements) {
+    if (!byPlot.has(placed.plotId)) byPlot.set(placed.plotId, placed);
+  }
+  return byPlot;
+}
 
+function drawFertilizerOperation(plotId, x, y, now) {
   // Do not spend animation work on a fertilized plot that is fully outside
   // the viewport. Large farms can keep dozens of fertilizer stacks active.
-  const screenX = x * camera.scale + camera.x;
-  const screenY = y * camera.scale + camera.y;
-  const margin = TILE_W * 2.5 * camera.scale;
-  if (screenX < -margin || screenX > canvasWidth + margin || screenY < -margin || screenY > canvasHeight + margin) return;
+  if (!isWorldPointVisible(x, y)) return;
 
-  const representative = fertilizedEntries.reduce((best, entry) => {
-    return getFertilizerEffect(entry.cell).count > getFertilizerEffect(best.cell).count ? entry : best;
-  }, fertilizedEntries[0]);
-  const fertilizerEffect = getFertilizerEffect(representative.cell);
+  const fertilizedEntries = [];
+  let fertilizerEffect = null;
+  let rounds = 0;
+  for (const index of indexesForPlot(plotId)) {
+    const cell = state.cells[index];
+    const effect = getFertilizerEffect(cell);
+    if (!effect.count) continue;
+    fertilizedEntries.push({ index, effect });
+    if (!fertilizerEffect || effect.count > fertilizerEffect.count) fertilizerEffect = effect;
+    if (effect.rounds > rounds) rounds = effect.rounds;
+  }
+  if (!fertilizedEntries.length || !fertilizerEffect) return;
   const fertilizer = getFertilizer(fertilizerEffect.stacks[0]?.id);
   if (!fertilizer) return;
-  const rounds = Math.max(...fertilizedEntries.map(({ cell }) => getFertilizerEffect(cell).rounds));
   const path = automationCellPath(fertilizedEntries.map(({ index }) => index));
-  const pathPoints = path.map((index) => worldPoint(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE));
-  const segmentCount = Math.max(0, pathPoints.length - 1);
-  const cycleMs = segmentCount ? segmentCount * 2 / FERTILIZER_CELLS_PER_SECOND * 1000 : 1000;
-  const phase = state.settings.reducedMotion ? .5 : ((now + plotId * 173) % cycleMs) / cycleMs;
-  const loopDistance = phase * segmentCount * 2;
-  const movingForward = loopDistance <= segmentCount;
-  const pathDistance = movingForward ? loopDistance : segmentCount * 2 - loopDistance;
-  const pathIndex = segmentCount ? Math.min(segmentCount, Math.floor(pathDistance)) : 0;
-  const segmentEndIndex = segmentCount ? clamp(pathIndex + 1, 0, segmentCount) : pathIndex;
-  const localProgress = pathIndex === segmentEndIndex ? 0 : pathDistance - pathIndex;
-  const segmentStart = pathPoints[pathIndex] || { x, y };
-  const segmentEnd = pathPoints[segmentEndIndex] || segmentStart;
-  const machineX = segmentStart.x + (segmentEnd.x - segmentStart.x) * localProgress;
-  const machineY = segmentStart.y + (segmentEnd.y - segmentStart.y) * localProgress + 7;
-  const forwardVector = { x: segmentEnd.x - segmentStart.x, y: segmentEnd.y - segmentStart.y };
-  const movement = movingForward ? forwardVector : { x: -forwardVector.x, y: -forwardVector.y };
-  if (!movement.x && !movement.y) movement.x = 1;
-  const heading = Math.atan2(movement.y, movement.x);
+  const motion = automationPathMotion(path, x, y, now, plotId * 173, FERTILIZER_CELLS_PER_SECOND, .5);
+  const machineX = motion.x;
+  const machineY = motion.y + 7;
+  const movement = motion.movement;
+  const heading = motion.heading;
   const vectorLength = Math.max(1, Math.hypot(movement.x, movement.y));
   const backX = -movement.x / vectorLength;
   const backY = -movement.y / vectorLength;
@@ -2169,14 +2195,13 @@ function plotOutline(plotId, color, lineWidth = 3) {
   ctx.stroke();
 }
 
-function drawLockedPlots() {
+function drawLockedPlots(ownedPlots) {
   const price = getLandPrice(state.ownedPlots.length);
   const affordable = price != null && state.gold >= price;
   for (const plot of PLOTS) {
-    if (state.ownedPlots.includes(plot.id)) continue;
-    const indexes = indexesForPlot(plot.id);
-    const centerIndex = indexes[4];
-    const point = worldPoint(Math.floor(centerIndex / BOARD_SIZE), centerIndex % BOARD_SIZE);
+    if (ownedPlots.has(plot.id)) continue;
+    const point = plotGeometry(plot.id).center;
+    if (!isWorldPointVisible(point.x, point.y, TILE_W * 3)) continue;
     plotOutline(plot.id, affordable ? "rgba(255,223,109,.72)" : "rgba(231,241,209,.2)", affordable ? 3 : 2);
     ctx.save();
     ctx.translate(point.x, point.y - 8);
@@ -2242,28 +2267,31 @@ function drawPlacementSelectionPreview() {
 }
 
 function drawPlacedGroundDecorations() {
-  const placed = state.decorations.filter((decoration) => getDecoration(decoration.id)?.layer === "ground");
-  for (const decoration of placed) {
+  for (const decoration of state.decorations) {
     const item = getDecoration(decoration.id);
     const point = decorationSlotWorldPoint(decoration);
-    if (item && point) drawDecorationItem(item, point.x, point.y, decoration.direction, 1);
+    if (item?.layer === "ground" && point && isWorldPointVisible(point.x, point.y, TILE_W * 2)) {
+      drawDecorationItem(item, point.x, point.y, decoration.direction, 1);
+    }
   }
 }
 
 function decorationSceneNodes() {
-  return state.decorations.flatMap((decoration) => {
+  const nodes = [];
+  for (const decoration of state.decorations) {
     const item = getDecoration(decoration.id);
     const point = decorationSlotWorldPoint(decoration);
-    if (!item || !point || item.layer === "ground") return [];
-    return [{
+    if (!item || !point || item.layer === "ground" || !isWorldPointVisible(point.x, point.y, TILE_W * 3)) continue;
+    nodes.push({
       kind: "decoration",
       depth: point.y + (item.contactOffsetY || 8),
       x: point.x,
       item,
       decoration,
       point
-    }];
-  });
+    });
+  }
+  return nodes;
 }
 
 function cellPaintOrder() {
@@ -2480,7 +2508,10 @@ function drawFarm(now = performance.now()) {
     const bCenter = plotGeometry(b.id).center;
     return aCenter.y - bCenter.y || aCenter.x - bCenter.x;
   });
-  for (const plot of plotPaintOrder) drawPlotBase(plot);
+  for (const plot of plotPaintOrder) {
+    const center = plotGeometry(plot.id).center;
+    if (isWorldPointVisible(center.x, center.y, TILE_W * 3)) drawPlotBase(plot, owned);
+  }
   drawSideScenery();
   drawPlacedGroundDecorations();
   updateFarmer(now);
@@ -2498,11 +2529,14 @@ function drawFarm(now = performance.now()) {
     if (plantRootIndex !== index) continue;
     const anchorIndex = Number.isInteger(cell.plantAnchorIndex) ? cell.plantAnchorIndex : index;
     const point = plantVisualPoint(cell, anchorIndex);
+    if (!isWorldPointVisible(point.x, point.y, TILE_W * 5)) continue;
     const metrics = plantMetrics(cell);
     sceneNodes.push({ kind: "plant", depth: point.y + metrics.contactY, x: point.x, cell, point });
     plantOverlays.push({ cell, point, metrics });
   }
-  sceneNodes.push({ kind: "farmer", depth: farmer.y + TILE_H * .42, x: farmer.x });
+  if (isWorldPointVisible(farmer.x, farmer.y, TILE_W)) {
+    sceneNodes.push({ kind: "farmer", depth: farmer.y + TILE_H * .42, x: farmer.x });
+  }
   sceneNodes.sort((a, b) => a.depth - b.depth || a.x - b.x);
   for (const node of sceneNodes) {
     if (node.kind === "plant") drawPlant(node.cell, node.point.x, node.point.y, now);
@@ -2523,10 +2557,13 @@ function drawFarm(now = performance.now()) {
     }
   }
 
+  const harvestersByPlot = firstAutomationByPlot(state.harvesters);
+  const sprinklersByPlot = firstAutomationByPlot(state.sprinklers);
   for (const plotId of state.ownedPlots) {
     const center = plotGeometry(plotId).center;
+    if (!isWorldPointVisible(center.x, center.y, TILE_W * 3)) continue;
     drawFertilizerOperation(plotId, center.x, center.y, now);
-    drawDevices(plotId, center.x, center.y, now);
+    drawDevices(plotId, center.x, center.y, now, harvestersByPlot.get(plotId), sprinklersByPlot.get(plotId));
   }
   drawPlacementSelectionPreview();
 
@@ -2540,7 +2577,7 @@ function drawFarm(now = performance.now()) {
   }
 
   drawActionAnimations(now);
-  drawLockedPlots();
+  drawLockedPlots(owned);
   if (hoverIndex >= 0) {
     const row = Math.floor(hoverIndex / BOARD_SIZE);
     const col = hoverIndex % BOARD_SIZE;

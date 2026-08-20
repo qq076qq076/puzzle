@@ -142,6 +142,7 @@ const harvesterById = new Map(HARVESTERS.map((item) => [item.id, item]));
 const sprinklerById = new Map(SPRINKLERS.map((item) => [item.id, item]));
 const fertilizerById = new Map(FERTILIZERS.map((item) => [item.id, item]));
 const decorationById = new Map(DECORATIONS.map((item) => [item.id, item]));
+const plotIndexesById = new Map();
 const FERTILIZER_STACK_DECAY = 0.62;
 
 function getPlant(id) { return plantById.get(id); }
@@ -211,6 +212,8 @@ function plotIdForIndex(index) {
 }
 
 function indexesForPlot(plotId) {
+  const cached = plotIndexesById.get(plotId);
+  if (cached) return cached;
   const plotRow = Math.floor(plotId / PLOT_GRID_SIZE);
   const plotCol = plotId % PLOT_GRID_SIZE;
   const indexes = [];
@@ -219,6 +222,7 @@ function indexesForPlot(plotId) {
       indexes.push((plotRow * LAND_SIZE + y) * BOARD_SIZE + plotCol * LAND_SIZE + x);
     }
   }
+  plotIndexesById.set(plotId, indexes);
   return indexes;
 }
 
@@ -403,16 +407,33 @@ function occupiedIndexesForRoot(state, rootIndex) {
   return indexes.filter((index) => plantRootIndexForCell(state.cells[index], index) === rootIndex);
 }
 
+function automationCoversIndex(state, placed, item, targetIndex) {
+  if (!item || !Number.isInteger(targetIndex) || !state.ownedPlots.includes(plotIdForIndex(targetIndex))) return false;
+  const centerIndex = placed.centerIndex === undefined ? indexesForPlot(placed.plotId)[4] : Number(placed.centerIndex);
+  const centerRow = Math.floor(centerIndex / BOARD_SIZE);
+  const centerCol = centerIndex % BOARD_SIZE;
+  const targetRow = Math.floor(targetIndex / BOARD_SIZE);
+  const targetCol = targetIndex % BOARD_SIZE;
+  const radius = Math.floor(Math.max(1, item.range) / 2);
+  return Math.abs(targetRow - centerRow) <= radius && Math.abs(targetCol - centerCol) <= radius;
+}
+
 function getDeviceStateForIndex(state, list, getter, index, cell = null) {
-  return list
-    .filter((placed) => {
-      const item = getter(placed.id);
-      const plant = cell ? getPlant(cell.plantId) : null;
-      const canTargetPlant = !item?.targetType || item.targetType === plant?.type;
-      const targetIndex = plantAnchorIndexForCell(cell, index);
-      return item && canTargetPlant && automationTargetIndexes(item.range, placed.plotId, state.ownedPlots, placed.centerIndex).includes(targetIndex);
-    })
-    .sort((a, b) => (getter(b.id)?.tier || 0) - (getter(a.id)?.tier || 0))[0] || null;
+  const plant = cell ? getPlant(cell.plantId) : null;
+  const targetIndex = plantAnchorIndexForCell(cell, index);
+  let bestPlaced = null;
+  let bestTier = -Infinity;
+  for (const placed of list) {
+    const item = getter(placed.id);
+    if (!item || (item.targetType && item.targetType !== plant?.type)) continue;
+    if (!automationCoversIndex(state, placed, item, targetIndex)) continue;
+    const tier = item.tier || 0;
+    if (tier > bestTier) {
+      bestPlaced = placed;
+      bestTier = tier;
+    }
+  }
+  return bestPlaced;
 }
 
 function awardHarvest(state, cell, regrowthMultiplier, rootIndex) {

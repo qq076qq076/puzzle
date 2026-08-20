@@ -329,6 +329,22 @@ test("單點滴灌器只加速中心一格", () => {
   assert.equal(state.cells[indexes[0]].growthProgress, 0.9);
 });
 
+test("多台灑水設備重疊時只套用最高階設備", () => {
+  const state = createInitialState(0);
+  sowPlot(state, INITIAL_PLOT_ID, "clover");
+  const centerIndex = indexesForPlot(INITIAL_PLOT_ID)[4];
+  state.sprinklers.push(
+    { id: "drop", plotId: INITIAL_PLOT_ID, centerIndex },
+    { id: "stardew", plotId: INITIAL_PLOT_ID, centerIndex }
+  );
+  const plant = PLANTS.find((item) => item.id === "clover");
+  const strongest = SPRINKLERS.find((item) => item.id === "stardew");
+  assert.equal(
+    growthDurationSeconds(state, state.cells[centerIndex], INITIAL_PLOT_ID, centerIndex),
+    plant.growSeconds * strongest.growthMultiplier
+  );
+});
+
 test("沒有自動收割機時離線只推進生長、不產生金幣", () => {
   const state = createInitialState(0);
   sowPlot(state, INITIAL_PLOT_ID, "clover");
