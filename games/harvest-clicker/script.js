@@ -3553,6 +3553,28 @@ function canvasPosition(event) {
   return { x: event.clientX - rect.left, y: event.clientY - rect.top };
 }
 
+function hideMouseSurfacePosition() {
+  if (activePointers.size) return;
+  toolCursor.visible = false;
+  hoverIndex = -1;
+  hoverDecorationSlot = null;
+}
+
+function updateMouseSurfacePosition(event) {
+  if (event.pointerType !== "mouse") return;
+  const rect = farmSurfaceRect();
+  const point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  if (point.x < 0 || point.y < 0 || point.x > rect.width || point.y > rect.height) {
+    hideMouseSurfacePosition();
+    return;
+  }
+  toolCursor.x = point.x;
+  toolCursor.y = point.y;
+  toolCursor.visible = !READ_ONLY;
+  hoverIndex = tileIndexAtScreen(point.x, point.y);
+  hoverDecorationSlot = selection?.kind === "decoration" ? decorationSlotAtScreen(point.x, point.y) : null;
+}
+
 function tileIndexAtScreen(x, y) {
   const worldX = (x - camera.x) / camera.scale;
   const worldY = (y - camera.y) / camera.scale;
@@ -3617,13 +3639,6 @@ elements.canvas.addEventListener("pointerdown", (event) => {
 
 elements.canvas.addEventListener("pointermove", (event) => {
   const point = canvasPosition(event);
-  if (event.pointerType === "mouse") {
-    toolCursor.x = point.x;
-    toolCursor.y = point.y;
-    toolCursor.visible = !READ_ONLY;
-    hoverIndex = tileIndexAtScreen(point.x, point.y);
-    hoverDecorationSlot = selection?.kind === "decoration" ? decorationSlotAtScreen(point.x, point.y) : null;
-  }
   if (!activePointers.has(event.pointerId)) return;
   activePointers.set(event.pointerId, point);
   if (activePointers.size >= 2) {
@@ -3650,21 +3665,9 @@ elements.canvas.addEventListener("pointermove", (event) => {
   }
 });
 
-elements.canvas.addEventListener("pointerenter", (event) => {
-  if (event.pointerType !== "mouse") return;
-  const point = canvasPosition(event);
-  toolCursor.x = point.x;
-  toolCursor.y = point.y;
-  toolCursor.visible = !READ_ONLY;
-  hoverIndex = tileIndexAtScreen(point.x, point.y);
-  hoverDecorationSlot = selection?.kind === "decoration" ? decorationSlotAtScreen(point.x, point.y) : null;
-});
-elements.canvas.addEventListener("pointerleave", () => {
-  if (activePointers.size) return;
-  toolCursor.visible = false;
-  hoverIndex = -1;
-  hoverDecorationSlot = null;
-});
+window.addEventListener("pointermove", updateMouseSurfacePosition, { passive: true });
+elements.canvas.addEventListener("pointerenter", updateMouseSurfacePosition);
+elements.canvas.addEventListener("pointerleave", hideMouseSurfacePosition);
 
 function endPointer(event) {
   const point = activePointers.get(event.pointerId) || canvasPosition(event);
