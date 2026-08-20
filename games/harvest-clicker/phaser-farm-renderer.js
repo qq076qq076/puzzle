@@ -740,7 +740,6 @@
           scale: { mode: globalThis.Phaser.Scale.RESIZE, autoCenter: globalThis.Phaser.Scale.CENTER_BOTH },
           scene: FarmScene
         });
-        this.installInputBridge();
         this.game.events.once("ready", () => {
           this.scene = this.game.scene.getScene("HarvestFarmScene");
           this.active = Boolean(this.scene);
