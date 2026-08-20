@@ -2505,12 +2505,27 @@ function drawFarm(now = performance.now()) {
   }
   lastFarmFrameAt = now;
   updateCameraFocus(now);
+  updateFarmer(now);
   if (phaserFarmRenderer?.isActive()) {
     phaserFarmRenderer.update({
       state,
       camera,
       now,
-      reducedMotion: Boolean(state.settings?.reducedMotion)
+      reducedMotion: Boolean(state.settings?.reducedMotion),
+      selection,
+      pendingActionPlotId,
+      pendingActionIndex,
+      pendingDecorationSlot,
+      hoverIndex,
+      keyboardIndex,
+      focusedPlotId,
+      focusedPlotStartedAt,
+      toolCursor,
+      farmer,
+      effects,
+      swingMarks,
+      plantBursts,
+      deviceBursts
     });
     window.requestAnimationFrame(drawFarm);
     return;
@@ -2532,7 +2547,6 @@ function drawFarm(now = performance.now()) {
   }
   drawSideScenery();
   drawPlacedGroundDecorations();
-  updateFarmer(now);
 
   const order = cellPaintOrder();
   const sceneNodes = decorationSceneNodes();
@@ -3577,7 +3591,7 @@ elements.canvas.addEventListener("pointerdown", (event) => {
   if (event.button > 0) return;
   event.preventDefault();
   cameraFocusAnimation = null;
-  elements.canvas.setPointerCapture(event.pointerId);
+  try { elements.canvas.setPointerCapture(event.pointerId); } catch (error) { /* Phaser forwards synthetic pointers. */ }
   const point = canvasPosition(event);
   activePointers.set(event.pointerId, point);
   if (activePointers.size === 1) {

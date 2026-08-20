@@ -39,6 +39,14 @@
       this.ground = null;
       this.cells = null;
       this.overlays = null;
+      this.devices = null;
+      this.decorations = null;
+      this.effects = null;
+      this.deviceObjects = new Map();
+      this.decorationObjects = new Map();
+      this.farmerSprite = null;
+      this.farmerActionLabel = null;
+      this.toolCursorSprite = null;
     }
 
     preload() {
@@ -47,6 +55,28 @@
         if (!plant.image) continue;
         this.load.image(`plant-${plant.id}`, `assets/${plant.image}`);
       }
+      for (const tool of staticData.TOOLS || []) {
+        if (tool.image) this.load.image(`tool-${tool.id}`, `assets/${tool.image}`);
+      }
+      this.load.spritesheet("farmer", "assets/farmer-green-cap.png", { frameWidth: 16, frameHeight: 18 });
+      for (const item of [...(staticData.HARVESTERS || []), ...(staticData.SPRINKLERS || [])]) {
+        for (const [direction, file] of Object.entries(item.directionImages || {})) {
+          this.load.image(`device-${item.id}-${direction}`, `assets/${file}`);
+        }
+        if (item.image) this.load.image(`device-${item.id}-default`, `assets/${item.image}`);
+      }
+      for (const item of staticData.DECORATIONS || []) {
+        for (const file of new Set([item.image, item.imageHorizontal, item.imageVertical].filter(Boolean))) {
+          this.load.image(`decoration-${file}`, `assets/${file}`);
+        }
+      }
+      for (const file of [
+        "kenney-truck-flat.png",
+        "kenney-truck-flat-down-left.png",
+        "kenney-truck-flat-down-right.png",
+        "kenney-truck-flat-up-left.png",
+        "kenney-truck-flat-up-right.png"
+      ]) this.load.image(`fertilizer-${file}`, `assets/${file}`);
     }
 
     create() {
@@ -54,10 +84,25 @@
       this.cells = this.add.graphics();
       this.shadow = this.add.graphics();
       this.overlays = this.add.graphics();
+      this.devices = this.add.graphics();
+      this.decorations = this.add.graphics();
+      this.effects = this.add.graphics();
       this.ground.setDepth(-100000);
       this.cells.setDepth(-90000);
       this.shadow.setDepth(0);
       this.overlays.setDepth(FARMER_LAYER_Z);
+      this.devices.setDepth(50000);
+      this.decorations.setDepth(45000);
+      this.effects.setDepth(FARMER_LAYER_Z + 100);
+      this.farmerSprite = this.add.sprite(0, 0, "farmer").setOrigin(.5, 1).setScale(2.75).setDepth(FARMER_LAYER_Z);
+      this.farmerActionLabel = this.add.text(0, 0, "", {
+        fontFamily: "sans-serif",
+        fontSize: "17px",
+        color: "#fffaf0",
+        stroke: "#3b2e20",
+        strokeThickness: 4
+      }).setOrigin(.5, 1).setDepth(FARMER_LAYER_Z + 1);
+      this.toolCursorSprite = this.add.image(0, 0, "tool-small_knife").setOrigin(.5, 1).setDepth(FARMER_LAYER_Z + 2).setVisible(false);
       this.events.on("shutdown", () => this.destroyPlantObjects());
       this.renderSnapshot();
     }
@@ -76,6 +121,16 @@
         object.label?.destroy();
       }
       this.plantObjects.clear();
+      for (const object of this.deviceObjects.values()) {
+        object.sprite?.destroy();
+        object.label?.destroy();
+      }
+      this.deviceObjects.clear();
+      for (const object of this.decorationObjects.values()) object.destroy?.();
+      this.decorationObjects.clear();
+      this.farmerSprite?.destroy();
+      this.farmerActionLabel?.destroy();
+      this.toolCursorSprite?.destroy();
     }
 
     ensurePlantObject(index, plant) {
@@ -231,6 +286,287 @@
       this.overlays.fillRect(point.x - 23, point.y + contactY - height - 9, 46 * Math.min(1, Math.max(0, ratioValue)), 3);
     }
 
+    hash(value) {
+      let result = 0;
+      for (let index = 0; index < String(value).length; index += 1) result = (result * 31 + String(value).charCodeAt(index)) >>> 0;
+      return result;
+    }
+
+    directionForVector(dx, dy) {
+      if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? "down-right" : "up-left";
+      return dy >= 0 ? "down-left" : "up-right";
+    }
+
+    automationPath(targets, boardSize) {
+      const rows = new Map();
+      for (const index of targets) {
+        const row = Math.floor(index / boardSize);
+        const col = index % boardSize;
+        if (!rows.has(row)) rows.set(row, []);
+        rows.get(row).push(col);
+      }
+      const path = [];
+      [...rows.keys()].sort((a, b) => a - b).forEach((row, order) => {
+        const columns = rows.get(row).sort((a, b) => a - b);
+        if (order % 2) columns.reverse();
+        for (const col of columns) path.push(row * boardSize + col);
+      });
+      return path;
+    }
+
+    pathPosition(path, now, speed, offset, boardSize) {
+      if (!path.length) return null;
+      if (path.length === 1) {
+        const row = Math.floor(path[0] / boardSize);
+        return { ...worldPoint(row, path[0] % boardSize), dx: 0, dy: 0 };
+      }
+      const cycle = (path.length - 1) * 2;
+      const travel = ((now / 1000) * speed + offset) % cycle;
+      const distance = travel <= path.length - 1 ? travel : cycle - travel;
+      const start = Math.floor(distance);
+      const progress = distance - start;
+      const a = path[Math.min(path.length - 1, start)];
+      const b = path[Math.min(path.length - 1, start + 1)];
+      const pointA = worldPoint(Math.floor(a / boardSize), a % boardSize);
+      const pointB = worldPoint(Math.floor(b / boardSize), b % boardSize);
+      return {
+        x: pointA.x + (pointB.x - pointA.x) * progress,
+        y: pointA.y + (pointB.y - pointA.y) * progress,
+        dx: pointB.x - pointA.x,
+        dy: pointB.y - pointA.y
+      };
+    }
+
+    ensureDeviceObject(key, item, kind) {
+      let object = this.deviceObjects.get(key);
+      if (object) return object;
+      const textureKey = `device-${item.id}-default`;
+      const sprite = this.textures.exists(textureKey) ? this.add.image(0, 0, textureKey) : null;
+      const label = sprite ? null : this.add.text(0, 0, item.emoji || (kind === "sprinkler" ? "💧" : "🚜"), {
+        fontFamily: "Apple Color Emoji, Segoe UI Emoji, sans-serif",
+        fontSize: "24px",
+        color: "#fffaf0",
+        stroke: "#3b2e20",
+        strokeThickness: 4
+      }).setOrigin(.5, 1);
+      sprite?.setOrigin(.5, 1);
+      object = { sprite, label, kind, key };
+      this.deviceObjects.set(key, object);
+      return object;
+    }
+
+    hideUnusedDeviceObjects(usedKeys) {
+      for (const [key, object] of this.deviceObjects) {
+        if (usedKeys.has(key)) continue;
+        object.sprite?.setVisible(false);
+        object.label?.setVisible(false);
+      }
+    }
+
+    deviceCenter(placed, core, boardSize) {
+      const index = Number.isInteger(placed?.centerIndex) ? placed.centerIndex : core.indexesForPlot(placed.plotId)[4];
+      return worldPoint(Math.floor(index / boardSize), index % boardSize);
+    }
+
+    drawAutomation(state, core, boardSize, now, snapshot) {
+      const usedObjects = new Set();
+      const drawRanges = (list, kind, getter, color, activeColor) => {
+        for (const placed of list || []) {
+          const item = getter(placed.id);
+          if (!item) continue;
+          const centerIndex = Number.isInteger(placed.centerIndex) ? placed.centerIndex : core.indexesForPlot(placed.plotId)[4];
+          const targets = core.automationTargetIndexes(item.range, placed.plotId, state.ownedPlots, centerIndex);
+          const focused = snapshot.selection?.sourceInstanceId === placed.instanceId
+            || (snapshot.focusedPlotId === placed.plotId && snapshot.selection?.kind === kind);
+          if (focused) {
+            for (const index of targets) {
+              const point = worldPoint(Math.floor(index / boardSize), index % boardSize);
+              pathDiamond(this.devices, point.x, point.y, CELL_W, CELL_H);
+              this.devices.fillStyle(color, .18);
+              this.devices.fillPath();
+              this.devices.lineStyle(2, activeColor, .72);
+              this.devices.strokePath();
+            }
+          }
+          const key = `${kind}:${placed.instanceId || placed.plotId}`;
+          const object = this.ensureDeviceObject(key, item, kind);
+          usedObjects.add(key);
+          const path = this.automationPath(targets, boardSize);
+          const position = this.pathPosition(path, now, 2, this.hash(key) % 1000 / 1000 * Math.max(1, path.length), boardSize)
+            || this.deviceCenter(placed, core, boardSize);
+          const heading = this.directionForVector(position.dx || 0, position.dy || 0);
+          const directionalTexture = `device-${item.id}-${heading}`;
+          if (object.sprite) {
+            if (this.textures.exists(directionalTexture)) object.sprite.setTexture(directionalTexture);
+            object.sprite.setVisible(true).setPosition(position.x, position.y + 7).setDepth(position.y + 100);
+            object.sprite.setDisplaySize(kind === "sprinkler" ? 42 : 58, kind === "sprinkler" ? 42 : 42);
+          } else {
+            object.label.setVisible(true).setPosition(position.x, position.y + 7).setDepth(position.y + 100);
+          }
+          this.devices.fillStyle(0x2e2114, .24);
+          this.devices.fillEllipse(position.x + 3, position.y + 8, kind === "sprinkler" ? 24 : 38, 10);
+          if (kind === "sprinkler") {
+            const center = this.deviceCenter(placed, core, boardSize);
+            const pulse = snapshot.reducedMotion ? 0 : Math.sin(now / 220) * 4;
+            this.devices.lineStyle(2, 0x8fe2ef, .6);
+            for (let arm = 0; arm < 4; arm += 1) {
+              const angle = now / 900 + arm * Math.PI / 2;
+              const endX = center.x + Math.cos(angle) * (18 + item.range * 12 + pulse);
+              const endY = center.y + Math.sin(angle) * (8 + item.range * 5 + pulse * .25);
+              this.devices.beginPath();
+              this.devices.moveTo(center.x, center.y - 10);
+              this.devices.lineTo(endX, endY);
+              this.devices.strokePath();
+              this.devices.fillStyle(0xc7f4fa, .86);
+              this.devices.fillCircle(endX, endY, 2.4);
+            }
+          }
+        }
+      };
+      drawRanges(state.harvesters, "harvester", core.getHarvester.bind(core), 0xffe082, 0xffc34f);
+      drawRanges(state.sprinklers, "sprinkler", core.getSprinkler.bind(core), 0x9ceaf0, 0x70d0dc);
+      this.hideUnusedDeviceObjects(usedObjects);
+    }
+
+    decorationPoint(slot) {
+      if (!slot) return null;
+      if (slot.slotType === "corner") return worldPoint(slot.row + .5, slot.col + .5);
+      if (slot.direction === "vertical") return worldPoint(slot.row, slot.col + .5);
+      return worldPoint(slot.row + .5, slot.col);
+    }
+
+    drawDecorations(state, core) {
+      const used = new Set();
+      for (const [index, placed] of (state.decorations || []).entries()) {
+        const item = core.getDecoration(placed.id);
+        const point = this.decorationPoint(placed);
+        if (!item || !point) continue;
+        const key = `${placed.id}:${placed.row}:${placed.col}:${placed.direction || ""}:${index}`;
+        used.add(key);
+        let object = this.decorationObjects.get(key);
+        const file = placed.direction === "vertical" ? item.imageVertical || item.image : item.imageHorizontal || item.image;
+        const textureKey = `decoration-${file}`;
+        if (!object) {
+          object = this.textures.exists(textureKey)
+            ? this.add.image(0, 0, textureKey).setOrigin(.5, 1)
+            : this.add.text(0, 0, item.emoji || "🪵", { fontSize: "24px" }).setOrigin(.5, 1);
+          this.decorationObjects.set(key, object);
+        }
+        if (object.texture && this.textures.exists(textureKey)) object.setTexture(textureKey);
+        const image = this.textures.exists(textureKey) ? this.textures.get(textureKey).getSourceImage() : null;
+        const width = item.renderWidth || 52;
+        const height = image ? width / Math.max(.4, safeNumber(image.naturalWidth / image.naturalHeight, 1)) : width;
+        object.setPosition(point.x, point.y + safeNumber(item.contactOffsetY, 8));
+        object.setDisplaySize(width, height);
+        object.setAlpha(1);
+        object.setDepth(point.y + safeNumber(item.contactOffsetY, 8) + (item.layer === "ground" ? -100 : 100));
+        object.setVisible(true);
+      }
+      for (const [key, object] of this.decorationObjects) {
+        if (used.has(key)) continue;
+        object.setVisible(false);
+      }
+    }
+
+    drawFarmer(farmer, now, reducedMotion) {
+      if (!farmer?.initialized || !this.farmerSprite) return;
+      const frame = farmer.action === "walk" ? Math.floor(now / 180) % 3 : 1;
+      const row = Math.max(0, Math.min(3, Number(farmer.directionRow) || 0));
+      this.farmerSprite.setVisible(true).setPosition(farmer.x, farmer.y + TILE_H * .42);
+      this.farmerSprite.setFrame(row * 3 + frame);
+      this.farmerSprite.setDepth(farmer.y + 100);
+      this.farmerSprite.setAlpha(.98);
+      const actionLabels = { hoe: "⛏", water: "💧", rest: "💦", sing: "♪", look: "…" };
+      const label = farmer.action === "walk" ? "" : actionLabels[farmer.action] || "";
+      this.farmerActionLabel.setText(label).setVisible(Boolean(label));
+      this.farmerActionLabel.setPosition(farmer.x + 26, farmer.y - 54 + (reducedMotion ? 0 : Math.sin(now / 180) * 2));
+    }
+
+    drawSelection(snapshot, state, core, boardSize) {
+      const center = Number.isInteger(snapshot.pendingActionIndex) ? snapshot.pendingActionIndex : snapshot.hoverIndex;
+      if (!Number.isInteger(center) || center < 0) return;
+      const point = worldPoint(Math.floor(center / boardSize), center % boardSize);
+      pathDiamond(this.overlays, point.x, point.y, CELL_W, CELL_H);
+      this.overlays.fillStyle(0xffe679, .12);
+      this.overlays.fillPath();
+      this.overlays.lineStyle(2.5, 0xffefaa, .9);
+      this.overlays.strokePath();
+      const selection = snapshot.selection;
+      if (!selection || snapshot.pendingActionPlotId == null) return;
+      let indexes = [];
+      if (selection.kind === "harvester" || selection.kind === "sprinkler") {
+        const item = selection.kind === "harvester" ? core.getHarvester(selection.id) : core.getSprinkler(selection.id);
+        indexes = item ? core.automationTargetIndexes(item.range, snapshot.pendingActionPlotId, state.ownedPlots, center) : [];
+      } else if (selection.kind === "seed" && core.getPlant(selection.id)?.type === "tree") {
+        indexes = core.getPlantPlacementIndexes(center, selection.id);
+      } else if (selection.kind === "tool") {
+        indexes = core.getToolTargetIndexes(selection.id, center, state.ownedPlots);
+      } else {
+        indexes = core.indexesForPlot(snapshot.pendingActionPlotId);
+      }
+      for (const index of indexes) {
+        const target = worldPoint(Math.floor(index / boardSize), index % boardSize);
+        pathDiamond(this.overlays, target.x, target.y, CELL_W, CELL_H);
+        this.overlays.fillStyle(0xffe679, .08);
+        this.overlays.fillPath();
+        this.overlays.lineStyle(2, 0xffe679, .7);
+        this.overlays.strokePath();
+      }
+    }
+
+    drawEffects(snapshot, core, boardSize, now) {
+      const reduced = snapshot.reducedMotion;
+      this.effects.clear();
+      const drawBurst = (burst, color, duration) => {
+        const progress = Math.min(1, Math.max(0, (now - burst.startedAt) / duration));
+        if (progress >= 1) return false;
+        const point = { x: burst.x, y: burst.y + TILE_H * .39 };
+        this.effects.lineStyle(2.5, color, Math.sin(progress * Math.PI));
+        this.effects.strokeEllipse(point.x, point.y, 18 + progress * 42, 7 + progress * 14);
+        this.effects.fillStyle(color, Math.sin(progress * Math.PI) * .72);
+        this.effects.fillCircle(point.x, point.y - progress * 24, 4 + progress * 4);
+        return true;
+      };
+      for (let index = snapshot.plantBursts.length - 1; index >= 0; index -= 1) {
+        const burst = snapshot.plantBursts[index];
+        if (!drawBurst(burst, burst.color || 0x8ab35e, reduced ? 180 : 820)) snapshot.plantBursts.splice(index, 1);
+      }
+      for (let index = snapshot.swingMarks.length - 1; index >= 0; index -= 1) {
+        const mark = snapshot.swingMarks[index];
+        const progress = Math.min(1, Math.max(0, (now - mark.startedAt) / (reduced ? 110 : 320)));
+        if (progress >= 1) { snapshot.swingMarks.splice(index, 1); continue; }
+        this.effects.lineStyle(4, 0xfff4b1, Math.sin(progress * Math.PI));
+        this.effects.beginPath();
+        this.effects.moveTo(mark.x - 34, mark.y - 15);
+        this.effects.quadraticBezierTo(mark.x, mark.y + 9, mark.x + 35, mark.y - 11);
+        this.effects.strokePath();
+      }
+      for (let index = snapshot.effects.length - 1; index >= 0; index -= 1) {
+        const effect = snapshot.effects[index];
+        const progress = Math.min(1, Math.max(0, (now - effect.startedAt) / 760));
+        if (progress >= 1) { snapshot.effects.splice(index, 1); continue; }
+        const text = this.add.text(effect.x, effect.y - progress * 38, effect.text, {
+          fontFamily: "sans-serif", fontSize: "17px", color: effect.color || "#ffe16d",
+          stroke: "#3b2e20", strokeThickness: 4
+        }).setOrigin(.5, 1).setAlpha(1 - progress).setDepth(FARMER_LAYER_Z + 3);
+        this.time.delayedCall(20, () => text.destroy());
+      }
+      for (let index = snapshot.deviceBursts.length - 1; index >= 0; index -= 1) {
+        const burst = snapshot.deviceBursts[index];
+        const duration = reduced ? 180 : burst.kind === "fertilizer" ? 1100 : burst.kind === "sprinkler" ? 920 : 760;
+        const progress = Math.min(1, Math.max(0, (now - burst.startedAt) / duration));
+        if (progress >= 1) { snapshot.deviceBursts.splice(index, 1); continue; }
+        const color = burst.kind === "sprinkler" ? 0x9ceaf0 : burst.kind === "fertilizer" ? 0xf0c95e : 0xffd36a;
+        this.effects.lineStyle(3, color, (1 - progress) * .9);
+        this.effects.strokeEllipse(burst.x, burst.y + 10, 36 + progress * 120, 14 + progress * 48);
+        this.effects.fillStyle(color, (1 - progress) * .65);
+        this.effects.fillCircle(burst.x, burst.y - progress * 30, 3 + progress * 3);
+      }
+      // Keep the graphics path deterministic and bounded even when a user
+      // holds a tool on a large range.
+      if (snapshot.deviceBursts.length > 48) snapshot.deviceBursts.splice(0, snapshot.deviceBursts.length - 48);
+    }
+
     renderSnapshot() {
       const snapshot = this.snapshot;
       if (!snapshot || !this.ground || !globalThis.HarvestCore) return;
@@ -245,6 +581,8 @@
       this.cells.clear();
       this.shadow.clear();
       this.overlays.clear();
+      this.devices.clear();
+      this.decorations.clear();
       this.ground.fillStyle(0x86ad69, 1);
       this.ground.fillRect(-2600, -900, 5200, 3400);
 
@@ -259,6 +597,26 @@
         this.drawPlant(index, snapshot.state.cells[index], boardSize, core, snapshot.now || performance.now(), usedKeys);
       }
       this.hideUnusedPlantObjects(usedKeys);
+      this.drawDecorations(snapshot.state, core);
+      this.drawAutomation(snapshot.state, core, boardSize, snapshot.now || performance.now(), snapshot);
+      this.drawFarmer(snapshot.farmer, snapshot.now || performance.now(), snapshot.reducedMotion);
+      this.drawSelection(snapshot, snapshot.state, core, boardSize);
+      this.drawEffects(snapshot, core, boardSize, snapshot.now || performance.now());
+
+      const cursor = snapshot.toolCursor;
+      if (cursor?.visible && !snapshot.state.readOnly) {
+        const tool = core.getTool(snapshot.state.equippedToolId);
+        const textureKey = `tool-${tool?.id}`;
+        if (tool && this.textures.exists(textureKey)) {
+          const worldX = (cursor.x - safeNumber(snapshot.camera?.x)) / scale;
+          const worldY = (cursor.y - safeNumber(snapshot.camera?.y)) / scale;
+          const swingProgress = Math.min(1, Math.max(0, ((snapshot.now || performance.now()) - cursor.swingStartedAt) / (snapshot.reducedMotion ? 80 : 280)));
+          this.toolCursorSprite.setTexture(textureKey).setVisible(true).setPosition(worldX, worldY).setDisplaySize(44, 44);
+          this.toolCursorSprite.setRotation(-.18 + Math.sin(swingProgress * Math.PI) * .72);
+        }
+      } else {
+        this.toolCursorSprite?.setVisible(false);
+      }
     }
   }
 
@@ -269,6 +627,7 @@
       this.scene = null;
       this.snapshot = null;
       this.active = false;
+      this.inputBridgeDisposers = [];
     }
 
     mount() {
@@ -284,6 +643,7 @@
           scale: { mode: globalThis.Phaser.Scale.RESIZE, autoCenter: globalThis.Phaser.Scale.CENTER_BOTH },
           scene: FarmScene
         });
+        this.installInputBridge();
         this.game.events.once("ready", () => {
           this.scene = this.game.scene.getScene("HarvestFarmScene");
           this.active = Boolean(this.scene);
@@ -298,6 +658,76 @@
       }
     }
 
+    installInputBridge() {
+      const source = this.game?.canvas;
+      const target = document.querySelector("#farm-canvas");
+      if (!source || !target || typeof globalThis.PointerEvent !== "function") return;
+      source.tabIndex = 0;
+      source.setAttribute("aria-label", target.getAttribute("aria-label") || "農田");
+      const forwardPointer = (type, event) => {
+        if (type === "pointerdown") source.focus({ preventScroll: true });
+        const forwarded = new globalThis.PointerEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          clientX: event.clientX,
+          clientY: event.clientY,
+          pointerId: event.pointerId,
+          pointerType: event.pointerType,
+          isPrimary: event.isPrimary,
+          button: event.button,
+          buttons: event.buttons,
+          pressure: event.pressure,
+          width: event.width,
+          height: event.height,
+          altKey: event.altKey,
+          ctrlKey: event.ctrlKey,
+          metaKey: event.metaKey,
+          shiftKey: event.shiftKey
+        });
+        target.dispatchEvent(forwarded);
+        if (forwarded.defaultPrevented) event.preventDefault();
+      };
+      const pointerEvents = ["pointerdown", "pointermove", "pointerenter", "pointerleave", "pointerup", "pointercancel"];
+      for (const type of pointerEvents) {
+        const listener = (event) => forwardPointer(type, event);
+        source.addEventListener(type, listener, { passive: false });
+        this.inputBridgeDisposers.push(() => source.removeEventListener(type, listener));
+      }
+      const wheelListener = (event) => {
+        const forwarded = new WheelEvent("wheel", {
+          bubbles: true,
+          cancelable: true,
+          clientX: event.clientX,
+          clientY: event.clientY,
+          deltaX: event.deltaX,
+          deltaY: event.deltaY,
+          deltaZ: event.deltaZ,
+          deltaMode: event.deltaMode,
+          ctrlKey: event.ctrlKey,
+          shiftKey: event.shiftKey,
+          altKey: event.altKey,
+          metaKey: event.metaKey
+        });
+        target.dispatchEvent(forwarded);
+        if (forwarded.defaultPrevented) event.preventDefault();
+      };
+      source.addEventListener("wheel", wheelListener, { passive: false });
+      this.inputBridgeDisposers.push(() => source.removeEventListener("wheel", wheelListener));
+      const keyListener = (event) => target.dispatchEvent(new KeyboardEvent("keydown", {
+        bubbles: true,
+        cancelable: true,
+        key: event.key,
+        code: event.code,
+        repeat: event.repeat,
+        altKey: event.altKey,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey
+      }));
+      source.addEventListener("keydown", keyListener);
+      this.inputBridgeDisposers.push(() => source.removeEventListener("keydown", keyListener));
+    }
+
     update(snapshot) {
       this.snapshot = snapshot;
       if (!this.scene && this.game?.scene) this.scene = this.game.scene.getScene("HarvestFarmScene");
@@ -309,6 +739,7 @@
     }
 
     destroy() {
+      for (const dispose of this.inputBridgeDisposers.splice(0)) dispose();
       this.game?.destroy(true);
       this.game = null;
       this.scene = null;
