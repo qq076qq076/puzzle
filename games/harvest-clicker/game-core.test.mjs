@@ -10,10 +10,10 @@ await import("./game-core.js");
 const { MONTHLY_EVENT_START_AT, MONTHLY_EVENT_END_AT, MONTHLY_EVENT_ID } = globalThis.HarvestStaticConfig;
 const {
   createInitialState, manualHarvest, simulateTo, sowPlot, sowPlantAt, fertilizePlot,
-  getToolTargetIndexes, automationTargetIndexes, indexesForPlot, buyPlot, validateState,
+  getToolTargetIndexes, automationTargetIndexes, getAutomationToolbarAction, indexesForPlot, buyPlot, validateState,
   INITIAL_PLOT_ID, INITIAL_PLOT_IDS, BOARD_SIZE, PLOTS,
   PLANTS, TOOLS, HARVESTERS, SPRINKLERS, FERTILIZERS, DECORATIONS, getDecoration, getProductPrice,
-  getLandPrice, getPlantFootprint, getPlantPlacementIndexes, getFertilizerEffect, normalizeStateData, isFertilizerUnlocked,
+  getLandPrice, getPlantFootprint, getPlantPlacementIndexes, getFertilizerEffect, growthDurationSeconds, normalizeStateData, isFertilizerUnlocked,
   claimMonthlyCherryTreeReward
 } = globalThis.HarvestCore;
 
@@ -270,6 +270,27 @@ test("一般與林業自動設備依階級覆蓋指定範圍", () => {
   assert.equal(state.cells[indexesForPlot(INITIAL_PLOT_ID)[4]].phase, "mature");
 });
 
+test("已配置設備第一次點擊定位，第二次點擊同一實例才開啟管理", () => {
+  const installed = {
+    kind: "harvester",
+    id: "clockwork",
+    sourcePlot: INITIAL_PLOT_ID,
+    sourceInstanceId: "harvester-a"
+  };
+  assert.deepEqual(getAutomationToolbarAction(null, installed, true), {
+    sameSelection: false,
+    shouldManage: false
+  });
+  assert.deepEqual(getAutomationToolbarAction(installed, { ...installed }, true), {
+    sameSelection: true,
+    shouldManage: true
+  });
+  assert.deepEqual(getAutomationToolbarAction(installed, { ...installed, sourceInstanceId: "harvester-b" }, true), {
+    sameSelection: false,
+    shouldManage: false
+  });
+});
+
 test("林業自動設備只採伐樹木，不會攻擊一般作物", () => {
   const state = createInitialState(0);
   const [treeIndex, cropIndex] = indexesForPlot(INITIAL_PLOT_ID);
@@ -362,13 +383,21 @@ test("同一格肥料可以疊加且後續效果邊際遞減", () => {
   const index = indexesForPlot(INITIAL_PLOT_ID)[0];
   fertilizePlot(state, INITIAL_PLOT_ID, "quick");
   const first = getFertilizerEffect(state.cells[index]);
-  fertilizePlot(state, INITIAL_PLOT_ID, "leaf");
-  const stacked = getFertilizerEffect(state.cells[index]);
-  assert.equal(stacked.count, 2);
-  assert.equal(state.cells[index].fertilizerStacks.length, 2);
-  assert.ok(stacked.growthMultiplier < first.growthMultiplier);
-  assert.ok(stacked.growthMultiplier > 0.2);
-  assert.ok(stacked.coinMultiplier > first.coinMultiplier);
+  const firstDuration = growthDurationSeconds(state, state.cells[index], INITIAL_PLOT_ID, index);
+  fertilizePlot(state, INITIAL_PLOT_ID, "quick");
+  const second = getFertilizerEffect(state.cells[index]);
+  const secondDuration = growthDurationSeconds(state, state.cells[index], INITIAL_PLOT_ID, index);
+  fertilizePlot(state, INITIAL_PLOT_ID, "quick");
+  const third = getFertilizerEffect(state.cells[index]);
+  const thirdDuration = growthDurationSeconds(state, state.cells[index], INITIAL_PLOT_ID, index);
+  assert.equal(third.count, 3);
+  assert.equal(state.cells[index].fertilizerStacks.length, 3);
+  assert.ok(secondDuration < firstDuration);
+  assert.ok(thirdDuration < secondDuration);
+  assert.ok(firstDuration - secondDuration > secondDuration - thirdDuration);
+  assert.ok(second.coinMultiplier > first.coinMultiplier);
+  assert.ok(third.coinMultiplier > second.coinMultiplier);
+  assert.ok(second.coinMultiplier - first.coinMultiplier > third.coinMultiplier - second.coinMultiplier);
 
   state.cells[index].phase = "mature";
   state.cells[index].currentHp = 2;

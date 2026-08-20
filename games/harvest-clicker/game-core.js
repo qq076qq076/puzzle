@@ -347,6 +347,18 @@ function automationTargetIndexes(range, plotId, ownedPlots, centerIndex = indexe
   return indexes;
 }
 
+function getAutomationToolbarAction(currentSelection, nextSelection, installed = false) {
+  const sameSelection = Boolean(currentSelection && nextSelection
+    && currentSelection.kind === nextSelection.kind
+    && currentSelection.id === nextSelection.id
+    && currentSelection.sourcePlot === nextSelection.sourcePlot
+    && currentSelection.sourceInstanceId === nextSelection.sourceInstanceId);
+  return {
+    sameSelection,
+    shouldManage: Boolean(installed && sameSelection && nextSelection?.sourceInstanceId)
+  };
+}
+
 function getPlantFootprint(plantOrId) {
   const plant = typeof plantOrId === "string" ? getPlant(plantOrId) : plantOrId;
   if (plant?.id === "weed") return 1;
@@ -889,7 +901,7 @@ globalThis.HarvestCore = Object.freeze({
   getHarvester, getSprinkler, getFertilizer, getDecoration, getProductPrice, plotIdForIndex,
   indexesForPlot, getLandPrice, getPlantFootprint, getPlantPlacementIndexes, createInitialState, isAutomationUnlocked,
   isToolUnlocked, isPlantUnlocked, isFertilizerUnlocked,
-  getToolTargetIndexes, automationTargetIndexes, manualHarvest, growthDurationSeconds,
+  getToolTargetIndexes, automationTargetIndexes, getAutomationToolbarAction, manualHarvest, growthDurationSeconds,
   getFertilizerEffect,
   simulateTo, sowPlot, sowPlantAt, claimMonthlyCherryTreeReward, fertilizePlot, buyPlot, formatNumber,
   formatTime, migrateLegacyCropIds, normalizeStateData, validateState

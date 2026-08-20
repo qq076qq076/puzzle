@@ -5,7 +5,7 @@ const {
   createInitialState, validateState, simulateTo, manualHarvest, sowPlantAt,
   fertilizePlot, buyPlot, formatNumber, formatTime, getPlant, getTool,
   getHarvester, getSprinkler, getFertilizer, getDecoration, getProductPrice, getLandPrice, plotIdForIndex, indexesForPlot,
-  automationTargetIndexes, getPlantFootprint, getPlantPlacementIndexes,
+  automationTargetIndexes, getAutomationToolbarAction, getPlantFootprint, getPlantPlacementIndexes,
   isToolUnlocked, isPlantUnlocked, isFertilizerUnlocked, isAutomationUnlocked, claimMonthlyCherryTreeReward,
   growthDurationSeconds, getFertilizerEffect, normalizeStateData
 } = globalThis.HarvestCore;
@@ -25,6 +25,7 @@ const TILE_DEPTH = 13;
 const CELL_SURFACE_W = 76;
 const CELL_SURFACE_H = 38;
 const HARVESTER_CELLS_PER_SECOND = 2;
+const FERTILIZER_CELLS_PER_SECOND = 1.35;
 const MIN_ZOOM = 0.35;
 const MAX_ZOOM = 2.4;
 const AUTOMATION_SELL_RATE = 0.6;
@@ -2052,85 +2053,99 @@ function drawDevices(plotId, x, y, now) {
   if (sprinkler) drawDeviceBadge(sprinkler, sprinklerPoint.x + (sameAnchor ? 25 : 0), sprinklerPoint.y - 38, "rgba(105,197,218,.82)");
 }
 
-function fertilizerWorkBounds(plotId, fallbackX, fallbackY) {
-  const indexes = Number.isInteger(plotId) ? indexesForPlot(plotId) : [];
-  const points = indexes.length
-    ? indexes.map((index) => worldPoint(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE))
-    : [{ x: fallbackX, y: fallbackY }];
-  return {
-    minX: Math.min(...points.map((point) => point.x)) - TILE_W * .26,
-    maxX: Math.max(...points.map((point) => point.x)) + TILE_W * .26,
-    minY: Math.min(...points.map((point) => point.y)) - TILE_H * .18,
-    maxY: Math.max(...points.map((point) => point.y)) + TILE_H * .18
-  };
-}
-
 function drawFertilizerOperation(plotId, x, y, now) {
   const fertilizedEntries = indexesForPlot(plotId)
     .map((index) => ({ index, cell: state.cells[index] }))
     .filter(({ cell }) => getFertilizerEffect(cell).count > 0);
   if (!fertilizedEntries.length) return;
-  const rootIndexes = [...new Set(fertilizedEntries.map(({ index, cell }) => Number.isInteger(cell.plantRootIndex) ? cell.plantRootIndex : index))];
-  const treeRootIndex = rootIndexes.find((rootIndex) => getPlant(state.cells[rootIndex]?.plantId)?.type === "tree");
-  if (treeRootIndex != null) {
-    if (plotIdForIndex(treeRootIndex) !== plotId) return;
-    const anchorIndex = Number.isInteger(state.cells[treeRootIndex]?.plantAnchorIndex)
-      ? state.cells[treeRootIndex].plantAnchorIndex
-      : treeRootIndex;
-    const anchorPoint = plantVisualPoint(state.cells[treeRootIndex], anchorIndex);
-    x = anchorPoint.x;
-    y = anchorPoint.y;
-  }
-  const fertilizerEffect = getFertilizerEffect(state.cells[treeRootIndex ?? fertilizedEntries[0].index]);
+
+  // Do not spend animation work on a fertilized plot that is fully outside
+  // the viewport. Large farms can keep dozens of fertilizer stacks active.
+  const screenX = x * camera.scale + camera.x;
+  const screenY = y * camera.scale + camera.y;
+  const margin = TILE_W * 2.5 * camera.scale;
+  if (screenX < -margin || screenX > canvasWidth + margin || screenY < -margin || screenY > canvasHeight + margin) return;
+
+  const representative = fertilizedEntries.reduce((best, entry) => {
+    return getFertilizerEffect(entry.cell).count > getFertilizerEffect(best.cell).count ? entry : best;
+  }, fertilizedEntries[0]);
+  const fertilizerEffect = getFertilizerEffect(representative.cell);
   const fertilizer = getFertilizer(fertilizerEffect.stacks[0]?.id);
   if (!fertilizer) return;
   const rounds = Math.max(...fertilizedEntries.map(({ cell }) => getFertilizerEffect(cell).rounds));
-  const bounds = fertilizerWorkBounds(plotId, x, y);
-  const cycle = state.settings.reducedMotion ? .5 : (now / 6200 + plotId * .071) % 1;
-  const laneProgress = cycle * 3;
-  const lane = Math.min(2, Math.floor(laneProgress));
-  const localProgress = laneProgress - lane;
-  const direction = lane % 2 === 0 ? 1 : -1;
-  const travel = direction > 0 ? localProgress : 1 - localProgress;
-  const travelStart = bounds.minX + TILE_W * .2;
-  const travelEnd = bounds.maxX - TILE_W * .2;
-  const laneHeight = Math.max(TILE_H * .55, (bounds.maxY - bounds.minY) / 3);
-  const machineX = travelStart + travel * Math.max(TILE_W, travelEnd - travelStart);
-  const machineY = bounds.minY + laneHeight * (lane + .5);
-  const wheelSpin = state.settings.reducedMotion ? 0 : now / 95 * direction;
+  const path = automationCellPath(fertilizedEntries.map(({ index }) => index));
+  const pathPoints = path.map((index) => worldPoint(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE));
+  const segmentCount = Math.max(0, pathPoints.length - 1);
+  const cycleMs = segmentCount ? segmentCount * 2 / FERTILIZER_CELLS_PER_SECOND * 1000 : 1000;
+  const phase = state.settings.reducedMotion ? .5 : ((now + plotId * 173) % cycleMs) / cycleMs;
+  const loopDistance = phase * segmentCount * 2;
+  const movingForward = loopDistance <= segmentCount;
+  const pathDistance = movingForward ? loopDistance : segmentCount * 2 - loopDistance;
+  const pathIndex = segmentCount ? Math.min(segmentCount, Math.floor(pathDistance)) : 0;
+  const segmentEndIndex = segmentCount ? clamp(pathIndex + 1, 0, segmentCount) : pathIndex;
+  const localProgress = pathIndex === segmentEndIndex ? 0 : pathDistance - pathIndex;
+  const segmentStart = pathPoints[pathIndex] || { x, y };
+  const segmentEnd = pathPoints[segmentEndIndex] || segmentStart;
+  const machineX = segmentStart.x + (segmentEnd.x - segmentStart.x) * localProgress;
+  const machineY = segmentStart.y + (segmentEnd.y - segmentStart.y) * localProgress + 7;
+  const forwardVector = { x: segmentEnd.x - segmentStart.x, y: segmentEnd.y - segmentStart.y };
+  const movement = movingForward ? forwardVector : { x: -forwardVector.x, y: -forwardVector.y };
+  if (!movement.x && !movement.y) movement.x = 1;
+  const heading = Math.atan2(movement.y, movement.x);
+  const vectorLength = Math.max(1, Math.hypot(movement.x, movement.y));
+  const backX = -movement.x / vectorLength;
+  const backY = -movement.y / vectorLength;
+  const sideX = -backY;
+  const sideY = backX;
 
   ctx.save();
   ctx.fillStyle = "rgba(46,33,20,.24)";
-  ctx.beginPath(); ctx.ellipse(machineX, machineY + 13, 23, 7, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(machineX, machineY + 12, 25, 7.5, 0, 0, Math.PI * 2); ctx.fill();
   if (!state.settings.reducedMotion) {
-    ctx.fillStyle = "rgba(183,133,65,.76)";
-    for (let grain = 0; grain < (LOW_POWER_RENDER ? 3 : 7); grain += 1) {
-      const drift = 10 + grain * 5;
-      const grainX = machineX - direction * drift;
-      const grainY = machineY + 8 + Math.sin(now / 120 + grain) * 5;
-      ctx.beginPath(); ctx.arc(grainX, grainY, 1.7 + grain % 2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "rgba(225,180,74,.78)";
+    for (let grain = 0; grain < (LOW_POWER_RENDER ? 2 : 6); grain += 1) {
+      const drift = 18 + (grain % 3) * 9;
+      const spread = (Math.floor(grain / 3) * 2 - 1) * (9 + (grain % 3) * 3);
+      const flutter = Math.sin(now / 115 + grain * 1.7) * 2;
+      const grainX = machineX + backX * drift + sideX * spread;
+      const grainY = machineY + backY * drift + sideY * spread * .45 + 7 + flutter;
+      ctx.beginPath(); ctx.arc(grainX, grainY, 1.6 + grain % 2 * .5, 0, Math.PI * 2); ctx.fill();
     }
   }
   ctx.translate(machineX, machineY);
-  ctx.scale(direction, 1);
-  ctx.fillStyle = "#d6a94f";
-  ctx.strokeStyle = "#70492e";
+  ctx.rotate(heading);
+  ctx.scale(1, .72);
+  ctx.lineJoin = "round";
+
+  // Rotating rear distributor makes the machine read as a fertilizer
+  // spreader instead of another harvester.
+  ctx.save();
+  ctx.translate(-24, 4);
+  ctx.rotate(state.settings.reducedMotion ? 0 : now / 105);
+  ctx.fillStyle = "#e6c357";
+  ctx.strokeStyle = "#76552f";
+  ctx.lineWidth = 1.8 / camera.scale;
+  ctx.beginPath(); ctx.ellipse(0, 0, 10, 6, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-9, 0); ctx.lineTo(9, 0); ctx.moveTo(0, -5); ctx.lineTo(0, 5); ctx.stroke();
+  ctx.restore();
+
+  for (const wheelX of [-11, 13]) {
+    drawVehicleWheel(wheelX, 9, "#293b33", "#aeb48e");
+  }
+  ctx.fillStyle = "#4d845d";
+  ctx.strokeStyle = "#35543f";
   ctx.lineWidth = 2 / camera.scale;
   ctx.beginPath();
-  ctx.moveTo(-15, -4); ctx.lineTo(14, -4); ctx.lineTo(11, 10); ctx.lineTo(-13, 10); ctx.closePath();
+  ctx.moveTo(-17, -5); ctx.lineTo(19, -5); ctx.lineTo(23, 6); ctx.lineTo(-14, 8); ctx.closePath();
   ctx.fill(); ctx.stroke();
-  ctx.fillStyle = "#8d6439";
-  ctx.beginPath(); ctx.moveTo(-9, -17); ctx.lineTo(9, -17); ctx.lineTo(13, -4); ctx.lineTo(-13, -4); ctx.closePath(); ctx.fill(); ctx.stroke();
-  ctx.strokeStyle = "#5d4935";
-  ctx.beginPath(); ctx.moveTo(13, -8); ctx.lineTo(24, -16); ctx.stroke();
-  for (const wheelX of [-10, 10]) {
-    ctx.save(); ctx.translate(wheelX, 11); ctx.rotate(wheelSpin);
-    ctx.fillStyle = "#3d382f";
-    ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = "#c2a06a";
-    ctx.beginPath(); ctx.moveTo(-4, 0); ctx.lineTo(4, 0); ctx.moveTo(0, -4); ctx.lineTo(0, 4); ctx.stroke();
-    ctx.restore();
-  }
+  ctx.fillStyle = "#f0c95c";
+  ctx.beginPath(); ctx.moveTo(-9, -22); ctx.lineTo(8, -22); ctx.lineTo(15, -4); ctx.lineTo(-14, -4); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = "#fff1a3";
+  ctx.beginPath(); ctx.ellipse(-1, -20, 7, 2.8, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#76b97b";
+  ctx.beginPath(); ctx.roundRect(14, -13, 8, 11, 2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = state.settings.reducedMotion ? "#e6ba4f" : (Math.sin(now / 160) > 0 ? "#ffe582" : "#d89b3f");
+  ctx.beginPath(); ctx.arc(18, -16, 2.7, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 
   ctx.save();
@@ -2305,33 +2320,42 @@ function drawActionAnimations(now) {
     ctx.save();
     ctx.translate(burst.x, burst.y - 8);
     if (burst.kind === "fertilizer") {
-      const bounds = fertilizerWorkBounds(burst.plotId, burst.x, burst.y);
-      const startX = bounds.minX - burst.x + TILE_W * .2;
-      const endX = bounds.maxX - burst.x - TILE_W * .2;
-      const laneHeight = Math.max(TILE_H * .55, (bounds.maxY - bounds.minY) / 3);
-      ctx.strokeStyle = `rgba(147,102,55,${fade * .86})`;
-      ctx.fillStyle = `rgba(215,174,89,${fade * .92})`;
-      ctx.lineWidth = 2.5 / camera.scale;
-      for (let lane = -1; lane <= 1; lane += 1) {
-        const laneY = bounds.minY - burst.y + (lane + 1.5) * laneHeight;
-        const direction = lane % 2 ? -1 : 1;
-        const travel = direction > 0 ? progress : 1 - progress;
-        const sweep = startX + travel * Math.max(TILE_W, endX - startX);
-        ctx.beginPath();
-        ctx.moveTo(startX, laneY);
-        ctx.lineTo(endX, laneY);
+      const affectedIndexes = indexesForPlot(burst.plotId)
+        .filter((index) => getFertilizerEffect(state.cells[index]).count > 0);
+      const stride = Math.max(1, Math.ceil(affectedIndexes.length / (LOW_POWER_RENDER ? 5 : 9)));
+      affectedIndexes.filter((_, index) => index % stride === 0).forEach((index, order, visibleIndexes) => {
+        const point = worldPoint(Math.floor(index / BOARD_SIZE), index % BOARD_SIZE);
+        const stagger = clamp(progress * 1.55 - order / Math.max(1, visibleIndexes.length) * .42, 0, 1);
+        const pulse = Math.sin(stagger * Math.PI);
+        ctx.save();
+        ctx.translate(point.x - burst.x, point.y - burst.y + 8);
+        ctx.globalAlpha = pulse * .8;
+        pathCellSurface(ctx, 0, 0);
+        ctx.fillStyle = "rgba(237,199,91,.38)";
+        ctx.fill();
+        ctx.strokeStyle = `rgba(117,157,78,${pulse})`;
+        ctx.lineWidth = 2.4 / camera.scale;
         ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(sweep, laneY - 4, 6 + fade * 5, 0, Math.PI * 2);
-        ctx.fill();
+        if (!state.settings.reducedMotion && !LOW_POWER_RENDER) {
+          ctx.fillStyle = `rgba(244,214,116,${pulse})`;
+          for (let grain = 0; grain < 3; grain += 1) {
+            const grainX = (grain - 1) * 9;
+            const grainY = -25 + stagger * 23 + Math.sin(order + grain) * 3;
+            ctx.beginPath(); ctx.arc(grainX, grainY, 1.8, 0, Math.PI * 2); ctx.fill();
+          }
+        }
+        ctx.restore();
+      });
+      ctx.save();
+      ctx.rotate(state.settings.reducedMotion ? 0 : progress * Math.PI * 5);
+      ctx.strokeStyle = `rgba(234,194,78,${fade * .9})`;
+      ctx.lineWidth = 3 / camera.scale;
+      ctx.beginPath(); ctx.ellipse(0, 10, 18 + progress * 18, 7 + progress * 7, 0, 0, Math.PI * 2); ctx.stroke();
+      for (let arm = 0; arm < 4; arm += 1) {
+        ctx.rotate(Math.PI / 2);
+        ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(28 + progress * 12, 0); ctx.stroke();
       }
-      for (let grain = 0; grain < (LOW_POWER_RENDER ? 4 : 8); grain += 1) {
-        const angle = grain * Math.PI * 2 / 8;
-        const radius = 12 + progress * (24 + grain % 3 * 7);
-        ctx.beginPath();
-        ctx.arc(Math.cos(angle) * radius, Math.sin(angle) * radius * .3, 1.8, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      ctx.restore();
     } else if (burst.kind === "sprinkler") {
       ctx.strokeStyle = `rgba(132,225,241,${fade * .9})`;
       ctx.lineWidth = 3 / camera.scale;
@@ -3643,9 +3667,8 @@ elements.quickbar.addEventListener("click", (event) => {
     sourcePlot: item.dataset.sourcePlot == null ? null : Number(item.dataset.sourcePlot),
     sourceInstanceId: item.dataset.sourceInstance == null ? null : item.dataset.sourceInstance
   };
-  const sameSelection = selection && selection.kind === nextSelection.kind && selection.id === nextSelection.id
-    && selection.sourcePlot === nextSelection.sourcePlot && selection.sourceInstanceId === nextSelection.sourceInstanceId;
-  if (item.dataset.installedKind && sameSelection) {
+  const { sameSelection, shouldManage } = getAutomationToolbarAction(selection, nextSelection, Boolean(item.dataset.installedKind));
+  if (shouldManage) {
     openAutomationAction(nextSelection);
     return;
   }
