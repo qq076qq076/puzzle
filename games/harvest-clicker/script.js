@@ -18,6 +18,16 @@ const SHARE_ID = window.PuzzleShare?.parseShareId(window.location.hash) || null;
 const READ_ONLY = HAS_SHARE_LINK;
 const ASSET_ROOT = "assets/";
 const FARMER_SPRITE = "farmer-green-cap.png";
+const FERTILIZER_MACHINE = Object.freeze({
+  image: "kenney-truck-flat.png",
+  directionImages: Object.freeze({
+    "down-left": "kenney-truck-flat-down-left.png",
+    "down-right": "kenney-truck-flat-down-right.png",
+    "up-left": "kenney-truck-flat-up-left.png",
+    "up-right": "kenney-truck-flat-up-right.png"
+  }),
+  model: "fertilizer"
+});
 const TAB_ID = globalThis.crypto?.randomUUID?.() || `harvest-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const TILE_W = 96;
 const TILE_H = 48;
@@ -173,7 +183,12 @@ function assetMarkup(fileName, fallback, className = "shop-art") {
 function preloadAssets() {
   const files = new Set();
   files.add(FARMER_SPRITE);
-  for (const item of [...PLANTS, ...TOOLS, ...HARVESTERS, ...SPRINKLERS, ...DECORATIONS]) {
+  // The fertilizer spreader is a Kenney flatbed with a small hopper overlay.
+  // Keep its four baked isometric directions in the same preload batch so the
+  // machine never flashes as an untextured fallback on its first pass.
+  files.add(FERTILIZER_MACHINE.image);
+  for (const file of Object.values(FERTILIZER_MACHINE.directionImages)) files.add(file);
+  for (const item of [...PLANTS, ...TOOLS, ...HARVESTERS, ...SPRINKLERS, ...FERTILIZERS, ...DECORATIONS]) {
     if (item.image) files.add(item.image);
     if (item.imageHorizontal) files.add(item.imageHorizontal);
     if (item.imageVertical) files.add(item.imageVertical);
@@ -1831,7 +1846,8 @@ const HARVESTER_MODELS = Object.freeze({
   steam: { body: "#c65b3f", top: "#eb9562", side: "#873b32", glass: "#d2e9df", accent: "#f1ca5d", attachment: "chimney" },
   autonomous: { body: "#765db7", top: "#b6a1ed", side: "#4a397f", glass: "#d4f4ef", accent: "#f6d76b", attachment: "sensor" },
   sawmill: { body: "#91603b", top: "#d19a5a", side: "#5e3927", glass: "#d7e7d1", accent: "#f0c75b", attachment: "saw" },
-  lumber: { body: "#6d4d39", top: "#ae7950", side: "#402d28", glass: "#d7e7d1", accent: "#f0c75b", attachment: "crane" }
+  lumber: { body: "#6d4d39", top: "#ae7950", side: "#402d28", glass: "#d7e7d1", accent: "#f0c75b", attachment: "crane" },
+  fertilizer: { body: "#4d845d", top: "#8ecb88", side: "#2f6b47", glass: "#d7ebe0", accent: "#e6c357", attachment: "hopper" }
 });
 
 // Kenney's preview renders have different transparent margins. The offset is
@@ -1889,6 +1905,30 @@ function drawKenneyVehicleAttachment(device, now) {
     for (let log = 0; log < 3; log += 1) {
       ctx.beginPath(); ctx.roundRect(-25 + log * 5, -18 + (log % 2) * 3, 18, 5, 2); ctx.fill(); ctx.stroke();
     }
+    return;
+  }
+  if (device.model === "fertilizer") {
+    const pulse = state.settings.reducedMotion ? 0 : Math.sin(now / 190) * .8;
+    // A hopper and a rotating spinner turn the free Kenney flatbed into a
+    // readable fertilizer spreader while keeping the original 2.5D chassis.
+    ctx.fillStyle = "#3d7658";
+    ctx.strokeStyle = "#244936";
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-23, -18); ctx.lineTo(-7, -21); ctx.lineTo(1, -15); ctx.lineTo(-15, -12); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#d9b54e";
+    ctx.beginPath();
+    ctx.moveTo(-20, -17); ctx.lineTo(-9, -19); ctx.lineTo(-3, -15); ctx.lineTo(-14, -14); ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#dce7ce";
+    ctx.fillRect(-5, -19, 2, 8);
+    ctx.fillStyle = "#e9c65a";
+    ctx.save();
+    ctx.translate(-18, 5);
+    ctx.rotate(pulse / 4 + (state.settings.reducedMotion ? 0 : now / 150));
+    ctx.beginPath(); ctx.ellipse(0, 0, 7, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
     return;
   }
   if (device.model === "hopper" || device.model === "steam" || device.model === "autonomous") {
@@ -2126,7 +2166,7 @@ function drawFertilizerOperation(plotId, x, y, now) {
 
   ctx.save();
   ctx.fillStyle = "rgba(46,33,20,.24)";
-  ctx.beginPath(); ctx.ellipse(machineX, machineY + 12, 25, 7.5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(machineX, machineY + 10, 25, 7.5, 0, 0, Math.PI * 2); ctx.fill();
   if (!state.settings.reducedMotion) {
     ctx.fillStyle = "rgba(225,180,74,.78)";
     for (let grain = 0; grain < (LOW_POWER_RENDER ? 2 : 6); grain += 1) {
@@ -2138,40 +2178,7 @@ function drawFertilizerOperation(plotId, x, y, now) {
       ctx.beginPath(); ctx.arc(grainX, grainY, 1.6 + grain % 2 * .5, 0, Math.PI * 2); ctx.fill();
     }
   }
-  ctx.translate(machineX, machineY);
-  ctx.rotate(heading);
-  ctx.scale(1, .72);
-  ctx.lineJoin = "round";
-
-  // Rotating rear distributor makes the machine read as a fertilizer
-  // spreader instead of another harvester.
-  ctx.save();
-  ctx.translate(-24, 4);
-  ctx.rotate(state.settings.reducedMotion ? 0 : now / 105);
-  ctx.fillStyle = "#e6c357";
-  ctx.strokeStyle = "#76552f";
-  ctx.lineWidth = 1.8 / camera.scale;
-  ctx.beginPath(); ctx.ellipse(0, 0, 10, 6, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(-9, 0); ctx.lineTo(9, 0); ctx.moveTo(0, -5); ctx.lineTo(0, 5); ctx.stroke();
-  ctx.restore();
-
-  for (const wheelX of [-11, 13]) {
-    drawVehicleWheel(wheelX, 9, "#293b33", "#aeb48e");
-  }
-  ctx.fillStyle = "#4d845d";
-  ctx.strokeStyle = "#35543f";
-  ctx.lineWidth = 2 / camera.scale;
-  ctx.beginPath();
-  ctx.moveTo(-17, -5); ctx.lineTo(19, -5); ctx.lineTo(23, 6); ctx.lineTo(-14, 8); ctx.closePath();
-  ctx.fill(); ctx.stroke();
-  ctx.fillStyle = "#f0c95c";
-  ctx.beginPath(); ctx.moveTo(-9, -22); ctx.lineTo(8, -22); ctx.lineTo(15, -4); ctx.lineTo(-14, -4); ctx.closePath(); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = "#fff1a3";
-  ctx.beginPath(); ctx.ellipse(-1, -20, 7, 2.8, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = "#76b97b";
-  ctx.beginPath(); ctx.roundRect(14, -13, 8, 11, 2); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = state.settings.reducedMotion ? "#e6ba4f" : (Math.sin(now / 160) > 0 ? "#ffe582" : "#d89b3f");
-  ctx.beginPath(); ctx.arc(18, -16, 2.7, 0, Math.PI * 2); ctx.fill();
+  drawHarvesterVehicle(FERTILIZER_MACHINE, machineX, machineY - 6, heading, now, movement);
   ctx.restore();
 
   ctx.save();
@@ -2719,6 +2726,7 @@ function selectionActionPreview(plotId) {
     const stackCount = Math.max(...indexes.map((index) => getFertilizerEffect(state.cells[index]).count));
     return {
       icon: fertilizer.emoji,
+      image: FERTILIZER_MACHINE.image,
       title: `在${plot.name}施用${fertilizer.name}？`,
       text: `立即追加到選取區塊內的作物；若包含樹木則套用整棵樹：本次生長時間 ×${fertilizer.growthMultiplier}、金幣 ×${fertilizer.coinMultiplier}，持續 ${fertilizer.rounds} 輪。${stackCount ? `目前已有 ${stackCount} 層，追加後生長時間會再乘上本次倍率。` : ""}`,
       button: "確認施肥",
@@ -2864,7 +2872,7 @@ function renderFertilizerShop() {
   return FERTILIZERS.map((item) => {
     const unlocked = isFertilizerUnlocked(item, state);
     return shopCard({
-      icon: item.emoji, title: item.name, price: item.cost, locked: !unlocked, kind: "fertilizer", id: item.id
+      image: FERTILIZER_MACHINE.image, icon: item.emoji, title: item.name, price: item.cost, locked: !unlocked, kind: "fertilizer", id: item.id
     });
   }).join("");
 }
@@ -2986,7 +2994,7 @@ function renderQuickbar() {
   }
   for (const item of FERTILIZERS) {
     const count = inventoryCount(`fertilizer_${item.id}`);
-    if (count) items.push(quickButton({ emoji: item.emoji, title: `${item.name} ×${count}`, attributes: `data-inventory-kind="fertilizer" data-inventory-id="${item.id}"`, count, selected: selection?.kind === "fertilizer" && selection.id === item.id }));
+    if (count) items.push(quickButton({ image: FERTILIZER_MACHINE.image, emoji: item.emoji, title: `${item.name} ×${count}`, attributes: `data-inventory-kind="fertilizer" data-inventory-id="${item.id}"`, count, selected: selection?.kind === "fertilizer" && selection.id === item.id }));
   }
   for (const item of HARVESTERS) {
     const count = inventoryCount(`harvester_${item.id}`);
