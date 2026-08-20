@@ -727,20 +727,10 @@
       this.drawSelection(snapshot, snapshot.state, core, boardSize);
       this.drawEffects(snapshot, core, boardSize, snapshot.now || performance.now());
 
-      const cursor = snapshot.toolCursor;
-      if (cursor?.visible && !snapshot.readOnly) {
-        const tool = core.getTool(snapshot.state.equippedToolId);
-        const textureKey = `tool-${tool?.id}`;
-        if (tool && this.textures.exists(textureKey)) {
-          const worldX = (cursor.x - safeNumber(snapshot.camera?.x)) / scale;
-          const worldY = (cursor.y - safeNumber(snapshot.camera?.y)) / scale;
-          const swingProgress = Math.min(1, Math.max(0, ((snapshot.now || performance.now()) - cursor.swingStartedAt) / (snapshot.reducedMotion ? 80 : 280)));
-          this.toolCursorSprite.setTexture(textureKey).setVisible(true).setPosition(worldX, worldY).setDisplaySize(44, 44);
-          this.toolCursorSprite.setRotation(-.18 + Math.sin(swingProgress * Math.PI) * .72);
-        }
-      } else {
-        this.toolCursorSprite?.setVisible(false);
-      }
+      // The equipped tool is a native CSS cursor. Keeping it out of the Phaser
+      // display list avoids a one-frame jump when the pointer enters or leaves
+      // the farm surface.
+      this.toolCursorSprite?.setVisible(false);
     }
   }
 

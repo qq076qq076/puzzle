@@ -76,6 +76,7 @@ const elements = {
 
 const ctx = elements.canvas.getContext("2d", { alpha: true });
 const images = new Map();
+const farmCursorCache = new Map();
 const effects = [];
 const swingMarks = [];
 const plantBursts = [];
@@ -105,6 +106,8 @@ let automationActionTarget = null;
 let automationInstanceSequence = 0;
 let keyboardIndex = indexesForPlot(INITIAL_PLOT_ID)[4];
 let toastTimer = 0;
+let farmCursorResetTimer = 0;
+let farmCursorToolId = null;
 let audioContext = null;
 let rustleBuffer = null;
 let canvasWidth = 0;
@@ -181,6 +184,47 @@ function assetMarkup(fileName, fallback, className = "shop-art") {
     : `<span aria-hidden="true">${fallback}</span>`;
 }
 
+function farmCursorStyle(tool, pose = "normal") {
+  if (!tool?.image) return "crosshair";
+  const cacheKey = `${tool.id}:${pose}`;
+  const cached = farmCursorCache.get(cacheKey);
+  if (cached) return cached;
+  const image = images.get(tool.image);
+  if (!image) return "crosshair";
+  const size = 48;
+  const hotspot = 8;
+  const cursorCanvas = document.createElement("canvas");
+  cursorCanvas.width = size;
+  cursorCanvas.height = size;
+  const cursorContext = cursorCanvas.getContext("2d");
+  cursorContext.imageSmoothingEnabled = true;
+  cursorContext.translate(hotspot, hotspot);
+  cursorContext.rotate(pose === "swing" ? .46 : -.12);
+  cursorContext.drawImage(image, -4, -4, 40, 40);
+  const style = `url("${cursorCanvas.toDataURL("image/png")}") ${hotspot} ${hotspot}, crosshair`;
+  farmCursorCache.set(cacheKey, style);
+  return style;
+}
+
+function updateFarmPointerCursor(pose = "normal") {
+  if (!elements.canvas) return;
+  const tool = getTool(state?.equippedToolId);
+  farmCursorToolId = tool?.id || null;
+  elements.canvas.style.cursor = READ_ONLY ? "grab" : farmCursorStyle(tool, pose);
+}
+
+function syncFarmPointerCursor() {
+  const toolId = getTool(state?.equippedToolId)?.id || null;
+  if (toolId !== farmCursorToolId || !elements.canvas.style.cursor) updateFarmPointerCursor();
+}
+
+function animateFarmPointerCursor() {
+  if (READ_ONLY) return;
+  window.clearTimeout(farmCursorResetTimer);
+  updateFarmPointerCursor("swing");
+  farmCursorResetTimer = window.setTimeout(() => updateFarmPointerCursor(), state.settings.reducedMotion ? 70 : 150);
+}
+
 function preloadAssets() {
   const files = new Set();
   files.add(FARMER_SPRITE);
@@ -200,7 +244,10 @@ function preloadAssets() {
   for (const file of files) {
     const image = new Image();
     image.decoding = "async";
-    image.addEventListener("load", () => images.set(file, image));
+    image.addEventListener("load", () => {
+      images.set(file, image);
+      if (getTool(state?.equippedToolId)?.image === file) updateFarmPointerCursor();
+    });
     image.src = `${ASSET_ROOT}${file}`;
   }
 }
@@ -2647,35 +2694,6 @@ function drawFarm(now = performance.now()) {
   drawEffects(now);
   ctx.restore();
 
-  if (toolCursor.visible) {
-    const tool = getTool(state.equippedToolId);
-    const image = tool.image ? images.get(tool.image) : null;
-    ctx.save();
-    ctx.translate(toolCursor.x, toolCursor.y);
-    const swingProgress = clamp((now - toolCursor.swingStartedAt) / (state.settings.reducedMotion ? 80 : 280), 0, 1);
-    let toolAngle = -.18;
-    if (swingProgress < 1) {
-      if (swingProgress < .58) {
-        const strike = 1 - (1 - swingProgress / .58) ** 3;
-        toolAngle = -.68 + strike * 1.34;
-      } else {
-        toolAngle = .66 - ((swingProgress - .58) / .42) * .84;
-      }
-      ctx.scale(1 + Math.sin(swingProgress * Math.PI) * .08, 1 + Math.sin(swingProgress * Math.PI) * .08);
-    }
-    ctx.rotate(toolAngle);
-    if (!LOW_POWER_RENDER) {
-      ctx.shadowColor = "rgba(22,31,20,.45)";
-      ctx.shadowBlur = 6;
-      ctx.shadowOffsetY = 3;
-    }
-    if (image) ctx.drawImage(image, -9, -39, 44, 44);
-    else {
-      ctx.font = "30px sans-serif";
-      ctx.fillText(tool.emoji, -5, -8);
-    }
-    ctx.restore();
-  }
   window.requestAnimationFrame(drawFarm);
 }
 
@@ -3007,6 +3025,7 @@ function stableAutomationOrder(left, right) {
 }
 
 function renderQuickbar() {
+  syncFarmPointerCursor();
   if (READ_ONLY) {
     elements.quickbar.innerHTML = '<div class="readonly-quickbar">拖曳移動 · 滾輪或雙指縮放 · 點擊作物查看目前狀態</div>';
     return;
@@ -3432,6 +3451,7 @@ function addHarvestEffects(result) {
 function triggerHarvestSwing(result) {
   const now = performance.now();
   toolCursor.swingStartedAt = now;
+  animateFarmPointerCursor();
   const uniqueTargets = [...new Set(result.targets.map((index) => Number.isInteger(state.cells[index]?.plantRootIndex) ? state.cells[index].plantRootIndex : index))];
   const targets = state.settings.reducedMotion && uniqueTargets.length
     ? [uniqueTargets[Math.floor(uniqueTargets.length / 2)]]

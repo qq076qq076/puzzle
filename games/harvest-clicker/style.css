@@ -79,7 +79,7 @@ h1, h2, h3, p { margin: 0; }
 #phaser-farm-layer.is-unavailable { display: none; }
 #phaser-farm-layer.is-unavailable ~ #farm-canvas { pointer-events: auto; opacity: 1; }
 #farm-canvas:focus-visible { outline: 4px solid rgba(239,189,75,.8); outline-offset: -5px; }
-@media (pointer: fine) { #farm-canvas { cursor: none; } }
+@media (pointer: fine) { #farm-canvas { cursor: crosshair; } }
 .readonly-banner { position: absolute; z-index: 12; top: 14px; left: 50%; display: flex; width: min(440px, calc(100% - 28px)); align-items: center; justify-content: space-between; gap: 16px; padding: 10px 12px 10px 14px; border: 1px solid rgba(255,255,255,.3); border-radius: 16px; color: #fff; background: rgba(17,48,32,.92); box-shadow: 0 12px 34px rgba(12,35,23,.28); backdrop-filter: blur(12px); transform: translateX(-50%); }
 .readonly-banner[hidden] { display: none; }
 .readonly-banner div { display: grid; gap: 1px; }
