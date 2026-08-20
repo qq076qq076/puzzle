@@ -47,7 +47,7 @@ const FRAME_INTERVAL = LOW_POWER_RENDER ? 1000 / 24 : 0;
 const elements = {
   gold: $("#gold-value"), shop: $("#shop-panel"),
   tabs: $("#shop-tabs"), shopList: $("#shop-list"), canvas: $("#farm-canvas"),
-  canvasShell: $("#farm-canvas-shell"), quickbar: $("#quickbar"),
+  canvasShell: $("#farm-canvas-shell"), phaserLayer: $("#phaser-farm-layer"), quickbar: $("#quickbar"),
   toast: $("#toast"), backdrop: $("#shop-backdrop"),
   mobileShop: $("#mobile-shop-button"),
   offlineDialog: $("#offline-dialog"), settingsDialog: $("#settings-dialog"),
@@ -133,6 +133,7 @@ let cloudReady = !window.PuzzleFirebase?.enabled;
 let cloudSaveTimer = null;
 let cloudSavePending = null;
 let cloudSaveInFlight = Promise.resolve();
+let phaserFarmRenderer = null;
 let cloudSaveOperations = 0;
 let cloudSaveUnsubscribe = null;
 let pendingRemoteSave = null;
@@ -2504,6 +2505,16 @@ function drawFarm(now = performance.now()) {
   }
   lastFarmFrameAt = now;
   updateCameraFocus(now);
+  if (phaserFarmRenderer?.isActive()) {
+    phaserFarmRenderer.update({
+      state,
+      camera,
+      now,
+      reducedMotion: Boolean(state.settings?.reducedMotion)
+    });
+    window.requestAnimationFrame(drawFarm);
+    return;
+  }
   ctx.clearRect(0, 0, canvasWidth, canvasHeight);
   ctx.save();
   ctx.translate(camera.x, camera.y);
@@ -3873,6 +3884,14 @@ preloadAssets();
 document.body.classList.toggle("is-readonly", READ_ONLY);
 const cloudSyncGate = window.PuzzleFirebase?.createSyncGate(READ_ONLY ? "正在載入分享農場…" : "正在同步農場進度…");
 stopFirebaseStatus = window.PuzzleFirebase?.onStatus?.(updateShareAvailability) || null;
+if (globalThis.HarvestPhaserFarmRenderer && elements.phaserLayer) {
+  phaserFarmRenderer = new globalThis.HarvestPhaserFarmRenderer({ parent: elements.phaserLayer });
+  if (phaserFarmRenderer.mount()) {
+    elements.canvas.classList.add("is-phaser-rendered");
+  } else {
+    elements.phaserLayer.classList.add("is-unavailable");
+  }
+}
 new ResizeObserver(resizeCanvas).observe(elements.canvasShell);
 let cloudSyncPromise = Promise.resolve();
 

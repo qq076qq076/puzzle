@@ -52,6 +52,7 @@
 
         <section class="farm-panel">
           <div class="farm-canvas-shell" id="farm-canvas-shell">
+            <div id="phaser-farm-layer" aria-hidden="true"></div>
             <canvas id="farm-canvas" tabindex="0" aria-label="27乘27等角農田；點擊收割，拖曳移動畫面，兩指縮放"></canvas>
             <section class="readonly-banner" id="readonly-banner" hidden aria-live="polite">
               <div><span>READ ONLY</span><strong>正在瀏覽分享農場</strong></div>
@@ -208,6 +209,8 @@
     <script src="../share-utils.js?v=20260818-3"></script>
     <script src="../firebase-config.js?v=20260818-3"></script>
     <script src="../firebase-runtime.js?v=20260819-6"></script>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
+    <script src="phaser-farm-renderer.js?v=20260820-1"></script>
     <script src="script.js?v=20260820-21"></script>
   </body>
 </html>
