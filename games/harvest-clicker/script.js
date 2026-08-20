@@ -1216,8 +1216,21 @@ function drawDecorationSlotPreview(slot, item, valid) {
   drawDecorationItem(item, point.x, point.y, slot.direction, valid ? .92 : .45);
 }
 
+function farmSurfaceElement() {
+  const phaserCanvas = elements.phaserLayer?.querySelector("canvas");
+  if (phaserFarmRenderer?.isActive() && phaserCanvas) {
+    const rect = phaserCanvas.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) return phaserCanvas;
+  }
+  return elements.canvas;
+}
+
+function farmSurfaceRect() {
+  return farmSurfaceElement().getBoundingClientRect();
+}
+
 function resizeCanvas() {
-  const rect = elements.canvasShell.getBoundingClientRect();
+  const rect = farmSurfaceRect();
   const dpr = Math.min(LOW_POWER_RENDER ? 1.25 : 2, window.devicePixelRatio || 1);
   canvasWidth = Math.max(1, rect.width);
   canvasHeight = Math.max(1, rect.height);
@@ -3536,7 +3549,7 @@ function handleBoardClick(index) {
 }
 
 function canvasPosition(event) {
-  const rect = elements.canvas.getBoundingClientRect();
+  const rect = farmSurfaceRect();
   return { x: event.clientX - rect.left, y: event.clientY - rect.top };
 }
 
