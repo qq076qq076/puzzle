@@ -630,8 +630,23 @@
         if (progress >= 1) { snapshot.swingMarks.splice(index, 1); continue; }
         this.effects.lineStyle(4, 0xfff4b1, Math.sin(progress * Math.PI));
         this.effects.beginPath();
-        this.effects.moveTo(mark.x - 34, mark.y - 15);
-        this.effects.quadraticBezierTo(mark.x, mark.y + 9, mark.x + 35, mark.y - 11);
+        const startX = mark.x - 34;
+        const startY = mark.y - 15;
+        const controlX = mark.x;
+        const controlY = mark.y + 9;
+        const endX = mark.x + 35;
+        const endY = mark.y - 11;
+        this.effects.moveTo(startX, startY);
+        // Phaser Graphics has no quadraticBezierTo method. Approximate the
+        // short slash with a small deterministic polyline instead.
+        for (let segment = 1; segment <= 8; segment += 1) {
+          const t = segment / 8;
+          const inverse = 1 - t;
+          this.effects.lineTo(
+            inverse * inverse * startX + 2 * inverse * t * controlX + t * t * endX,
+            inverse * inverse * startY + 2 * inverse * t * controlY + t * t * endY
+          );
+        }
         this.effects.strokePath();
       }
       for (let index = snapshot.effects.length - 1; index >= 0; index -= 1) {
