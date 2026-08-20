@@ -544,6 +544,7 @@ function simulateAutoCell(state, cell, plotId, index, machineState, from, to, su
     if (to >= firstHit) {
       const hitCount = Math.floor((to - firstHit) / interval) + 1;
       cell.currentHp = Math.max(1, cell.currentHp - hitCount * machine.damage);
+      summary.automationChanged = true;
     }
     return;
   }
@@ -551,6 +552,7 @@ function simulateAutoCell(state, cell, plotId, index, machineState, from, to, su
   const firstCoins = awardHarvest(state, cell, machine.regrowth, index);
   summary.gold += firstCoins;
   summary.harvested += 1;
+  summary.automationChanged = true;
 
   let lastHarvestAt = firstHarvestAt;
   while (fertilizerStacksForCell(cell).length) {
@@ -608,7 +610,7 @@ function simulateTo(state, targetTime) {
   const savedTime = Number(state.lastSimulatedAt);
   const from = Number.isFinite(savedTime) ? savedTime : targetTime;
   const to = Math.max(from, Number(targetTime) || from);
-  const summary = { elapsedMs: to - from, gold: 0, harvested: 0 };
+  const summary = { elapsedMs: to - from, gold: 0, harvested: 0, automationChanged: false };
   if (to <= from) return summary;
 
   for (const plotId of state.ownedPlots) {

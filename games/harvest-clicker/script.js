@@ -445,7 +445,7 @@ function readLocalCheckpoint() {
   }
 }
 
-function queueCloudSave(immediate = false) {
+function queueCloudSave() {
   if (READ_ONLY || !window.PuzzleFirebase?.enabled || !cloudReady || !state || !isActiveTab()) return;
   cloudSavePending = {
     data: JSON.parse(JSON.stringify(state)),
@@ -458,11 +458,7 @@ function queueCloudSave(immediate = false) {
     revision: localRevision,
     writerId: TAB_ID
   };
-  if (immediate) {
-    flushCloudSave();
-  } else if (!cloudSaveTimer) {
-    cloudSaveTimer = window.setTimeout(flushCloudSave, 5000);
-  }
+  flushCloudSave();
 }
 
 function flushCloudSave() {
@@ -471,23 +467,34 @@ function flushCloudSave() {
   const snapshot = cloudSavePending;
   cloudSavePending = null;
   cloudSaveOperations += 1;
-  cloudSaveInFlight = cloudSaveInFlight.then(() => window.PuzzleFirebase.save(CLOUD_SAVE_KEY, snapshot.data, snapshot)).then((result) => {
+  cloudSaveInFlight = cloudSaveInFlight.then(() => {
+    // Several rapid actions can be queued before the previous Firestore
+    // transaction returns. Resolve the expected server revision only when
+    // this write actually starts, so every action builds on the accepted one.
+    snapshot.serverSavedAt = localServerSavedAt;
+    snapshot.serverRevision = localServerRevision;
+    snapshot.baseServerRevision = localServerRevision;
+    return window.PuzzleFirebase.save(CLOUD_SAVE_KEY, snapshot.data, snapshot);
+  }).then((result) => {
     const current = readLocalCheckpoint();
-    if (result?.accepted && result.checkpoint && current && current.revision === snapshot.revision && current.clientSavedAt === snapshot.clientSavedAt) {
+    if (result?.accepted && result.checkpoint) {
       const serverSavedAt = Number(result.checkpoint.serverSavedAt) || Number(result.checkpoint.savedAt) || 0;
       localServerSavedAt = serverSavedAt;
       localServerRevision = Number(result.checkpoint.serverRevision) || localServerRevision;
-      localSyncedRevision = snapshot.revision;
-      localSavedAt = serverSavedAt || current.savedAt;
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({
-          ...current,
-          savedAt: localSavedAt,
-          serverSavedAt: localServerSavedAt,
-          serverRevision: localServerRevision,
-          syncedRevision: localSyncedRevision
-        }));
-      } catch (error) { /* Local storage is optional. */ }
+      localSyncedRevision = Math.max(localSyncedRevision, snapshot.revision);
+      if (current) {
+        const snapshotIsLatest = current.revision === snapshot.revision && current.clientSavedAt === snapshot.clientSavedAt;
+        if (snapshotIsLatest) localSavedAt = serverSavedAt || current.savedAt;
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            ...current,
+            savedAt: snapshotIsLatest ? localSavedAt : current.savedAt,
+            serverSavedAt: localServerSavedAt,
+            serverRevision: localServerRevision,
+            syncedRevision: localSyncedRevision
+          }));
+        } catch (error) { /* Local storage is optional. */ }
+      }
     }
     if (result?.shareSyncFailed && shareActive && Date.now() - lastShareSyncErrorToastAt > 30000) {
       lastShareSyncErrorToastAt = Date.now();
@@ -597,7 +604,9 @@ function saveNow(forceCloud = false, { allowInactive = false, forceOverwrite = f
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(checkpoint));
     lastPersistedState = stateSnapshot();
-    queueCloudSave(forceCloud || shareActive);
+    // Every durable state change is mirrored to Firestore immediately. The
+    // transaction queue above serializes rapid clicks without stale revisions.
+    queueCloudSave();
     return true;
   } catch (error) {
     console.warn("無法儲存農場進度", error);
@@ -3977,10 +3986,9 @@ async function initializeGame() {
     if (!isActiveTab()) return;
     const summary = simulateTo(state, Date.now());
     renderHeader();
-    if (summary.gold || summary.harvested) {
+    if (summary.gold || summary.harvested || summary.automationChanged) {
       renderShop(); renderQuickbar();
-      // Automated harvest can also change the player's balance. Persist the
-      // result immediately instead of waiting for the ten-second autosave.
+      // Automated damage and completed harvests are durable progress too.
       saveNow(true);
     }
   }, 500);

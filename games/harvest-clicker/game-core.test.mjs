@@ -314,6 +314,19 @@ test("林業自動設備只採伐樹木，不會攻擊一般作物", () => {
   assert.equal(state.cells[cropIndex].currentHp, 4);
 });
 
+test("自動設備只有造成傷害、尚未收成時也標記持久化更新", () => {
+  const state = createInitialState(0);
+  const treeIndex = indexesForPlot(INITIAL_PLOT_ID)[0];
+  state.cells[treeIndex] = { plantId: "apple_tree", phase: "mature", growthProgress: 1, currentHp: 2400, nextGrowthMultiplier: 1, fertilizerId: null, fertilizerRounds: 0 };
+  state.harvesters.push({ id: "tree_sawmill", plotId: INITIAL_PLOT_ID, nextRunAt: 8000 });
+
+  const summary = simulateTo(state, 8000);
+  assert.equal(summary.harvested, 0);
+  assert.equal(summary.gold, 0);
+  assert.equal(summary.automationChanged, true);
+  assert.equal(state.cells[treeIndex].currentHp, 1000);
+});
+
 test("十種肥料依各自條件解鎖", () => {
   const state = createInitialState(0);
   assert.equal(isFertilizerUnlocked(FERTILIZERS.find((item) => item.id === "quick"), state), false);
