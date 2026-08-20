@@ -47,6 +47,12 @@
       this.farmerSprite = null;
       this.farmerActionLabel = null;
       this.toolCursorSprite = null;
+      this.staticFarmSignature = "";
+      this.pathCache = new Map();
+      this.effectLabels = [];
+      this.lowPower = Boolean(globalThis.matchMedia?.("(pointer: coarse)")?.matches || (globalThis.navigator?.hardwareConcurrency || 8) <= 4);
+      this.lastRenderAt = -Infinity;
+      this.frameInterval = this.lowPower ? 1000 / 24 : 0;
     }
 
     preload() {
@@ -112,6 +118,9 @@
     }
 
     update() {
+      const now = this.snapshot?.now || performance.now();
+      if (this.frameInterval && now - this.lastRenderAt < this.frameInterval) return;
+      this.lastRenderAt = now;
       this.renderSnapshot();
     }
 
@@ -131,6 +140,8 @@
       this.farmerSprite?.destroy();
       this.farmerActionLabel?.destroy();
       this.toolCursorSprite?.destroy();
+      for (const label of this.effectLabels) label.destroy();
+      this.effectLabels = [];
     }
 
     ensurePlantObject(index, plant) {
@@ -175,6 +186,22 @@
         bottom: { x: bottom.x, y: bottom.y + TILE_H / 2 },
         left: { x: left.x - TILE_W / 2, y: left.y }
       };
+    }
+
+    isWorldVisible(x, y, padding = TILE_W * 2) {
+      const snapshot = this.snapshot;
+      if (!snapshot) return true;
+      const scale = Math.max(.01, safeNumber(snapshot.camera?.scale, 1));
+      const screenX = x * scale + safeNumber(snapshot.camera?.x);
+      const screenY = y * scale + safeNumber(snapshot.camera?.y);
+      const pad = padding * scale;
+      const width = Math.max(1, this.parent?.clientWidth || 1);
+      const height = Math.max(1, this.parent?.clientHeight || 1);
+      return screenX >= -pad && screenX <= width + pad && screenY >= -pad && screenY <= height + pad;
+    }
+
+    farmSignature(state) {
+      return (state.ownedPlots || []).join(",");
     }
 
     drawPlot(plot, owned, boardSize, plotGridSize) {
@@ -246,6 +273,14 @@
       const anchorIndex = Number.isInteger(cell.plantRootIndex) ? cell.plantRootIndex : index;
       if (anchorIndex !== index) return;
       const point = this.plantAnchorPoint(cell, index, boardSize, core);
+      const objectKey = `${index}:${plant.id}`;
+      if (!this.isWorldVisible(point.x, point.y, TILE_W * 5)) {
+        const offscreen = this.plantObjects.get(objectKey);
+        offscreen?.sprite?.setVisible(false);
+        offscreen?.label?.setVisible(false);
+        usedKeys.add(objectKey);
+        return;
+      }
       const object = this.ensurePlantObject(index, plant);
       usedKeys.add(object.key);
       const progress = cell.phase === "mature" ? 1 : Math.min(1, Math.max(0, safeNumber(cell.growthProgress)));
@@ -389,11 +424,24 @@
             }
           }
           const key = `${kind}:${placed.instanceId || placed.plotId}`;
+          const deviceCenter = this.deviceCenter(placed, core, boardSize);
+          if (!this.isWorldVisible(deviceCenter.x, deviceCenter.y, TILE_W * (item.range + 2))) {
+            const offscreen = this.deviceObjects.get(key);
+            offscreen?.sprite?.setVisible(false);
+            offscreen?.label?.setVisible(false);
+            continue;
+          }
           const object = this.ensureDeviceObject(key, item, kind);
           usedObjects.add(key);
-          const path = this.automationPath(targets, boardSize);
+          const pathKey = `${key}:${item.range}:${centerIndex}:${targets.join(".")}`;
+          let path = this.pathCache.get(pathKey);
+          if (!path) {
+            path = this.automationPath(targets, boardSize);
+            this.pathCache.set(pathKey, path);
+            if (this.pathCache.size > 128) this.pathCache.delete(this.pathCache.keys().next().value);
+          }
           const position = this.pathPosition(path, now, 2, this.hash(key) % 1000 / 1000 * Math.max(1, path.length), boardSize)
-            || this.deviceCenter(placed, core, boardSize);
+            || deviceCenter;
           const heading = this.directionForVector(position.dx || 0, position.dy || 0);
           const directionalTexture = `device-${item.id}-${heading}`;
           if (object.sprite) {
@@ -406,7 +454,7 @@
           this.devices.fillStyle(0x2e2114, .24);
           this.devices.fillEllipse(position.x + 3, position.y + 8, kind === "sprinkler" ? 24 : 38, 10);
           if (kind === "sprinkler") {
-            const center = this.deviceCenter(placed, core, boardSize);
+            const center = deviceCenter;
             const pulse = snapshot.reducedMotion ? 0 : Math.sin(now / 220) * 4;
             this.devices.lineStyle(2, 0x8fe2ef, .6);
             for (let arm = 0; arm < 4; arm += 1) {
@@ -443,6 +491,10 @@
         if (!item || !point) continue;
         const key = `${placed.id}:${placed.row}:${placed.col}:${placed.direction || ""}:${index}`;
         used.add(key);
+        if (!this.isWorldVisible(point.x, point.y, TILE_W * 2)) {
+          this.decorationObjects.get(key)?.setVisible(false);
+          continue;
+        }
         let object = this.decorationObjects.get(key);
         const file = placed.direction === "vertical" ? item.imageVertical || item.image : item.imageHorizontal || item.image;
         const textureKey = `decoration-${file}`;
@@ -470,6 +522,11 @@
 
     drawFarmer(farmer, now, reducedMotion) {
       if (!farmer?.initialized || !this.farmerSprite) return;
+      if (!this.isWorldVisible(farmer.x, farmer.y, TILE_W * 2)) {
+        this.farmerSprite.setVisible(false);
+        this.farmerActionLabel.setVisible(false);
+        return;
+      }
       const frame = farmer.action === "walk" ? Math.floor(now / 180) % 3 : 1;
       const row = Math.max(0, Math.min(3, Number(farmer.directionRow) || 0));
       this.farmerSprite.setVisible(true).setPosition(farmer.x, farmer.y + TILE_H * .42);
@@ -514,9 +571,25 @@
       }
     }
 
+    effectLabelAt(index) {
+      let label = this.effectLabels[index];
+      if (label) return label;
+      label = this.add.text(0, 0, "", {
+        fontFamily: "sans-serif",
+        fontSize: "17px",
+        color: "#ffe16d",
+        stroke: "#3b2e20",
+        strokeThickness: 4
+      }).setOrigin(.5, 1).setDepth(FARMER_LAYER_Z + 3).setVisible(false);
+      this.effectLabels[index] = label;
+      return label;
+    }
+
     drawEffects(snapshot, core, boardSize, now) {
       const reduced = snapshot.reducedMotion;
       this.effects.clear();
+      for (const label of this.effectLabels) label.setVisible(false);
+      let labelIndex = 0;
       const drawBurst = (burst, color, duration) => {
         const progress = Math.min(1, Math.max(0, (now - burst.startedAt) / duration));
         if (progress >= 1) return false;
@@ -545,11 +618,9 @@
         const effect = snapshot.effects[index];
         const progress = Math.min(1, Math.max(0, (now - effect.startedAt) / 760));
         if (progress >= 1) { snapshot.effects.splice(index, 1); continue; }
-        const text = this.add.text(effect.x, effect.y - progress * 38, effect.text, {
-          fontFamily: "sans-serif", fontSize: "17px", color: effect.color || "#ffe16d",
-          stroke: "#3b2e20", strokeThickness: 4
-        }).setOrigin(.5, 1).setAlpha(1 - progress).setDepth(FARMER_LAYER_Z + 3);
-        this.time.delayedCall(20, () => text.destroy());
+        const text = this.effectLabelAt(labelIndex++);
+        text.setText(effect.text).setColor(effect.color || "#ffe16d");
+        text.setPosition(effect.x, effect.y - progress * 38).setAlpha(1 - progress).setVisible(true);
       }
       for (let index = snapshot.deviceBursts.length - 1; index >= 0; index -= 1) {
         const burst = snapshot.deviceBursts[index];
@@ -577,19 +648,25 @@
       const scale = Math.max(.01, safeNumber(snapshot.camera?.scale, 1));
       this.cameras.main.setZoom(scale);
       this.cameras.main.setScroll(-safeNumber(snapshot.camera?.x) / scale, -safeNumber(snapshot.camera?.y) / scale);
-      this.ground.clear();
-      this.cells.clear();
       this.shadow.clear();
       this.overlays.clear();
       this.devices.clear();
       this.decorations.clear();
-      this.ground.fillStyle(0x86ad69, 1);
-      this.ground.fillRect(-2600, -900, 5200, 3400);
-
       const ownedPlots = new Set(snapshot.state.ownedPlots || []);
-      for (const plot of core.PLOTS || staticData.PLOTS || []) this.drawPlot(plot, ownedPlots.has(plot.id), boardSize, plotGridSize);
+      const signature = this.farmSignature(snapshot.state);
+      if (signature !== this.staticFarmSignature) {
+        this.ground.clear();
+        this.cells.clear();
+        this.ground.fillStyle(0x86ad69, 1);
+        this.ground.fillRect(-2600, -900, 5200, 3400);
+        for (const plot of core.PLOTS || staticData.PLOTS || []) {
+          this.drawPlot(plot, ownedPlots.has(plot.id), boardSize, plotGridSize);
+        }
+        const ownedIndexes = new Set((snapshot.state.ownedPlots || []).flatMap(core.indexesForPlot));
+        for (const index of ownedIndexes) this.drawCellGrid(index, boardSize, true);
+        this.staticFarmSignature = signature;
+      }
       const ownedIndexes = new Set((snapshot.state.ownedPlots || []).flatMap(core.indexesForPlot));
-      for (const index of ownedIndexes) this.drawCellGrid(index, boardSize, true);
 
       const usedKeys = new Set();
       for (let index = 0; index < (snapshot.state.cells || []).length; index += 1) {
@@ -604,7 +681,7 @@
       this.drawEffects(snapshot, core, boardSize, snapshot.now || performance.now());
 
       const cursor = snapshot.toolCursor;
-      if (cursor?.visible && !snapshot.state.readOnly) {
+      if (cursor?.visible && !snapshot.readOnly) {
         const tool = core.getTool(snapshot.state.equippedToolId);
         const textureKey = `tool-${tool?.id}`;
         if (tool && this.textures.exists(textureKey)) {
@@ -665,7 +742,10 @@
       source.tabIndex = 0;
       source.setAttribute("aria-label", target.getAttribute("aria-label") || "農田");
       const forwardPointer = (type, event) => {
-        if (type === "pointerdown") source.focus({ preventScroll: true });
+        if (type === "pointerdown") {
+          source.focus({ preventScroll: true });
+          try { source.setPointerCapture(event.pointerId); } catch (error) { /* Browser may not expose capture for synthetic input. */ }
+        }
         const forwarded = new globalThis.PointerEvent(type, {
           bubbles: true,
           cancelable: true,

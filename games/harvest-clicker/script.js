@@ -2509,6 +2509,7 @@ function drawFarm(now = performance.now()) {
   if (phaserFarmRenderer?.isActive()) {
     phaserFarmRenderer.update({
       state,
+      readOnly: READ_ONLY,
       camera,
       now,
       reducedMotion: Boolean(state.settings?.reducedMotion),
