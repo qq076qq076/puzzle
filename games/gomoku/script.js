@@ -155,9 +155,12 @@
     aiThinking = false;
     statusElement.className = "gomoku-status " + statusClass;
     statusElement.textContent = message;
-    const winner = statusClass.indexOf("is-winner-") === 0;
-    gomokuPanel.classList.toggle("is-finished", winner);
-    if (winner) showVictoryDialog(message);
+    gomokuPanel.classList.toggle("is-finished", statusClass.indexOf("is-winner-") === 0);
+  }
+
+  function finishWinner(message, statusClass) {
+    finishGame(message, statusClass);
+    showVictoryDialog(message);
   }
 
   function closeVictoryDialog() {
@@ -244,13 +247,13 @@
 
     if (analysis.forbidden) {
       getCell(row, column).classList.add("is-forbidden");
-      finishGame("黑棋禁手（" + analysis.forbiddenType + "），白棋獲勝！", "is-winner-white");
+      finishWinner("黑棋禁手（" + analysis.forbiddenType + "），白棋獲勝！", "is-winner-white");
       return false;
     }
 
     if (analysis.wins) {
       highlightWinningLine(analysis.winningLine);
-      finishGame(playerName(player) + "獲勝！", "is-winner-" + playerClass(player));
+      finishWinner(playerName(player) + "獲勝！", "is-winner-" + playerClass(player));
       return false;
     }
 
