@@ -25,6 +25,13 @@
   padding: 16px 0;
 }
 
+.duquan-back-link {
+  margin-bottom: 14px;
+  color: var(--duquan-muted);
+}
+
+.duquan-back-link span { color: var(--duquan-red); }
+
 .duquan-header,
 .duquan-status-row {
   display: flex;
@@ -47,6 +54,15 @@
 }
 
 .duquan-header h1 span { color: var(--duquan-red); }
+
+.duquan-summary {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: var(--duquan-muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
 
 .duquan-quiet-button,
 .duquan-primary-button {
@@ -263,8 +279,10 @@
 
 @media (max-width: 700px) {
   .duquan-shell { width: 100%; padding: 8px 0 12px; }
-  .duquan-header { display: block; margin: 0 8px 8px; }
-  .duquan-header h1 { margin: 4px 2px 10px; font-size: 2.6rem; }
+  .duquan-back-link { margin: 0 8px 12px; }
+  .duquan-header { display: flex; flex-wrap: wrap; margin: 0 8px 8px; }
+  .duquan-header h1 { margin: 4px 0; font-size: 2.6rem; }
+  .duquan-summary { font-size: 0.65rem; }
   .duquan-quiet-button { flex: 0 0 auto; }
   .duquan-setup { display: block; padding: 7px; }
   .duquan-choice-grid { width: 100%; gap: 5px; }
