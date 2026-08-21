@@ -32,6 +32,7 @@
   let aiTimerId = null;
   let aiTurnToken = 0;
   let victoryCover = null;
+  let victoryTimerId = null;
   let saveController = null;
 
   function getNow() {
@@ -156,17 +157,26 @@
     statusElement.className = "gomoku-status " + statusClass;
     statusElement.textContent = message;
     gomokuPanel.classList.toggle("is-finished", statusClass.indexOf("is-winner-") === 0);
+    undoButton.disabled = true;
   }
 
   function finishWinner(message, statusClass) {
     finishGame(message, statusClass);
-    showVictoryDialog(message);
+    victoryTimerId = window.setTimeout(function () {
+      victoryTimerId = null;
+      if (gameOver) showVictoryDialog(message);
+    }, 1000);
   }
 
   function closeVictoryDialog() {
-    if (!victoryCover) return;
-    victoryCover.remove();
-    victoryCover = null;
+    if (victoryTimerId !== null) {
+      window.clearTimeout(victoryTimerId);
+      victoryTimerId = null;
+    }
+    if (victoryCover) {
+      victoryCover.remove();
+      victoryCover = null;
+    }
   }
 
   function showVictoryDialog(message) {
