@@ -73,6 +73,16 @@
       return checkpoint;
     }
 
+    function hasRestorableProgress(checkpoint) {
+      if (!checkpoint) return false;
+      if (typeof options.hasProgress !== "function") return true;
+      try {
+        return Boolean(options.hasProgress(checkpoint.data));
+      } catch (error) {
+        return false;
+      }
+    }
+
     function clearLocal() {
       try { window.localStorage.removeItem(storageKey); } catch (error) { /* Storage may be unavailable. */ }
     }
@@ -304,8 +314,8 @@
     }
 
     const localCheckpoint = readCheckpoint();
-    let selectedCheckpoint = localCheckpoint;
-    let selectedSource = localCheckpoint ? "已載入本機存檔" : "";
+    let selectedCheckpoint = hasRestorableProgress(localCheckpoint) ? localCheckpoint : null;
+    let selectedSource = selectedCheckpoint ? "已載入本機存檔" : "";
     localCreatedAt = localCheckpoint ? localCheckpoint.createdAt : 0;
     localSavedAt = localCheckpoint ? localCheckpoint.savedAt : 0;
     localClientSavedAt = localCheckpoint ? localCheckpoint.clientSavedAt : 0;
@@ -318,14 +328,15 @@
 
     function finishInitialization(remote) {
       const remoteCheckpoint = normalizeRemote(remote);
-      const remoteWins = shouldUseRemote(remoteCheckpoint, selectedCheckpoint);
+      const restorableRemote = hasRestorableProgress(remoteCheckpoint) ? remoteCheckpoint : null;
+      const remoteWins = shouldUseRemote(restorableRemote, selectedCheckpoint);
       if (remoteWins) {
-        selectedCheckpoint = remoteCheckpoint;
+        selectedCheckpoint = restorableRemote;
         selectedSource = "已載入 Firebase 雲端存檔";
-        applyCheckpoint(remoteCheckpoint, false);
-        writeLocal(remoteCheckpoint.data, remoteCheckpoint);
+        applyCheckpoint(restorableRemote, false);
+        writeLocal(restorableRemote.data, restorableRemote);
       } else if (selectedCheckpoint) {
-        selectedSource = firebase && remoteCheckpoint ? "已檢查雲端存檔，本機進度較適用，已保留本機進度" : selectedSource;
+        selectedSource = firebase && restorableRemote ? "已檢查雲端存檔，本機進度較適用，已保留本機進度" : selectedSource;
       }
 
       cloudReady = true;

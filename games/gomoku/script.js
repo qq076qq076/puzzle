@@ -8,6 +8,7 @@
   const AI_MOVE_INTERVAL = 360;
 
   const boardElement = document.getElementById("gomoku-board");
+  const gomokuPanel = document.querySelector(".gomoku-panel");
   const statusElement = document.getElementById("gomoku-status");
   const playerLabelElement = document.getElementById("current-player-label");
   const moveCountElement = document.getElementById("move-count");
@@ -30,6 +31,8 @@
   let aiThinking = false;
   let aiTimerId = null;
   let aiTurnToken = 0;
+  let victoryCover = null;
+  let saveController = null;
 
   function getNow() {
     return window.performance && typeof window.performance.now === "function" ? window.performance.now() : Date.now();
@@ -68,6 +71,16 @@
     return boardElement.querySelector('[data-row="' + row + '"][data-column="' + column + '"]');
   }
 
+  function createMoveOrderMap() {
+    const moveOrderMap = createEmptyBoard();
+    moveHistory.forEach(function (move, index) {
+      if (moveOrderMap[move.row][move.column] === EMPTY) {
+        moveOrderMap[move.row][move.column] = index + 1;
+      }
+    });
+    return moveOrderMap;
+  }
+
   function createBoard() {
     boardElement.innerHTML = "";
 
@@ -93,12 +106,27 @@
     }
   }
 
-  function updateCell(cell, player) {
+  function updateCell(cell, player, moveNumber) {
     cell.classList.remove("is-forbidden");
     cell.dataset.player = player ? playerClass(player) : "empty";
     const row = Number(cell.dataset.row);
     const column = Number(cell.dataset.column);
-    cell.setAttribute("aria-label", "第 " + (row + 1) + " 行，第 " + (column + 1) + " 列，" + (player ? playerName(player) : "空位"));
+    let moveNumberElement = cell.querySelector(".gomoku-move-number");
+
+    if (!player) {
+      if (moveNumberElement) moveNumberElement.remove();
+    } else if (moveNumber) {
+      if (!moveNumberElement) {
+        moveNumberElement = document.createElement("span");
+        moveNumberElement.className = "gomoku-move-number";
+        moveNumberElement.setAttribute("aria-hidden", "true");
+        cell.appendChild(moveNumberElement);
+      }
+      moveNumberElement.textContent = moveNumber ? String(moveNumber) : "";
+    }
+
+    const orderLabel = moveNumber ? "，第 " + moveNumber + " 手" : "";
+    cell.setAttribute("aria-label", "第 " + (row + 1) + " 行，第 " + (column + 1) + " 列，" + (player ? playerName(player) + orderLabel : "空位"));
   }
 
   function updateTurnDisplay() {
@@ -127,6 +155,66 @@
     aiThinking = false;
     statusElement.className = "gomoku-status " + statusClass;
     statusElement.textContent = message;
+    const winner = statusClass.indexOf("is-winner-") === 0;
+    gomokuPanel.classList.toggle("is-finished", winner);
+    if (winner) showVictoryDialog(message);
+  }
+
+  function closeVictoryDialog() {
+    if (!victoryCover) return;
+    victoryCover.remove();
+    victoryCover = null;
+  }
+
+  function showVictoryDialog(message) {
+    closeVictoryDialog();
+    const cover = document.createElement("div");
+    cover.className = "gomoku-result-cover";
+    cover.setAttribute("role", "dialog");
+    cover.setAttribute("aria-modal", "true");
+    cover.setAttribute("aria-labelledby", "gomoku-result-title");
+
+    const dialog = document.createElement("div");
+    dialog.className = "gomoku-result-dialog";
+    const kicker = document.createElement("p");
+    kicker.className = "gomoku-result-kicker";
+    kicker.textContent = "GAME OVER";
+    const title = document.createElement("h2");
+    title.id = "gomoku-result-title";
+    title.textContent = "恭喜！";
+    const result = document.createElement("p");
+    result.className = "gomoku-result-message";
+    result.textContent = message;
+    const actions = document.createElement("div");
+    actions.className = "gomoku-result-actions";
+
+    const viewButton = document.createElement("button");
+    viewButton.className = "button button-quiet";
+    viewButton.type = "button";
+    viewButton.dataset.action = "view";
+    viewButton.textContent = "觀看棋盤";
+    const newGameButtonElement = document.createElement("button");
+    newGameButtonElement.className = "button button-primary";
+    newGameButtonElement.type = "button";
+    newGameButtonElement.dataset.action = "new";
+    newGameButtonElement.textContent = "開新一局";
+
+    actions.append(viewButton, newGameButtonElement);
+    dialog.append(kicker, title, result, actions);
+    cover.appendChild(dialog);
+    document.body.appendChild(cover);
+    victoryCover = cover;
+
+    cover.addEventListener("click", function (event) {
+      const actionButton = event.target.closest("button[data-action]");
+      if (!actionButton) return;
+      if (actionButton.dataset.action === "new") {
+        startNewGame();
+      } else {
+        closeVictoryDialog();
+      }
+    });
+    viewButton.focus();
   }
 
   function cancelComputerTurn() {
@@ -151,7 +239,7 @@
     board[row][column] = player;
     moveCount += 1;
     moveHistory.push({ row: row, column: column, player: player });
-    updateCell(getCell(row, column), player);
+    updateCell(getCell(row, column), player, moveCount);
     moveCountElement.textContent = String(moveCount) + " 手";
 
     if (analysis.forbidden) {
@@ -226,11 +314,13 @@
 
   function resetGame() {
     cancelComputerTurn();
+    closeVictoryDialog();
     board = createEmptyBoard();
     currentPlayer = BLACK;
     moveCount = 0;
     gameOver = false;
     moveHistory = [];
+    gomokuPanel.classList.remove("is-finished");
     boardElement.querySelectorAll(".gomoku-cell").forEach(function (cell) {
       cell.classList.remove("is-winning");
       updateCell(cell, EMPTY);
@@ -246,6 +336,13 @@
     board[lastMove.row][lastMove.column] = EMPTY;
     moveCount -= 1;
     updateCell(getCell(lastMove.row, lastMove.column), EMPTY);
+  }
+
+  function startNewGame() {
+    closeVictoryDialog();
+    if (saveController) saveController.clear();
+    resetGame();
+    if (saveController) saveController.save(true);
   }
 
   function undoMove() {
@@ -265,6 +362,7 @@
     boardElement.querySelectorAll(".gomoku-cell").forEach(function (cell) {
       cell.classList.remove("is-winning");
     });
+    gomokuPanel.classList.remove("is-finished");
     updateTurnDisplay();
   }
 
@@ -311,12 +409,14 @@
     moveHistory = Array.isArray(saved.history) ? saved.history.map(function (move) {
       return { row: move.row, column: move.column, player: move.player };
     }) : [];
+    const moveOrderMap = createMoveOrderMap();
     syncSettingsControls();
     boardElement.querySelectorAll(".gomoku-cell").forEach(function (cell) {
       const value = board[Number(cell.dataset.row)][Number(cell.dataset.column)];
       cell.classList.remove("is-winning");
-      updateCell(cell, value);
+      updateCell(cell, value, moveOrderMap[Number(cell.dataset.row)][Number(cell.dataset.column)]);
     });
+    gomokuPanel.classList.toggle("is-finished", gameOver && (saved.statusClass || "").indexOf("is-winner-") === 0);
     updateTurnDisplay();
     if (gameOver) {
       statusElement.className = saved.statusClass || "gomoku-status is-draw";
@@ -335,15 +435,18 @@
   });
 
   undoButton.addEventListener("click", undoMove);
-  newGameButton.addEventListener("click", resetGame);
+  newGameButton.addEventListener("click", startNewGame);
   gameModeElement.addEventListener("change", changeSettings);
   difficultyElement.addEventListener("change", changeSettings);
   humanColorElement.addEventListener("change", changeSettings);
   createBoard();
-  window.PuzzleSave.create({
+  saveController = window.PuzzleSave.create({
     key: "gomoku",
     fresh: resetGame,
     restore: restoreGame,
+    hasProgress: function (saved) {
+      return Boolean(saved && Array.isArray(saved.history) && saved.history.length > 0);
+    },
     validate: function (saved) {
       const boardIsNested = Array.isArray(saved?.board) && saved.board.length === BOARD_SIZE &&
         saved.board.every(function (row) { return Array.isArray(row) && row.length === BOARD_SIZE; });

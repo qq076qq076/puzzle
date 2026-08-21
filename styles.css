@@ -1849,6 +1849,28 @@ h1 {
   box-shadow: 0 0 0 3px #d95557, 0 0 0 6px rgba(217, 85, 87, 0.18), inset 0 3px 4px rgba(255, 255, 255, 0.16), 0 4px 7px rgba(48, 43, 52, 0.25);
 }
 
+.gomoku-move-number {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 72%;
+  aspect-ratio: 1;
+  color: transparent;
+  font-size: clamp(0.45rem, 1.8vw, 0.82rem);
+  font-weight: 850;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.gomoku-panel.is-finished .gomoku-move-number {
+  color: #fffdf9;
+}
+
+.gomoku-panel.is-finished .gomoku-cell[data-player="white"] .gomoku-move-number {
+  color: #302b34;
+}
+
 .gomoku-star {
   position: absolute;
   z-index: 0;
@@ -1981,6 +2003,56 @@ h1 {
   margin-bottom: clamp(8px, 2vh, 16px);
 }
 
+.gomoku-result-cover {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(8, 12, 22, 0.68);
+  backdrop-filter: blur(8px);
+}
+
+.gomoku-result-dialog {
+  box-sizing: border-box;
+  width: min(100%, 390px);
+  padding: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 24px;
+  color: #f8fafc;
+  background: linear-gradient(145deg, #202b40, #101724);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+  text-align: center;
+}
+
+.gomoku-result-kicker {
+  margin: 0 0 9px;
+  color: #fda4af;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.16em;
+}
+
+.gomoku-result-dialog h2 {
+  margin: 0;
+  color: inherit;
+  font-size: clamp(2rem, 8vw, 3rem);
+  line-height: 1.05;
+}
+
+.gomoku-result-message {
+  margin: 14px 0 24px;
+  color: #cbd5e1;
+  font-weight: 750;
+}
+
+.gomoku-result-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
 .gomoku-panel {
   width: 100%;
   max-width: none;
@@ -2045,6 +2117,10 @@ h1 {
     width: min(100%, calc(100dvh - 142px));
     padding: 6px;
     border-radius: 16px;
+  }
+
+  .gomoku-result-actions {
+    grid-template-columns: 1fr;
   }
 }
 
