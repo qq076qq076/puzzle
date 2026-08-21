@@ -83,6 +83,27 @@ export function createPrototypeTextures(scene) {
     g.lineBetween(10, 18, 4, 23);
     g.lineBetween(22, 18, 28, 23);
   });
+
+  makeTexture(scene, "boss-prototype", 64, 64, (g) => {
+    g.fillStyle(0x28283b, 1);
+    g.fillRect(12, 12, 40, 38);
+    g.fillStyle(0x7c4d58, 1);
+    g.fillRect(16, 14, 32, 22);
+    g.fillStyle(0xe0d6ae, 1);
+    g.fillRect(14, 8, 36, 10);
+    g.fillRect(20, 4, 6, 8);
+    g.fillRect(38, 4, 6, 8);
+    g.fillStyle(0xe1bc54, 1);
+    g.fillRect(27, 22, 10, 10);
+    g.fillStyle(0x151622, 1);
+    g.fillRect(20, 29, 7, 5);
+    g.fillRect(37, 29, 7, 5);
+    g.fillStyle(0x7786a7, 1);
+    g.fillRect(8, 38, 12, 10);
+    g.fillRect(44, 38, 12, 10);
+    g.fillRect(15, 50, 10, 11);
+    g.fillRect(39, 50, 10, 11);
+  });
 }
 
 export function createSlashTexture(scene) {

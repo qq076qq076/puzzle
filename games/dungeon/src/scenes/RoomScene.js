@@ -250,7 +250,13 @@ export class RoomScene extends Phaser.Scene {
   }
 
   goToNextRoom() {
-    if (this.roomIndex >= 4) return;
+    if (this.roomIndex >= 4) {
+      this.scene.start("Boss", {
+        runSeed: this.runSeed,
+        build: { buffs: this.player.buffs, health: this.player.health },
+      });
+      return;
+    }
     this.scene.restart({
       runSeed: this.runSeed,
       roomIndex: this.roomIndex + 1,

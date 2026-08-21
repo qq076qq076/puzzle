@@ -57,7 +57,9 @@ export function generateRoom(runSeed, roomIndex) {
 }
 
 function chooseTemplate(rng, roomIndex) {
-  const pool = ROOM_TEMPLATES.filter((template) => roomIndex < 3 || template.theme === "machine" || template.id === "pillars" || template.id === "trap_corridor");
+  const pool = roomIndex < 3
+    ? ROOM_TEMPLATES.filter((template) => template.theme === "fantasy")
+    : ROOM_TEMPLATES.filter((template) => template.theme === "machine" || template.id === "pillars" || template.id === "trap_corridor");
   return rng.pick(pool.length ? pool : ROOM_TEMPLATES);
 }
 
