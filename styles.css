@@ -1660,6 +1660,7 @@ h1 {
 
 .gomoku-toolbar-actions {
   gap: 13px;
+  flex-wrap: wrap;
 }
 
 .gomoku-turn-box {
@@ -1687,6 +1688,13 @@ h1 {
   font-size: 0.69rem;
   font-weight: 800;
   white-space: nowrap;
+}
+
+.gomoku-toolbar-actions .button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  box-shadow: none;
+  transform: none;
 }
 
 .gomoku-status {

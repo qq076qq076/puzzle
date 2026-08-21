@@ -17,12 +17,14 @@
   const statusElement = document.getElementById("gomoku-status");
   const playerLabelElement = document.getElementById("current-player-label");
   const moveCountElement = document.getElementById("move-count");
+  const undoButton = document.getElementById("undo-gomoku-move");
   const newGameButton = document.getElementById("new-gomoku-game");
 
   let board = [];
   let currentPlayer = BLACK;
   let moveCount = 0;
   let gameOver = false;
+  let moveHistory = [];
 
   function createEmptyBoard() {
     return Array.from({ length: BOARD_SIZE }, function () {
@@ -121,6 +123,7 @@
     statusElement.className = "gomoku-status is-" + playerClass(currentPlayer);
     statusElement.textContent = name + "回合，請落子。";
     moveCountElement.textContent = String(moveCount) + " 手";
+    undoButton.disabled = moveHistory.length === 0;
   }
 
   function highlightWinningLine(line) {
@@ -145,6 +148,7 @@
 
     board[row][column] = currentPlayer;
     moveCount += 1;
+    moveHistory.push({ row: row, column: column, player: currentPlayer });
     updateCell(getCell(row, column), currentPlayer);
     moveCountElement.textContent = String(moveCount) + " 手";
 
@@ -169,10 +173,29 @@
     currentPlayer = BLACK;
     moveCount = 0;
     gameOver = false;
+    moveHistory = [];
     boardElement.querySelectorAll(".gomoku-cell").forEach(function (cell) {
       cell.classList.remove("is-winning");
       updateCell(cell, EMPTY);
     });
+    updateTurnDisplay();
+  }
+
+  function undoMove() {
+    if (moveHistory.length === 0) {
+      return;
+    }
+
+    const lastMove = moveHistory.pop();
+    board[lastMove.row][lastMove.column] = EMPTY;
+    moveCount -= 1;
+    currentPlayer = lastMove.player;
+    gameOver = false;
+
+    boardElement.querySelectorAll(".gomoku-cell").forEach(function (cell) {
+      cell.classList.remove("is-winning");
+    });
+    updateCell(getCell(lastMove.row, lastMove.column), EMPTY);
     updateTurnDisplay();
   }
 
@@ -181,6 +204,9 @@
     currentPlayer = saved.currentPlayer;
     moveCount = saved.moveCount;
     gameOver = Boolean(saved.gameOver);
+    moveHistory = Array.isArray(saved.history) ? saved.history.map(function (move) {
+      return { row: move.row, column: move.column, player: move.player };
+    }) : [];
     boardElement.querySelectorAll(".gomoku-cell").forEach(function (cell) {
       const value = board[Number(cell.dataset.row)][Number(cell.dataset.column)];
       cell.classList.remove("is-winning");
@@ -201,6 +227,7 @@
     handleMove(Number(cell.dataset.row), Number(cell.dataset.column));
   });
 
+  undoButton.addEventListener("click", undoMove);
   newGameButton.addEventListener("click", resetGame);
   createBoard();
   window.PuzzleSave.create({
@@ -210,10 +237,16 @@
     validate: function (saved) {
       return saved && Array.isArray(saved.board) && saved.board.length === BOARD_SIZE &&
         saved.board.every(function (row) { return Array.isArray(row) && row.length === BOARD_SIZE; }) &&
-        [BLACK, WHITE].includes(saved.currentPlayer) && Number.isInteger(saved.moveCount);
+        [BLACK, WHITE].includes(saved.currentPlayer) && Number.isInteger(saved.moveCount) &&
+        (!saved.history || (Array.isArray(saved.history) && saved.history.every(function (move) {
+          return move && Number.isInteger(move.row) && move.row >= 0 && move.row < BOARD_SIZE &&
+            Number.isInteger(move.column) && move.column >= 0 && move.column < BOARD_SIZE &&
+            [BLACK, WHITE].includes(move.player);
+        })));
     },
     getState: function () {
       return { board: board, currentPlayer: currentPlayer, moveCount: moveCount, gameOver: gameOver,
+        history: moveHistory,
         statusClass: statusElement.className, statusText: statusElement.textContent };
     }
   });
