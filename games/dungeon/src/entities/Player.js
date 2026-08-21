@@ -16,20 +16,28 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.maxHealth = 100;
     this.health = 100;
     this.attackDamage = 20;
+    this.attackRange = 72;
+    this.attackArcDeg = 100;
     this.moveSpeed = 190;
     this.attackCooldownMs = 450;
     this.attackCooldownRemaining = 0;
     this.attackRemaining = 0;
+    this.attackStarted = false;
     this.dodgeCooldownMs = 1200;
     this.dodgeCooldownRemaining = 0;
     this.dodgeRemaining = 0;
     this.invulnerableRemaining = 0;
+    this.damageReduction = 0;
+    this.bleedDamage = 0;
+    this.machineDamageMultiplier = 1;
+    this.buffs = [];
     this.facing = new Phaser.Math.Vector2(0, 1);
     this.slash = scene.add.image(0, 0, "slash-prototype").setOrigin(0.5).setDepth(9).setVisible(false);
   }
 
   updateActor(input, delta) {
     const dt = Math.max(0, delta);
+    this.attackStarted = false;
     this.attackCooldownRemaining = Math.max(0, this.attackCooldownRemaining - dt);
     this.dodgeCooldownRemaining = Math.max(0, this.dodgeCooldownRemaining - dt);
     this.invulnerableRemaining = Math.max(0, this.invulnerableRemaining - dt);
@@ -60,6 +68,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (this.attackCooldownRemaining > 0 || this.dodgeRemaining > 0) return false;
     this.attackCooldownRemaining = this.attackCooldownMs;
     this.attackRemaining = 115;
+    this.attackStarted = true;
     return true;
   }
 
@@ -74,7 +83,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   takeDamage(amount) {
     if (this.invulnerableRemaining > 0 || this.health <= 0) return false;
-    this.health = Math.max(0, this.health - Math.max(1, amount));
+    this.health = Math.max(0, this.health - Math.max(1, amount - this.damageReduction));
     this.invulnerableRemaining = 600;
     this.setTint(0xffffff);
     this.scene.time.delayedCall(90, () => this.clearTint());

@@ -44,6 +44,45 @@ export function createPrototypeTextures(scene) {
     g.lineBetween(0, 15, 32, 15);
     g.lineBetween(0, 27, 32, 27);
   });
+
+  makeTexture(scene, "enemy-rat-prototype", 24, 18, (g) => {
+    g.fillStyle(0x9b7857, 1);
+    g.fillRect(5, 5, 14, 9);
+    g.fillRect(2, 8, 5, 5);
+    g.fillStyle(0xd7a7a1, 1);
+    g.fillRect(18, 9, 5, 2);
+    g.fillStyle(0x151722, 1);
+    g.fillRect(15, 7, 2, 2);
+  });
+
+  makeTexture(scene, "enemy-goblin-prototype", 24, 28, (g) => {
+    g.fillStyle(0x65a15d, 1);
+    g.fillRect(5, 4, 14, 13);
+    g.fillStyle(0x252937, 1);
+    g.fillRect(4, 15, 16, 8);
+    g.fillStyle(0xeee0ac, 1);
+    g.fillRect(7, 9, 3, 3);
+    g.fillRect(14, 9, 3, 3);
+    g.fillStyle(0x141620, 1);
+    g.fillRect(7, 21, 5, 6);
+    g.fillRect(14, 21, 5, 6);
+  });
+
+  makeTexture(scene, "enemy-spider-prototype", 32, 24, (g) => {
+    g.fillStyle(0x8b91aa, 1);
+    g.fillRect(9, 5, 14, 14);
+    g.fillStyle(0x4a506b, 1);
+    g.fillRect(12, 8, 8, 8);
+    g.fillStyle(0xd9bc5f, 1);
+    g.fillRect(14, 10, 4, 3);
+    g.lineStyle(3, 0x626a88, 1);
+    g.lineBetween(9, 8, 2, 2);
+    g.lineBetween(9, 13, 1, 13);
+    g.lineBetween(23, 8, 30, 2);
+    g.lineBetween(23, 13, 31, 13);
+    g.lineBetween(10, 18, 4, 23);
+    g.lineBetween(22, 18, 28, 23);
+  });
 }
 
 export function createSlashTexture(scene) {
