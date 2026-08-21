@@ -11,6 +11,10 @@
     { row: 1, column: -1 }
   ];
 
+  function now() {
+    return typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
+  }
+
   function isInsideBoard(row, column) {
     return row >= 0 && row < BOARD_SIZE && column >= 0 && column < BOARD_SIZE;
   }
@@ -140,7 +144,12 @@
     return ownScore - opponentScore;
   }
 
-  function minimax(board, player, maximizingPlayer, minimizingPlayer, depth, alpha, beta, legalMove) {
+  function minimax(board, player, maximizingPlayer, minimizingPlayer, depth, alpha, beta, legalMove, deadline, searchState) {
+    if (now() >= deadline) {
+      searchState.aborted = true;
+      return 0;
+    }
+
     const candidates = collectCandidateMoves(board, player, legalMove, 16);
     if (candidates.length === 0) return 0;
     if (depth === 0) return evaluateBoard(board, maximizingPlayer, minimizingPlayer, legalMove);
@@ -149,11 +158,17 @@
     let bestScore = isMaximizing ? -Infinity : Infinity;
 
     for (const move of candidates) {
+      if (now() >= deadline) {
+        searchState.aborted = true;
+        break;
+      }
       board[move.row][move.column] = player;
       const score = createsFive(board, move.row, move.column, player)
         ? (isMaximizing ? 100000000 : -100000000)
-        : minimax(board, player === 1 ? 2 : 1, maximizingPlayer, minimizingPlayer, depth - 1, alpha, beta, legalMove);
+        : minimax(board, player === 1 ? 2 : 1, maximizingPlayer, minimizingPlayer, depth - 1, alpha, beta, legalMove, deadline, searchState);
       board[move.row][move.column] = EMPTY;
+
+      if (searchState.aborted) break;
 
       if (isMaximizing) {
         bestScore = Math.max(bestScore, score);
@@ -168,46 +183,67 @@
     return bestScore;
   }
 
+  function searchBestMove(board, player, candidates, depth, legalMove, deadline) {
+    const opponent = player === 1 ? 2 : 1;
+    const searchState = { aborted: false };
+    let bestMove = candidates[0];
+    let bestScore = -Infinity;
+
+    for (const move of candidates) {
+      if (now() >= deadline) {
+        searchState.aborted = true;
+        break;
+      }
+
+      board[move.row][move.column] = player;
+      const score = createsFive(board, move.row, move.column, player)
+        ? 100000000
+        : minimax(board, opponent, player, opponent, depth - 1, -Infinity, Infinity, legalMove, deadline, searchState);
+      board[move.row][move.column] = EMPTY;
+
+      if (searchState.aborted) break;
+      if (score > bestScore) {
+        bestScore = score;
+        bestMove = move;
+      }
+    }
+
+    return searchState.aborted ? null : bestMove;
+  }
+
   function chooseMove(board, player, difficulty, options) {
     const legalMove = options && typeof options.isLegalMove === "function" ? options.isLegalMove : function () { return true; };
     const opponent = player === 1 ? 2 : 1;
-    const limit = difficulty === "hard" ? 20 : 28;
+    const limit = difficulty === "hard" ? 24 : 28;
     const candidates = collectCandidateMoves(board, player, legalMove, limit);
     if (candidates.length === 0) return null;
 
     const winningMove = findWinningMove(board, player, candidates);
     if (winningMove) return winningMove;
 
-    if (difficulty !== "easy") {
-      const blockingMove = findWinningMove(board, opponent, candidates);
-      if (blockingMove) return blockingMove;
-    }
+    const blockingMove = findWinningMove(board, opponent, candidates);
+    if (blockingMove) return blockingMove;
 
     if (difficulty === "easy") {
-      const easyPool = candidates.slice(0, Math.min(8, candidates.length));
-      return easyPool[Math.floor(Math.random() * easyPool.length)];
-    }
-
-    if (difficulty === "medium") {
       return candidates.slice(0, 8).sort(function (first, second) {
         return scoreMove(board, second.row, second.column, player, opponent) -
           scoreMove(board, first.row, first.column, player, opponent);
       })[0];
     }
 
-    let bestMove = candidates[0];
-    let bestScore = -Infinity;
-    candidates.slice(0, 12).forEach(function (move) {
-      board[move.row][move.column] = player;
-      const score = createsFive(board, move.row, move.column, player)
-        ? 100000000
-        : minimax(board, opponent, player, opponent, 2, -Infinity, Infinity, legalMove);
-      board[move.row][move.column] = EMPTY;
-      if (score > bestScore) {
-        bestScore = score;
-        bestMove = move;
-      }
-    });
+    const searchCandidates = candidates.slice(0, difficulty === "hard" ? 14 : 12);
+    if (difficulty === "medium") {
+      return searchBestMove(board, player, searchCandidates, 2, legalMove, Infinity) || searchCandidates[0];
+    }
+
+    const maxThinkMs = options && Number.isFinite(options.maxThinkMs) ? options.maxThinkMs : 280;
+    const deadline = now() + Math.max(1, maxThinkMs);
+    let bestMove = searchCandidates[0];
+    for (let depth = 1; depth <= 4; depth += 1) {
+      const candidate = searchBestMove(board, player, searchCandidates, depth, legalMove, deadline);
+      if (!candidate) break;
+      bestMove = candidate;
+    }
     return bestMove;
   }
 

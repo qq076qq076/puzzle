@@ -5,6 +5,7 @@
   const EMPTY = 0;
   const BLACK = 1;
   const WHITE = 2;
+  const AI_MOVE_INTERVAL = 360;
 
   const boardElement = document.getElementById("gomoku-board");
   const statusElement = document.getElementById("gomoku-status");
@@ -29,6 +30,10 @@
   let aiThinking = false;
   let aiTimerId = null;
   let aiTurnToken = 0;
+
+  function getNow() {
+    return window.performance && typeof window.performance.now === "function" ? window.performance.now() : Date.now();
+  }
 
   function createEmptyBoard() {
     return Array.from({ length: BOARD_SIZE }, function () {
@@ -186,18 +191,27 @@
         return;
       }
 
+      const moveStartedAt = getNow();
       const move = window.GomokuAI.chooseMove(board, aiColor, difficulty, {
+        maxThinkMs: AI_MOVE_INTERVAL - 60,
         isLegalMove: function (nextBoard, row, column, player) {
           return window.GomokuRules.isLegalMove(nextBoard, row, column, player);
         }
       });
-      aiThinking = false;
-      if (move) {
-        applyMove(move.row, move.column, aiColor);
-      } else {
-        updateTurnDisplay();
-      }
-    }, 360);
+      const remainingDelay = Math.max(0, AI_MOVE_INTERVAL - (getNow() - moveStartedAt));
+      aiTimerId = window.setTimeout(function () {
+        aiTimerId = null;
+        if (token !== aiTurnToken || gameOver || currentPlayer !== aiColor) {
+          return;
+        }
+        aiThinking = false;
+        if (move) {
+          applyMove(move.row, move.column, aiColor);
+        } else {
+          updateTurnDisplay();
+        }
+      }, remainingDelay);
+    }, 0);
   }
 
   function handleMove(row, column) {
