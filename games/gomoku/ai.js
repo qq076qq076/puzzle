@@ -10,9 +10,19 @@
     { row: 1, column: 1 },
     { row: 1, column: -1 }
   ];
+  const WIN_SCORE = 100000000;
 
   function now() {
     return typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
+  }
+
+  function isExpired(context) {
+    if (!context || !Number.isFinite(context.deadline)) return false;
+    if (now() >= context.deadline) {
+      context.aborted = true;
+      return true;
+    }
+    return false;
   }
 
   function isInsideBoard(row, column) {
@@ -76,10 +86,12 @@
     }, 0);
     board[row][column] = EMPTY;
 
-    return ownScore + defenseScore * 0.9;
+    const center = Math.floor(BOARD_SIZE / 2);
+    const centerBonus = BOARD_SIZE - (Math.abs(row - center) + Math.abs(column - center));
+    return ownScore + defenseScore * 0.9 + centerBonus * 0.1;
   }
 
-  function collectCandidateMoves(board, player, legalMove, limit) {
+  function getPotentialMoves(board, radius) {
     const occupied = [];
     const candidates = [];
     const seen = new Set();
@@ -92,14 +104,14 @@
 
     if (occupied.length === 0) {
       const center = Math.floor(BOARD_SIZE / 2);
-      return legalMove(board, center, center, player) ? [{ row: center, column: center }] : [];
+      return [{ row: center, column: center }];
     }
 
     occupied.forEach(function (stone) {
-      for (let row = Math.max(0, stone.row - 2); row <= Math.min(BOARD_SIZE - 1, stone.row + 2); row += 1) {
-        for (let column = Math.max(0, stone.column - 2); column <= Math.min(BOARD_SIZE - 1, stone.column + 2); column += 1) {
+      for (let row = Math.max(0, stone.row - radius); row <= Math.min(BOARD_SIZE - 1, stone.row + radius); row += 1) {
+        for (let column = Math.max(0, stone.column - radius); column <= Math.min(BOARD_SIZE - 1, stone.column + radius); column += 1) {
           const key = row + ":" + column;
-          if (board[row][column] === EMPTY && !seen.has(key) && legalMove(board, row, column, player)) {
+          if (board[row][column] === EMPTY && !seen.has(key)) {
             seen.add(key);
             candidates.push({ row: row, column: column });
           }
@@ -107,7 +119,37 @@
       }
     });
 
-    if (candidates.length === 0) {
+    if (candidates.length > 0) return candidates;
+
+    for (let row = 0; row < BOARD_SIZE; row += 1) {
+      for (let column = 0; column < BOARD_SIZE; column += 1) {
+        if (board[row][column] === EMPTY) candidates.push({ row: row, column: column });
+      }
+    }
+    return candidates;
+  }
+
+  function compareMoves(board, first, second, player, opponent) {
+    const secondScore = scoreMove(board, second.row, second.column, player, opponent);
+    const firstScore = scoreMove(board, first.row, first.column, player, opponent);
+    if (secondScore !== firstScore) return secondScore - firstScore;
+
+    const center = Math.floor(BOARD_SIZE / 2);
+    return (Math.abs(first.row - center) + Math.abs(first.column - center)) -
+      (Math.abs(second.row - center) + Math.abs(second.column - center));
+  }
+
+  function collectCandidateMoves(board, player, legalMove, limit, context) {
+    const opponent = player === 1 ? 2 : 1;
+    const candidates = [];
+    const potentialMoves = getPotentialMoves(board, 2);
+
+    for (const move of potentialMoves) {
+      if (isExpired(context)) break;
+      if (legalMove(board, move.row, move.column, player)) candidates.push(move);
+    }
+
+    if (candidates.length === 0 && !isExpired(context)) {
       for (let row = 0; row < BOARD_SIZE; row += 1) {
         for (let column = 0; column < BOARD_SIZE; column += 1) {
           if (board[row][column] === EMPTY && legalMove(board, row, column, player)) {
@@ -118,23 +160,57 @@
     }
 
     return candidates.sort(function (first, second) {
-      return scoreMove(board, second.row, second.column, player, player === 1 ? 2 : 1) -
-        scoreMove(board, first.row, first.column, player, player === 1 ? 2 : 1);
+      return compareMoves(board, first, second, player, opponent);
     }).slice(0, limit);
   }
 
-  function findWinningMove(board, player, candidates) {
-    return candidates.find(function (move) {
+  function findWinningMove(board, player, candidates, context) {
+    for (const move of candidates) {
+      if (isExpired(context)) return null;
       board[move.row][move.column] = player;
       const winning = createsFive(board, move.row, move.column, player);
       board[move.row][move.column] = EMPTY;
-      return winning;
-    }) || null;
+      if (winning) return move;
+    }
+    return null;
   }
 
-  function evaluateBoard(board, maximizingPlayer, minimizingPlayer, legalMove) {
-    const ownMoves = collectCandidateMoves(board, maximizingPlayer, legalMove, 12);
-    const opponentMoves = collectCandidateMoves(board, minimizingPlayer, legalMove, 12);
+  function findWinningReplies(board, player, legalMove, context, limit) {
+    const winningMoves = [];
+    const potentialMoves = getPotentialMoves(board, 2);
+
+    for (const move of potentialMoves) {
+      if (isExpired(context)) break;
+      if (!legalMove(board, move.row, move.column, player)) continue;
+
+      board[move.row][move.column] = player;
+      const winning = createsFive(board, move.row, move.column, player);
+      board[move.row][move.column] = EMPTY;
+      if (winning) {
+        winningMoves.push(move);
+        if (winningMoves.length >= limit) break;
+      }
+    }
+
+    return winningMoves;
+  }
+
+  function findForkMove(board, player, candidates, legalMove, context) {
+    for (const move of candidates) {
+      if (isExpired(context)) return null;
+
+      board[move.row][move.column] = player;
+      const winningReplies = findWinningReplies(board, player, legalMove, context, 2);
+      board[move.row][move.column] = EMPTY;
+      if (context && context.aborted) return null;
+      if (winningReplies.length >= 2) return move;
+    }
+    return null;
+  }
+
+  function evaluateBoard(board, maximizingPlayer, minimizingPlayer, legalMove, context) {
+    const ownMoves = collectCandidateMoves(board, maximizingPlayer, legalMove, 12, context);
+    const opponentMoves = collectCandidateMoves(board, minimizingPlayer, legalMove, 12, context);
     const ownScore = ownMoves.reduce(function (total, move) {
       return total + scoreMove(board, move.row, move.column, maximizingPlayer, minimizingPlayer);
     }, 0);
@@ -144,31 +220,47 @@
     return ownScore - opponentScore;
   }
 
-  function minimax(board, player, maximizingPlayer, minimizingPlayer, depth, alpha, beta, legalMove, deadline, searchState) {
-    if (now() >= deadline) {
-      searchState.aborted = true;
-      return 0;
+  function getBoardKey(board, player, depth) {
+    return player + ":" + depth + ":" + board.map(function (row) { return row.join(""); }).join("");
+  }
+
+  function minimax(board, player, maximizingPlayer, minimizingPlayer, depth, alpha, beta, legalMove, context) {
+    if (isExpired(context)) return 0;
+
+    const key = getBoardKey(board, player, depth);
+    const cached = context.table.get(key);
+    const originalAlpha = alpha;
+    const originalBeta = beta;
+    if (cached) {
+      if (cached.flag === "exact") return cached.value;
+      if (cached.flag === "lower") alpha = Math.max(alpha, cached.value);
+      if (cached.flag === "upper") beta = Math.min(beta, cached.value);
+      if (alpha >= beta) return cached.value;
     }
 
-    const candidates = collectCandidateMoves(board, player, legalMove, 16);
+    if (depth === 0) {
+      const evaluated = evaluateBoard(board, maximizingPlayer, minimizingPlayer, legalMove, context);
+      if (!context.aborted) context.table.set(key, { value: evaluated, flag: "exact" });
+      return evaluated;
+    }
+
+    const candidates = collectCandidateMoves(board, player, legalMove, 16, context);
     if (candidates.length === 0) return 0;
-    if (depth === 0) return evaluateBoard(board, maximizingPlayer, minimizingPlayer, legalMove);
 
     const isMaximizing = player === maximizingPlayer;
     let bestScore = isMaximizing ? -Infinity : Infinity;
+    const nextPlayer = player === 1 ? 2 : 1;
 
     for (const move of candidates) {
-      if (now() >= deadline) {
-        searchState.aborted = true;
-        break;
-      }
+      if (isExpired(context)) break;
+
       board[move.row][move.column] = player;
       const score = createsFive(board, move.row, move.column, player)
-        ? (isMaximizing ? 100000000 : -100000000)
-        : minimax(board, player === 1 ? 2 : 1, maximizingPlayer, minimizingPlayer, depth - 1, alpha, beta, legalMove, deadline, searchState);
+        ? (isMaximizing ? WIN_SCORE : -WIN_SCORE)
+        : minimax(board, nextPlayer, maximizingPlayer, minimizingPlayer, depth - 1, alpha, beta, legalMove, context);
       board[move.row][move.column] = EMPTY;
 
-      if (searchState.aborted) break;
+      if (context.aborted) break;
 
       if (isMaximizing) {
         bestScore = Math.max(bestScore, score);
@@ -180,49 +272,57 @@
       if (beta <= alpha) break;
     }
 
+    if (!context.aborted) {
+      const flag = bestScore <= originalAlpha ? "upper" : (bestScore >= originalBeta ? "lower" : "exact");
+      context.table.set(key, { value: bestScore, flag: flag });
+    }
     return bestScore;
   }
 
-  function searchBestMove(board, player, candidates, depth, legalMove, deadline) {
+  function searchBestMove(board, player, candidates, depth, legalMove, context) {
     const opponent = player === 1 ? 2 : 1;
-    const searchState = { aborted: false };
     let bestMove = candidates[0];
     let bestScore = -Infinity;
 
     for (const move of candidates) {
-      if (now() >= deadline) {
-        searchState.aborted = true;
-        break;
-      }
+      if (isExpired(context)) break;
 
       board[move.row][move.column] = player;
       const score = createsFive(board, move.row, move.column, player)
-        ? 100000000
-        : minimax(board, opponent, player, opponent, depth - 1, -Infinity, Infinity, legalMove, deadline, searchState);
+        ? WIN_SCORE
+        : minimax(board, opponent, player, opponent, depth - 1, -Infinity, Infinity, legalMove, context);
       board[move.row][move.column] = EMPTY;
 
-      if (searchState.aborted) break;
+      if (context.aborted) break;
       if (score > bestScore) {
         bestScore = score;
         bestMove = move;
       }
     }
 
-    return searchState.aborted ? null : bestMove;
+    return context.aborted ? null : bestMove;
   }
 
   function chooseMove(board, player, difficulty, options) {
     const legalMove = options && typeof options.isLegalMove === "function" ? options.isLegalMove : function () { return true; };
     const opponent = player === 1 ? 2 : 1;
-    const limit = difficulty === "hard" ? 24 : 28;
-    const candidates = collectCandidateMoves(board, player, legalMove, limit);
+    const isHard = difficulty === "hard";
+    const maxThinkMs = isHard && options && Number.isFinite(options.maxThinkMs) ? options.maxThinkMs : 280;
+    const context = {
+      deadline: isHard ? now() + Math.max(1, maxThinkMs) : Infinity,
+      aborted: false,
+      table: new Map()
+    };
+    const candidateLimit = isHard ? 24 : 28;
+    const candidates = collectCandidateMoves(board, player, legalMove, candidateLimit, context);
     if (candidates.length === 0) return null;
 
-    const winningMove = findWinningMove(board, player, candidates);
+    const winningMove = findWinningMove(board, player, candidates, context);
     if (winningMove) return winningMove;
 
-    const blockingMove = findWinningMove(board, opponent, candidates);
-    if (blockingMove) return blockingMove;
+    const opponentCandidates = collectCandidateMoves(board, opponent, legalMove, candidateLimit, context);
+    const blockingMove = findWinningMove(board, opponent, opponentCandidates, context);
+    if (blockingMove && legalMove(board, blockingMove.row, blockingMove.column, player)) return blockingMove;
 
     if (difficulty === "easy") {
       return candidates.slice(0, 8).sort(function (first, second) {
@@ -231,16 +331,23 @@
       })[0];
     }
 
-    const searchCandidates = candidates.slice(0, difficulty === "hard" ? 14 : 12);
-    if (difficulty === "medium") {
-      return searchBestMove(board, player, searchCandidates, 2, legalMove, Infinity) || searchCandidates[0];
+    if (isHard) {
+      const ownFork = findForkMove(board, player, candidates.slice(0, 18), legalMove, context);
+      if (ownFork) return ownFork;
+
+      const opponentFork = findForkMove(board, opponent, opponentCandidates.slice(0, 18), legalMove, context);
+      if (opponentFork && legalMove(board, opponentFork.row, opponentFork.column, player)) return opponentFork;
+      if (context.aborted) return candidates[0];
     }
 
-    const maxThinkMs = options && Number.isFinite(options.maxThinkMs) ? options.maxThinkMs : 280;
-    const deadline = now() + Math.max(1, maxThinkMs);
+    const searchCandidates = candidates.slice(0, isHard ? 18 : 12);
+    if (difficulty === "medium") {
+      return searchBestMove(board, player, searchCandidates, 2, legalMove, context) || searchCandidates[0];
+    }
+
     let bestMove = searchCandidates[0];
-    for (let depth = 1; depth <= 4; depth += 1) {
-      const candidate = searchBestMove(board, player, searchCandidates, depth, legalMove, deadline);
+    for (let depth = 1; depth <= 6; depth += 1) {
+      const candidate = searchBestMove(board, player, searchCandidates, depth, legalMove, context);
       if (!candidate) break;
       bestMove = candidate;
     }
