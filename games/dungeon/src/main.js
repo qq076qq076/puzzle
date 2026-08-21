@@ -3,13 +3,14 @@ import { gameConfig } from "./config.js";
 import { BootScene } from "./scenes/BootScene.js";
 import { PreloadScene } from "./scenes/PreloadScene.js";
 import { MenuScene } from "./scenes/MenuScene.js";
+import { RoomScene } from "./scenes/RoomScene.js";
 import { setupOrientationGuard } from "./ui/orientation-lock.js";
 
 setupOrientationGuard();
 
 const config = {
   ...gameConfig,
-  scene: [BootScene, PreloadScene, MenuScene],
+  scene: [BootScene, PreloadScene, MenuScene, RoomScene],
 };
 
 new Phaser.Game(config);
