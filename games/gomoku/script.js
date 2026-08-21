@@ -19,17 +19,43 @@
   const moveCountElement = document.getElementById("move-count");
   const undoButton = document.getElementById("undo-gomoku-move");
   const newGameButton = document.getElementById("new-gomoku-game");
+  const gameModeElement = document.getElementById("gomoku-game-mode");
+  const computerSettingsElement = document.getElementById("gomoku-computer-settings");
+  const difficultyElement = document.getElementById("gomoku-difficulty");
+  const humanColorElement = document.getElementById("gomoku-human-color");
 
   let board = [];
   let currentPlayer = BLACK;
   let moveCount = 0;
   let gameOver = false;
   let moveHistory = [];
+  let gameMode = "local";
+  let difficulty = "medium";
+  let humanColor = BLACK;
+  let aiColor = WHITE;
+  let aiThinking = false;
+  let aiTimerId = null;
+  let aiTurnToken = 0;
 
   function createEmptyBoard() {
     return Array.from({ length: BOARD_SIZE }, function () {
       return Array(BOARD_SIZE).fill(EMPTY);
     });
+  }
+
+  function serializeBoard() {
+    return board.reduce(function (cells, row) {
+      return cells.concat(row);
+    }, []);
+  }
+
+  function deserializeBoard(savedBoard) {
+    if (savedBoard.length === BOARD_SIZE * BOARD_SIZE && !Array.isArray(savedBoard[0])) {
+      return Array.from({ length: BOARD_SIZE }, function (_, row) {
+        return savedBoard.slice(row * BOARD_SIZE, (row + 1) * BOARD_SIZE);
+      });
+    }
+    return savedBoard.map(function (row) { return row.slice(); });
   }
 
   function playerName(player) {
@@ -118,12 +144,14 @@
 
   function updateTurnDisplay() {
     const name = playerName(currentPlayer);
-    playerLabelElement.textContent = name;
+    const computerTurn = gameMode === "computer" && currentPlayer === aiColor;
+    playerLabelElement.textContent = computerTurn ? "電腦・" + name : name;
     playerLabelElement.dataset.player = playerClass(currentPlayer);
     statusElement.className = "gomoku-status is-" + playerClass(currentPlayer);
-    statusElement.textContent = name + "回合，請落子。";
+    statusElement.textContent = aiThinking ? "電腦思考中…" : (computerTurn ? "電腦回合，請稍候。" : name + "回合，請落子。");
     moveCountElement.textContent = String(moveCount) + " 手";
-    undoButton.disabled = moveHistory.length === 0;
+    undoButton.disabled = moveHistory.length === 0 || aiThinking;
+    computerSettingsElement.hidden = gameMode !== "computer";
   }
 
   function highlightWinningLine(line) {
@@ -137,38 +165,85 @@
 
   function finishGame(message, statusClass) {
     gameOver = true;
+    aiThinking = false;
     statusElement.className = "gomoku-status " + statusClass;
     statusElement.textContent = message;
   }
 
-  function handleMove(row, column) {
-    if (gameOver || board[row][column] !== EMPTY) {
-      return;
+  function cancelComputerTurn() {
+    if (aiTimerId !== null) {
+      window.clearTimeout(aiTimerId);
+      aiTimerId = null;
     }
+    aiThinking = false;
+    aiTurnToken += 1;
+  }
 
-    board[row][column] = currentPlayer;
+  function isHumanTurn() {
+    return gameMode !== "computer" || currentPlayer === humanColor;
+  }
+
+  function applyMove(row, column, player) {
+    board[row][column] = player;
     moveCount += 1;
-    moveHistory.push({ row: row, column: column, player: currentPlayer });
-    updateCell(getCell(row, column), currentPlayer);
+    moveHistory.push({ row: row, column: column, player: player });
+    updateCell(getCell(row, column), player);
     moveCountElement.textContent = String(moveCount) + " 手";
 
-    const winningLine = getWinningLine(row, column, currentPlayer);
+    const winningLine = getWinningLine(row, column, player);
     if (winningLine) {
       highlightWinningLine(winningLine);
-      finishGame(playerName(currentPlayer) + "獲勝！", "is-winner-" + playerClass(currentPlayer));
-      return;
+      finishGame(playerName(player) + "獲勝！", "is-winner-" + playerClass(player));
+      return false;
     }
 
     if (moveCount === BOARD_SIZE * BOARD_SIZE) {
       finishGame("和棋！棋盤已填滿。", "is-draw");
-      return;
+      return false;
     }
 
     currentPlayer = currentPlayer === BLACK ? WHITE : BLACK;
     updateTurnDisplay();
+    return true;
+  }
+
+  function scheduleComputerTurn() {
+    if (gameMode !== "computer" || gameOver || currentPlayer !== aiColor) {
+      return;
+    }
+
+    cancelComputerTurn();
+    aiThinking = true;
+    updateTurnDisplay();
+    const token = aiTurnToken;
+    aiTimerId = window.setTimeout(function () {
+      aiTimerId = null;
+      if (token !== aiTurnToken || gameOver || currentPlayer !== aiColor) {
+        return;
+      }
+
+      const move = window.GomokuAI.chooseMove(board, aiColor, difficulty);
+      aiThinking = false;
+      if (move) {
+        applyMove(move.row, move.column, aiColor);
+      } else {
+        updateTurnDisplay();
+      }
+    }, 360);
+  }
+
+  function handleMove(row, column) {
+    if (gameOver || aiThinking || !isHumanTurn() || board[row][column] !== EMPTY) {
+      return;
+    }
+
+    if (applyMove(row, column, currentPlayer) && currentPlayer === aiColor) {
+      scheduleComputerTurn();
+    }
   }
 
   function resetGame() {
+    cancelComputerTurn();
     board = createEmptyBoard();
     currentPlayer = BLACK;
     moveCount = 0;
@@ -179,34 +254,82 @@
       updateCell(cell, EMPTY);
     });
     updateTurnDisplay();
+    if (gameMode === "computer" && currentPlayer === aiColor) {
+      scheduleComputerTurn();
+    }
   }
 
-  function undoMove() {
-    if (moveHistory.length === 0) {
-      return;
-    }
-
+  function removeLastMove() {
     const lastMove = moveHistory.pop();
     board[lastMove.row][lastMove.column] = EMPTY;
     moveCount -= 1;
-    currentPlayer = lastMove.player;
+    updateCell(getCell(lastMove.row, lastMove.column), EMPTY);
+  }
+
+  function undoMove() {
+    if (moveHistory.length === 0 || aiThinking) {
+      return;
+    }
+
+    cancelComputerTurn();
+    const lastPlayer = moveHistory[moveHistory.length - 1].player;
+    removeLastMove();
+    if (gameMode === "computer" && lastPlayer === aiColor && moveHistory.length > 0 && moveHistory[moveHistory.length - 1].player === humanColor) {
+      removeLastMove();
+    }
+    currentPlayer = gameMode === "computer" ? humanColor : (moveHistory.length > 0 ? (currentPlayer === BLACK ? WHITE : BLACK) : BLACK);
     gameOver = false;
 
     boardElement.querySelectorAll(".gomoku-cell").forEach(function (cell) {
       cell.classList.remove("is-winning");
     });
-    updateCell(getCell(lastMove.row, lastMove.column), EMPTY);
     updateTurnDisplay();
   }
 
+  function syncSettingsControls() {
+    gameModeElement.value = gameMode;
+    difficultyElement.value = difficulty;
+    humanColorElement.value = String(humanColor);
+    computerSettingsElement.hidden = gameMode !== "computer";
+  }
+
+  function changeSettings() {
+    const nextMode = gameModeElement.value === "computer" ? "computer" : "local";
+    const nextDifficulty = ["easy", "medium", "hard"].includes(difficultyElement.value) ? difficultyElement.value : "medium";
+    const nextHumanColor = Number(humanColorElement.value) === WHITE ? WHITE : BLACK;
+    const changed = nextMode !== gameMode || nextDifficulty !== difficulty || nextHumanColor !== humanColor;
+
+    if (!changed) {
+      updateTurnDisplay();
+      return;
+    }
+    if (moveCount > 0 && !window.confirm("切換設定會重新開始本局，確定要繼續嗎？")) {
+      syncSettingsControls();
+      return;
+    }
+
+    gameMode = nextMode;
+    difficulty = nextDifficulty;
+    humanColor = nextHumanColor;
+    aiColor = humanColor === BLACK ? WHITE : BLACK;
+    syncSettingsControls();
+    resetGame();
+  }
+
   function restoreGame(saved) {
-    board = saved.board.map(function (row) { return row.slice(); });
+    cancelComputerTurn();
+    gameMode = saved.gameMode === "computer" ? "computer" : "local";
+    difficulty = ["easy", "medium", "hard"].includes(saved.difficulty) ? saved.difficulty : "medium";
+    humanColor = Number(saved.humanColor) === WHITE ? WHITE : BLACK;
+    aiColor = humanColor === BLACK ? WHITE : BLACK;
+    board = deserializeBoard(saved.board);
     currentPlayer = saved.currentPlayer;
     moveCount = saved.moveCount;
     gameOver = Boolean(saved.gameOver);
     moveHistory = Array.isArray(saved.history) ? saved.history.map(function (move) {
       return { row: move.row, column: move.column, player: move.player };
     }) : [];
+    syncSettingsControls();
     boardElement.querySelectorAll(".gomoku-cell").forEach(function (cell) {
       const value = board[Number(cell.dataset.row)][Number(cell.dataset.column)];
       cell.classList.remove("is-winning");
@@ -216,6 +339,8 @@
     if (gameOver) {
       statusElement.className = saved.statusClass || "gomoku-status is-draw";
       statusElement.textContent = saved.statusText || "本局已結束。";
+    } else if (gameMode === "computer" && currentPlayer === aiColor) {
+      scheduleComputerTurn();
     }
   }
 
@@ -229,14 +354,20 @@
 
   undoButton.addEventListener("click", undoMove);
   newGameButton.addEventListener("click", resetGame);
+  gameModeElement.addEventListener("change", changeSettings);
+  difficultyElement.addEventListener("change", changeSettings);
+  humanColorElement.addEventListener("change", changeSettings);
   createBoard();
   window.PuzzleSave.create({
     key: "gomoku",
     fresh: resetGame,
     restore: restoreGame,
     validate: function (saved) {
-      return saved && Array.isArray(saved.board) && saved.board.length === BOARD_SIZE &&
-        saved.board.every(function (row) { return Array.isArray(row) && row.length === BOARD_SIZE; }) &&
+      const boardIsNested = Array.isArray(saved?.board) && saved.board.length === BOARD_SIZE &&
+        saved.board.every(function (row) { return Array.isArray(row) && row.length === BOARD_SIZE; });
+      const boardIsFlat = Array.isArray(saved?.board) && saved.board.length === BOARD_SIZE * BOARD_SIZE &&
+        saved.board.every(function (cell) { return !Array.isArray(cell); });
+      return saved && (boardIsNested || boardIsFlat) &&
         [BLACK, WHITE].includes(saved.currentPlayer) && Number.isInteger(saved.moveCount) &&
         (!saved.history || (Array.isArray(saved.history) && saved.history.every(function (move) {
           return move && Number.isInteger(move.row) && move.row >= 0 && move.row < BOARD_SIZE &&
@@ -245,9 +376,19 @@
         })));
     },
     getState: function () {
-      return { board: board, currentPlayer: currentPlayer, moveCount: moveCount, gameOver: gameOver,
+      return {
+        board: serializeBoard(),
+        currentPlayer: currentPlayer,
+        moveCount: moveCount,
+        gameOver: gameOver,
         history: moveHistory,
-        statusClass: statusElement.className, statusText: statusElement.textContent };
+        gameMode: gameMode,
+        difficulty: difficulty,
+        humanColor: humanColor,
+        aiColor: aiColor,
+        statusClass: statusElement.className,
+        statusText: statusElement.textContent
+      };
     }
   });
 }());

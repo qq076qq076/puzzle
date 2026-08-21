@@ -1644,6 +1644,40 @@ h1 {
   box-shadow: 0 22px 48px rgba(95, 67, 75, 0.11);
 }
 
+.gomoku-settings {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 11px;
+  border-radius: 16px;
+  background: rgba(248, 238, 233, 0.68);
+}
+
+.gomoku-computer-settings {
+  display: contents;
+}
+
+.gomoku-setting {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.64rem;
+  font-weight: 800;
+}
+
+.gomoku-setting select {
+  width: 100%;
+  min-height: 35px;
+  padding: 0 9px;
+  border: 1px solid rgba(53, 44, 56, 0.1);
+  border-radius: 9px;
+  color: var(--ink);
+  background: rgba(255, 253, 249, 0.88);
+  font: inherit;
+  cursor: pointer;
+}
+
 .gomoku-toolbar,
 .gomoku-toolbar-actions,
 .gomoku-board-meta,
@@ -1898,6 +1932,14 @@ h1 {
 
   .gomoku-toolbar-actions {
     gap: 7px;
+  }
+
+  .gomoku-settings {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .gomoku-settings > .gomoku-setting:first-child {
+    grid-column: 1 / -1;
   }
 
   .gomoku-toolbar-actions .button {

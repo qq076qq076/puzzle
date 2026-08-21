@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#fff7ed" />
-    <meta name="description" content="15×15 本機雙人五子棋，黑棋先手，連成五子即可獲勝。" />
+    <meta name="description" content="15×15 五子棋，支援本機雙人與電腦對弈。" />
     <title>五子棋 · 連成五子</title>
     <link rel="stylesheet" href="../../styles.css" />
   </head>
@@ -26,6 +26,32 @@
         </header>
 
         <section class="gomoku-panel" aria-label="五子棋遊戲">
+          <div class="gomoku-settings" aria-label="遊戲設定">
+            <label class="gomoku-setting">
+              <span>對戰模式</span>
+              <select id="gomoku-game-mode">
+                <option value="local">雙人對弈</option>
+                <option value="computer">電腦對弈</option>
+              </select>
+            </label>
+            <div class="gomoku-computer-settings" id="gomoku-computer-settings" hidden>
+              <label class="gomoku-setting">
+                <span>難度</span>
+                <select id="gomoku-difficulty">
+                  <option value="easy">簡單</option>
+                  <option value="medium" selected>普通</option>
+                  <option value="hard">困難</option>
+                </select>
+              </label>
+              <label class="gomoku-setting">
+                <span>玩家執棋</span>
+                <select id="gomoku-human-color">
+                  <option value="1">黑棋</option>
+                  <option value="2">白棋</option>
+                </select>
+              </label>
+            </div>
+          </div>
           <div class="gomoku-toolbar">
             <div class="gomoku-turn-box">
               <span class="score-label">TURN</span>
@@ -69,6 +95,7 @@
     <script src="../firebase-config.js"></script>
     <script src="../firebase-runtime.js"></script>
     <script src="../save-system.js"></script>
+    <script src="ai.js"></script>
     <script src="script.js"></script>
   </body>
 </html>
