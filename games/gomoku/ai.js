@@ -164,6 +164,31 @@
     }).slice(0, limit);
   }
 
+  function isLegalCandidate(board, move, player, legalMove) {
+    return Boolean(move) && isInsideBoard(move.row, move.column) &&
+      board[move.row][move.column] === EMPTY && legalMove(board, move.row, move.column, player);
+  }
+
+  function findAnyLegalMove(board, player, legalMove) {
+    const potentialMoves = getPotentialMoves(board, 2);
+    for (const move of potentialMoves) {
+      if (isLegalCandidate(board, move, player, legalMove)) return move;
+    }
+
+    for (let row = 0; row < BOARD_SIZE; row += 1) {
+      for (let column = 0; column < BOARD_SIZE; column += 1) {
+        const move = { row: row, column: column };
+        if (isLegalCandidate(board, move, player, legalMove)) return move;
+      }
+    }
+    return null;
+  }
+
+  function ensureLegalMove(board, player, move, legalMove) {
+    if (isLegalCandidate(board, move, player, legalMove)) return move;
+    return findAnyLegalMove(board, player, legalMove);
+  }
+
   function findWinningMove(board, player, candidates, context) {
     for (const move of candidates) {
       if (isExpired(context)) return null;
@@ -315,34 +340,40 @@
     };
     const candidateLimit = isHard ? 24 : 28;
     const candidates = collectCandidateMoves(board, player, legalMove, candidateLimit, context);
-    if (candidates.length === 0) return null;
+    if (candidates.length === 0) return findAnyLegalMove(board, player, legalMove);
 
     const winningMove = findWinningMove(board, player, candidates, context);
-    if (winningMove) return winningMove;
+    if (winningMove) return ensureLegalMove(board, player, winningMove, legalMove);
 
     const opponentCandidates = collectCandidateMoves(board, opponent, legalMove, candidateLimit, context);
     const blockingMove = findWinningMove(board, opponent, opponentCandidates, context);
-    if (blockingMove && legalMove(board, blockingMove.row, blockingMove.column, player)) return blockingMove;
+    if (blockingMove) return ensureLegalMove(board, player, blockingMove, legalMove);
 
     if (difficulty === "easy") {
-      return candidates.slice(0, 8).sort(function (first, second) {
+      const easyMove = candidates.slice(0, 8).sort(function (first, second) {
         return scoreMove(board, second.row, second.column, player, opponent) -
           scoreMove(board, first.row, first.column, player, opponent);
       })[0];
+      return ensureLegalMove(board, player, easyMove, legalMove);
     }
 
     if (isHard) {
       const ownFork = findForkMove(board, player, candidates.slice(0, 18), legalMove, context);
-      if (ownFork) return ownFork;
+      if (ownFork) return ensureLegalMove(board, player, ownFork, legalMove);
 
       const opponentFork = findForkMove(board, opponent, opponentCandidates.slice(0, 18), legalMove, context);
-      if (opponentFork && legalMove(board, opponentFork.row, opponentFork.column, player)) return opponentFork;
-      if (context.aborted) return candidates[0];
+      if (opponentFork) return ensureLegalMove(board, player, opponentFork, legalMove);
+      if (context.aborted) return ensureLegalMove(board, player, candidates[0], legalMove);
     }
 
     const searchCandidates = candidates.slice(0, isHard ? 18 : 12);
     if (difficulty === "medium") {
-      return searchBestMove(board, player, searchCandidates, 2, legalMove, context) || searchCandidates[0];
+      return ensureLegalMove(
+        board,
+        player,
+        searchBestMove(board, player, searchCandidates, 2, legalMove, context) || searchCandidates[0],
+        legalMove
+      );
     }
 
     let bestMove = searchCandidates[0];
@@ -351,10 +382,14 @@
       if (!candidate) break;
       bestMove = candidate;
     }
-    return bestMove;
+    return ensureLegalMove(board, player, bestMove, legalMove);
   }
 
   window.GomokuAI = {
-    chooseMove: chooseMove
+    chooseMove: chooseMove,
+    findLegalMove: function (board, player, legalMove) {
+      const checker = typeof legalMove === "function" ? legalMove : function () { return true; };
+      return findAnyLegalMove(board, player, checker);
+    }
   };
 }());

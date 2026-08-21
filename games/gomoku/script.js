@@ -248,6 +248,9 @@
     if (!analysis.legal && !analysis.forbidden) {
       return false;
     }
+    if (player === aiColor && analysis.forbidden) {
+      return false;
+    }
 
     board[row][column] = player;
     moveCount += 1;
@@ -306,8 +309,11 @@
           return;
         }
         aiThinking = false;
-        if (move) {
-          applyMove(move.row, move.column, aiColor);
+        const safeMove = move && window.GomokuRules.isLegalMove(board, move.row, move.column, aiColor)
+          ? move
+          : window.GomokuAI.findLegalMove(board, aiColor, window.GomokuRules.isLegalMove);
+        if (safeMove) {
+          applyMove(safeMove.row, safeMove.column, aiColor);
         } else {
           updateTurnDisplay();
         }

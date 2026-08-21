@@ -21,8 +21,8 @@ function emptyBoard() {
   return Array.from({ length: 15 }, () => Array(15).fill(0));
 }
 
-function choose(window, board, player) {
-  return window.GomokuAI.chooseMove(board, player, "hard", {
+function choose(window, board, player, difficulty = "hard") {
+  return window.GomokuAI.chooseMove(board, player, difficulty, {
     maxThinkMs: 300,
     isLegalMove: window.GomokuRules.isLegalMove
   });
@@ -87,4 +87,40 @@ test("搜尋不會修改原始棋盤，且三種難度都回傳合法著法", ()
     assert.equal(window.GomokuRules.isLegalMove(board, move.row, move.column, 2), true);
     assert.deepEqual(board, snapshot);
   }
+});
+
+test("電腦執黑時不會選擇長連或雙四禁手", () => {
+  const window = createAI();
+  const overlineBoard = emptyBoard();
+  [3, 4, 5, 6, 7].forEach((column) => { overlineBoard[7][column] = 1; });
+
+  const doubleFourBoard = crossForkBoard(1);
+  assert.equal(window.GomokuRules.isLegalMove(doubleFourBoard, 7, 7, 1), false);
+
+  for (const difficulty of ["easy", "medium", "hard"]) {
+    const overlineMove = choose(window, overlineBoard, 1, difficulty);
+    assert.ok(overlineMove);
+    assert.equal(window.GomokuRules.isLegalMove(overlineBoard, overlineMove.row, overlineMove.column, 1), true);
+
+    const doubleFourMove = choose(window, doubleFourBoard, 1, difficulty);
+    assert.ok(doubleFourMove);
+    assert.equal(window.GomokuRules.isLegalMove(doubleFourBoard, doubleFourMove.row, doubleFourMove.column, 1), true);
+    assert.notDeepEqual(doubleFourMove, { row: 7, column: 7 });
+  }
+});
+
+test("AI 合法性防線失效時仍能找到安全著法", () => {
+  const window = createAI();
+  const board = emptyBoard();
+  board[7][7] = 2;
+  const move = window.GomokuAI.chooseMove(board, 1, "hard", {
+    maxThinkMs: 1,
+    isLegalMove: (nextBoard, row, column, player) =>
+      window.GomokuRules.isLegalMove(nextBoard, row, column, player) &&
+      !(row === 7 && column === 6)
+  });
+
+  assert.ok(move);
+  assert.notDeepEqual(move, { row: 7, column: 6 });
+  assert.equal(window.GomokuRules.isLegalMove(board, move.row, move.column, 1), true);
 });
