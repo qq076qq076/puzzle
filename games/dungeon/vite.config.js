@@ -6,5 +6,12 @@ export default defineConfig({
     target: "es2022",
     assetsInlineLimit: 0,
     sourcemap: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          phaser: ["phaser"],
+        },
+      },
+    },
   },
 });

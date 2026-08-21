@@ -249,8 +249,12 @@ export class RoomScene extends Phaser.Scene {
       .setDepth(140);
   }
 
-  goToNextRoom() {
+  async goToNextRoom() {
     if (this.roomIndex >= 4) {
+      this.roomStatus = "loading";
+      this.transitionText?.setText("載入魔王房…");
+      const { BossScene } = await import("./BossScene.js");
+      if (!this.scene.get("Boss")) this.scene.add("Boss", BossScene, false);
       this.scene.start("Boss", {
         runSeed: this.runSeed,
         build: { buffs: this.player.buffs, health: this.player.health },
