@@ -1845,6 +1845,10 @@ h1 {
   box-shadow: 0 0 0 3px #9a87c2, inset 0 -3px 4px rgba(95, 67, 75, 0.07), 0 4px 7px rgba(95, 67, 75, 0.16);
 }
 
+.gomoku-cell[data-player="black"].is-forbidden::after {
+  box-shadow: 0 0 0 3px #d95557, 0 0 0 6px rgba(217, 85, 87, 0.18), inset 0 3px 4px rgba(255, 255, 255, 0.16), 0 4px 7px rgba(48, 43, 52, 0.25);
+}
+
 .gomoku-star {
   position: absolute;
   z-index: 0;

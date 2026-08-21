@@ -2,16 +2,9 @@
   "use strict";
 
   const BOARD_SIZE = 15;
-  const WIN_LENGTH = 5;
   const EMPTY = 0;
   const BLACK = 1;
   const WHITE = 2;
-  const DIRECTIONS = [
-    { row: 1, column: 0 },
-    { row: 0, column: 1 },
-    { row: 1, column: 1 },
-    { row: 1, column: -1 }
-  ];
 
   const boardElement = document.getElementById("gomoku-board");
   const statusElement = document.getElementById("gomoku-status");
@@ -66,10 +59,6 @@
     return player === BLACK ? "black" : "white";
   }
 
-  function isInsideBoard(row, column) {
-    return row >= 0 && row < BOARD_SIZE && column >= 0 && column < BOARD_SIZE;
-  }
-
   function getCell(row, column) {
     return boardElement.querySelector('[data-row="' + row + '"][data-column="' + column + '"]');
   }
@@ -99,43 +88,8 @@
     }
   }
 
-  function countDirection(row, column, direction, player) {
-    let count = 0;
-    let nextRow = row + direction.row;
-    let nextColumn = column + direction.column;
-
-    while (isInsideBoard(nextRow, nextColumn) && board[nextRow][nextColumn] === player) {
-      count += 1;
-      nextRow += direction.row;
-      nextColumn += direction.column;
-    }
-
-    return count;
-  }
-
-  function getWinningLine(row, column, player) {
-    for (const direction of DIRECTIONS) {
-      const line = [{ row: row, column: column }];
-      const forwardCount = countDirection(row, column, direction, player);
-      const backwardDirection = { row: -direction.row, column: -direction.column };
-      const backwardCount = countDirection(row, column, backwardDirection, player);
-
-      for (let index = 1; index <= forwardCount; index += 1) {
-        line.push({ row: row + direction.row * index, column: column + direction.column * index });
-      }
-      for (let index = 1; index <= backwardCount; index += 1) {
-        line.push({ row: row - direction.row * index, column: column - direction.column * index });
-      }
-
-      if (line.length >= WIN_LENGTH) {
-        return line;
-      }
-    }
-
-    return null;
-  }
-
   function updateCell(cell, player) {
+    cell.classList.remove("is-forbidden");
     cell.dataset.player = player ? playerClass(player) : "empty";
     const row = Number(cell.dataset.row);
     const column = Number(cell.dataset.column);
@@ -184,15 +138,25 @@
   }
 
   function applyMove(row, column, player) {
+    const analysis = window.GomokuRules.analyzeMove(board, row, column, player);
+    if (!analysis.legal && !analysis.forbidden) {
+      return false;
+    }
+
     board[row][column] = player;
     moveCount += 1;
     moveHistory.push({ row: row, column: column, player: player });
     updateCell(getCell(row, column), player);
     moveCountElement.textContent = String(moveCount) + " 手";
 
-    const winningLine = getWinningLine(row, column, player);
-    if (winningLine) {
-      highlightWinningLine(winningLine);
+    if (analysis.forbidden) {
+      getCell(row, column).classList.add("is-forbidden");
+      finishGame("黑棋禁手（" + analysis.forbiddenType + "），白棋獲勝！", "is-winner-white");
+      return false;
+    }
+
+    if (analysis.wins) {
+      highlightWinningLine(analysis.winningLine);
       finishGame(playerName(player) + "獲勝！", "is-winner-" + playerClass(player));
       return false;
     }
@@ -222,7 +186,11 @@
         return;
       }
 
-      const move = window.GomokuAI.chooseMove(board, aiColor, difficulty);
+      const move = window.GomokuAI.chooseMove(board, aiColor, difficulty, {
+        isLegalMove: function (nextBoard, row, column, player) {
+          return window.GomokuRules.isLegalMove(nextBoard, row, column, player);
+        }
+      });
       aiThinking = false;
       if (move) {
         applyMove(move.row, move.column, aiColor);
@@ -277,7 +245,7 @@
     if (gameMode === "computer" && lastPlayer === aiColor && moveHistory.length > 0 && moveHistory[moveHistory.length - 1].player === humanColor) {
       removeLastMove();
     }
-    currentPlayer = gameMode === "computer" ? humanColor : (moveHistory.length > 0 ? (currentPlayer === BLACK ? WHITE : BLACK) : BLACK);
+    currentPlayer = gameMode === "computer" ? humanColor : lastPlayer;
     gameOver = false;
 
     boardElement.querySelectorAll(".gomoku-cell").forEach(function (cell) {
