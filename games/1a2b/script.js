@@ -15,6 +15,10 @@
   const nextRoundButton = document.getElementById("next-round");
   const clearGuessButton = document.getElementById("clear-guess");
   const numberButtons = Array.from(document.querySelectorAll("[data-digit]"));
+  const rulesButton = document.getElementById("rules-button");
+  const rulesDialog = document.getElementById("rules-dialog");
+  const rulesDialogCloseButton = document.getElementById("rules-dialog-close");
+  const rulesDialogConfirmButton = document.getElementById("rules-dialog-confirm");
 
   let secretCode = "";
   let records = [];
@@ -210,6 +214,32 @@
     setStatus("已清除目前猜測。", "is-ready");
     guessInput.focus();
   }
+
+  function closeRulesDialog() {
+    if (rulesDialog.open) {
+      rulesDialog.close();
+    }
+  }
+
+  rulesButton.addEventListener("click", function () {
+    if (!rulesDialog.open) {
+      rulesDialog.showModal();
+    }
+  });
+  rulesDialogCloseButton.addEventListener("click", closeRulesDialog);
+  rulesDialogConfirmButton.addEventListener("click", closeRulesDialog);
+  rulesDialog.addEventListener("click", function (event) {
+    if (event.target === rulesDialog) {
+      closeRulesDialog();
+    }
+  });
+  rulesDialog.addEventListener("cancel", function (event) {
+    event.preventDefault();
+    closeRulesDialog();
+  });
+  rulesDialog.addEventListener("close", function () {
+    rulesButton.focus();
+  });
 
   numberButtons.forEach(function (button) {
     button.addEventListener("click", function () {
