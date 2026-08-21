@@ -26,27 +26,19 @@
   const canvas = document.querySelector("#duquan-canvas");
   const context = canvas.getContext("2d");
   const arenaSection = document.querySelector("#arena-section");
-  const setupCopy = document.querySelector("#setup-copy");
   const choiceButtons = Array.from(document.querySelectorAll(".duquan-choice"));
-  const roundValue = document.querySelector("#round-value");
-  const betValue = document.querySelector("#bet-value");
-  const aliveValue = document.querySelector("#alive-value");
-  const tickValue = document.querySelector("#tick-value");
   const statusValue = document.querySelector("#status-value");
   const lastEvent = document.querySelector("#last-event");
   const resultCard = document.querySelector("#result-card");
-  const resultKicker = document.querySelector("#result-kicker");
   const resultTitle = document.querySelector("#result-title");
   const resultCopy = document.querySelector("#result-copy");
   const resetButton = document.querySelector("#reset-button");
   const nextRoundButton = document.querySelector("#next-round-button");
   const populationPanel = document.querySelector("#population-panel");
-  const populationTotal = document.querySelector("#population-total");
 
   const state = {
     actors: [],
     userChoice: null,
-    round: 1,
     tick: 0,
     running: false,
     finished: false,
@@ -55,7 +47,6 @@
     lastTimestamp: 0,
     pulse: 0,
     collisionFlash: [],
-    recentWinner: null,
     counts: { scissors: 0, rock: 0, paper: 0 }
   };
 
@@ -124,10 +115,7 @@
     const aliveTypes = CONFIG.typeOrder.filter((typeId) => counts[typeId] > 0);
     const total = state.actors.length;
     state.counts = counts;
-    aliveValue.textContent = state.actors.length ? `${aliveTypes.length} 種` : "—";
-    tickValue.textContent = state.running || state.finished ? String(state.tick).padStart(3, "0") : "—";
     if (total > 0) {
-      populationTotal.textContent = `${total} ICONS`;
       CONFIG.typeOrder.forEach((typeId) => {
         const percentage = (counts[typeId] / total) * 100;
         const roundedPercentage = Math.round(percentage);
@@ -185,9 +173,6 @@
     state.finished = false;
     state.pulse = 0;
     state.collisionFlash = [];
-    state.recentWinner = null;
-    betValue.textContent = formatType(choice);
-    setupCopy.textContent = `${formatType(choice)} 已鎖定。拳台每 100ms 重算一次方向，等最後一種拳留下。`;
     choiceButtons.forEach((button) => {
       const isSelected = button.dataset.choice === choice;
       button.disabled = true;
@@ -362,7 +347,6 @@
     });
     if (event) {
       lastEvent.textContent = event;
-      state.recentWinner = event;
     }
     return collisions.length;
   }
@@ -389,7 +373,6 @@
     state.finished = true;
     const isWin = winnerType === state.userChoice;
     const winnerName = formatType(winnerType);
-    resultKicker.textContent = isWin ? "YOU CALLED IT" : "FINAL CALL";
     resultTitle.textContent = `${winnerName}稱霸`;
     resultCopy.textContent = isWin
       ? `猜中了！${winnerName} 留到最後，你的判斷完全命中。`
@@ -409,10 +392,6 @@
     state.finished = false;
     state.pulse = 0;
     state.collisionFlash = [];
-    betValue.textContent = "—";
-    aliveValue.textContent = "—";
-    tickValue.textContent = "—";
-    setupCopy.textContent = "選定之後，拳台會立即啟動。你的選擇只在最後揭曉時判定。";
     choiceButtons.forEach((button) => {
       button.disabled = false;
       button.setAttribute("aria-pressed", "false");
@@ -596,41 +575,6 @@
     state.animationId = window.requestAnimationFrame(animate);
   }
 
-  function restoreRound(saved) {
-    stopSimulation();
-    state.actors = saved.actors.map((actor) => ({ ...actor, visualX: actor.x, visualY: actor.y }));
-    state.userChoice = saved.userChoice;
-    state.round = saved.round;
-    state.tick = saved.tick;
-    state.finished = false;
-    state.pulse = saved.pulse || 0;
-    state.collisionFlash = [];
-    state.recentWinner = saved.recentWinner || null;
-    roundValue.textContent = String(state.round).padStart(2, "0");
-    betValue.textContent = formatType(state.userChoice);
-    choiceButtons.forEach((button) => {
-      button.disabled = true;
-      button.setAttribute("aria-pressed", String(button.dataset.choice === state.userChoice));
-    });
-    arenaSection.hidden = false;
-    populationPanel.hidden = false;
-    resultCard.hidden = true;
-    setupCopy.textContent = `${formatType(state.userChoice)} 已鎖定；已恢復上次的拳台狀態。`;
-    lastEvent.textContent = state.recentWinner || "已恢復拳台進度";
-    updateCounts();
-    render();
-    if (saved.finished) {
-      const winner = CONFIG.typeOrder.find((typeId) => state.counts[typeId] > 0);
-      if (winner) finishRound(winner);
-    } else {
-      state.running = true;
-      setStatus(`已恢復第 ${state.tick} 回合，模擬繼續進行。`);
-      state.timerId = window.setInterval(tick, CONFIG.tickMs);
-      state.lastTimestamp = performance.now();
-      state.animationId = window.requestAnimationFrame(animate);
-    }
-  }
-
   choiceButtons.forEach((button) => {
     button.addEventListener("click", () => {
       if (!state.running && !state.finished) startRound(button.dataset.choice);
@@ -638,34 +582,12 @@
   });
 
   resetButton.addEventListener("click", () => {
-    state.round += 1;
-    roundValue.textContent = String(state.round).padStart(2, "0");
     resetForNextRound();
   });
 
   nextRoundButton.addEventListener("click", () => {
-    state.round += 1;
-    roundValue.textContent = String(state.round).padStart(2, "0");
     resetForNextRound();
     choiceButtons[0]?.focus();
   });
 
-  window.PuzzleSave.create({
-    key: "duquan",
-    fresh: function () {
-      state.round = 1;
-      roundValue.textContent = "01";
-      resetForNextRound();
-    },
-    restore: restoreRound,
-    validate: function (saved) {
-      return saved && Array.isArray(saved.actors) && saved.actors.length > 0 && TYPES[saved.userChoice] &&
-        Number.isInteger(saved.round) && Number.isInteger(saved.tick);
-    },
-    getState: function () {
-      if (!state.actors.length || !state.userChoice) return null;
-      return { actors: state.actors, userChoice: state.userChoice, round: state.round, tick: state.tick,
-        finished: state.finished, pulse: state.pulse, recentWinner: state.recentWinner };
-    }
-  });
 })();

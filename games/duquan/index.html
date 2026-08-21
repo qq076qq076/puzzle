@@ -11,127 +11,65 @@
   </head>
   <body class="duquan-page">
     <main class="page-shell duquan-shell">
-      <a class="back-link duquan-back-link" href="../../index.html"><span aria-hidden="true">←</span> 回到遊戲列表</a>
+      <header class="duquan-header">
+        <h1>賭拳<span>.</span></h1>
+        <button class="duquan-quiet-button" id="reset-button" type="button">重新配置</button>
+      </header>
 
-      <section class="duquan-layout" aria-labelledby="duquan-title">
-        <header class="duquan-intro">
-          <div class="duquan-eyebrow"><span class="duquan-eyebrow-dot"></span> RPS SIMULATION · LIVE ARENA</div>
-          <h1 id="duquan-title">賭拳<span>.</span></h1>
-          <p class="duquan-tagline">押一種，<br /><em>看誰稱王。</em></p>
-          <p class="duquan-copy">先選定你相信的拳。90 個圖示會依照距離與剋制關係移動，碰撞之後，輸家立刻變成贏家，直到拳台只剩最後一種。</p>
-
-          <div class="duquan-rule-chips" aria-label="遊戲規則摘要">
-            <div><strong>90 ICONS</strong><span>剪刀／石頭／布各 30</span></div>
-            <div><strong>100 MS</strong><span>每次重算距離權重</span></div>
-            <div><strong>1 WINNER</strong><span>最後存活即為霸主</span></div>
-          </div>
-
-          <div class="duquan-rules" aria-label="拳種相剋關係">
-            <span class="duquan-rules-label">MATCHUP</span>
-            <div class="duquan-rule-row"><span class="duquan-mini-icon is-scissors"><img src="assets/scissors.svg" alt="" aria-hidden="true" /></span><span>剪刀</span><i>勝</i><span class="duquan-mini-icon is-paper"><img src="assets/paper.svg" alt="" aria-hidden="true" /></span><span>布</span></div>
-            <div class="duquan-rule-row"><span class="duquan-mini-icon is-rock"><img src="assets/rock.svg" alt="" aria-hidden="true" /></span><span>石頭</span><i>勝</i><span class="duquan-mini-icon is-scissors"><img src="assets/scissors.svg" alt="" aria-hidden="true" /></span><span>剪刀</span></div>
-            <div class="duquan-rule-row"><span class="duquan-mini-icon is-paper"><img src="assets/paper.svg" alt="" aria-hidden="true" /></span><span>布</span><i>勝</i><span class="duquan-mini-icon is-rock"><img src="assets/rock.svg" alt="" aria-hidden="true" /></span><span>石頭</span></div>
-          </div>
-        </header>
-
-        <section class="duquan-panel" aria-label="賭拳遊戲">
-          <div class="duquan-toolbar">
-            <div class="duquan-metrics">
-              <div class="duquan-stat"><span>ROUND</span><strong id="round-value">01</strong></div>
-              <div class="duquan-stat"><span>YOUR BET</span><strong id="bet-value">—</strong></div>
-              <div class="duquan-stat"><span>ALIVE</span><strong id="alive-value">—</strong></div>
-              <div class="duquan-stat"><span>TICK</span><strong id="tick-value">—</strong></div>
-            </div>
-            <button class="duquan-quiet-button" id="reset-button" type="button">重新配置</button>
-          </div>
-
-          <section class="duquan-arena-section" id="arena-section" aria-labelledby="arena-title" hidden>
-            <div class="duquan-arena-heading">
-              <div>
-                <span class="duquan-section-kicker">THE FIST RING · LIVE</span>
-                <h2 id="arena-title">拳台正在判斷</h2>
-              </div>
-              <div class="duquan-arena-live"><span></span>100ms LOOP</div>
-            </div>
-
-            <div class="duquan-stage-wrap">
-              <canvas id="duquan-canvas" width="960" height="620" tabindex="0" role="application" aria-label="剪刀石頭布模擬拳台"></canvas>
-              <div class="duquan-result-card" id="result-card" hidden aria-live="polite">
-                <span class="duquan-result-kicker" id="result-kicker">FINAL CALL</span>
-                <strong id="result-title">剪刀稱霸</strong>
-                <p id="result-copy">—</p>
-                <button class="duquan-primary-button" id="next-round-button" type="button">開始下一輪 <span aria-hidden="true">↗</span></button>
-              </div>
-            </div>
-
-            <div class="duquan-status-row">
-              <p class="duquan-status" id="status-value" role="status" aria-live="polite">模擬啟動中…</p>
-              <span class="duquan-last-event" id="last-event">等待第一次碰撞</span>
-            </div>
-          </section>
-
-          <section class="duquan-setup" id="setup-panel" aria-labelledby="choice-title">
-            <div class="duquan-setup-heading">
-              <div>
-                <span class="duquan-section-kicker">PLACE YOUR BET</span>
-                <h2 id="choice-title">你押哪一拳？</h2>
-              </div>
-              <span class="duquan-setup-count">01 / 01</span>
-            </div>
-            <p class="duquan-setup-copy" id="setup-copy">選定之後，拳台會立即啟動。你的選擇只在最後揭曉時判定。</p>
-
-            <div class="duquan-choice-grid" role="group" aria-label="選擇剪刀石頭布">
+      <section aria-label="賭拳遊戲">
+        <section class="duquan-setup" aria-label="選擇拳種">
+          <div class="duquan-choice-grid" role="group" aria-label="選擇剪刀石頭布">
               <button class="duquan-choice is-scissors" type="button" data-choice="scissors" aria-pressed="false">
                 <span class="duquan-choice-icon" aria-hidden="true"><img src="assets/scissors.svg" alt="" /></span>
-                <span class="duquan-choice-label"><b>剪刀</b><small>SCISSORS</small></span>
-                <span class="duquan-choice-mark" aria-hidden="true">S</span>
+                <b>剪刀</b>
               </button>
               <button class="duquan-choice is-rock" type="button" data-choice="rock" aria-pressed="false">
                 <span class="duquan-choice-icon" aria-hidden="true"><img src="assets/rock.svg" alt="" /></span>
-                <span class="duquan-choice-label"><b>石頭</b><small>ROCK</small></span>
-                <span class="duquan-choice-mark" aria-hidden="true">R</span>
+                <b>石頭</b>
               </button>
               <button class="duquan-choice is-paper" type="button" data-choice="paper" aria-pressed="false">
                 <span class="duquan-choice-icon" aria-hidden="true"><img src="assets/paper.svg" alt="" /></span>
-                <span class="duquan-choice-label"><b>布</b><small>PAPER</small></span>
-                <span class="duquan-choice-mark" aria-hidden="true">P</span>
+                <b>布</b>
               </button>
+          </div>
+
+          <section class="duquan-population" id="population-panel" aria-label="目前拳種佔比" hidden>
+            <div class="duquan-population-list">
+              <div class="duquan-population-row">
+                <div class="duquan-population-label"><span class="duquan-population-icon is-scissors"><img src="assets/scissors.svg" alt="" aria-hidden="true" /></span><span>剪刀</span></div>
+                <div class="duquan-population-track"><span class="duquan-population-fill is-scissors" id="population-fill-scissors"></span></div>
+                <strong id="population-value-scissors">33%</strong>
+              </div>
+              <div class="duquan-population-row">
+                <div class="duquan-population-label"><span class="duquan-population-icon is-rock"><img src="assets/rock.svg" alt="" aria-hidden="true" /></span><span>石頭</span></div>
+                <div class="duquan-population-track"><span class="duquan-population-fill is-rock" id="population-fill-rock"></span></div>
+                <strong id="population-value-rock">33%</strong>
+              </div>
+              <div class="duquan-population-row">
+                <div class="duquan-population-label"><span class="duquan-population-icon is-paper"><img src="assets/paper.svg" alt="" aria-hidden="true" /></span><span>布</span></div>
+                <div class="duquan-population-track"><span class="duquan-population-fill is-paper" id="population-fill-paper"></span></div>
+                <strong id="population-value-paper">33%</strong>
+              </div>
             </div>
-
-            <section class="duquan-population" id="population-panel" aria-label="目前拳種佔比" hidden>
-              <div class="duquan-population-heading">
-                <span class="duquan-section-kicker">LIVE SHARE</span>
-                <span class="duquan-population-total" id="population-total">90 ICONS</span>
-              </div>
-              <div class="duquan-population-list">
-                <div class="duquan-population-row" data-population-type="scissors">
-                  <div class="duquan-population-label"><span class="duquan-population-icon is-scissors"><img src="assets/scissors.svg" alt="" aria-hidden="true" /></span><span>剪刀</span></div>
-                  <div class="duquan-population-track"><span class="duquan-population-fill is-scissors" id="population-fill-scissors"></span></div>
-                  <strong id="population-value-scissors">33%</strong>
-                </div>
-                <div class="duquan-population-row" data-population-type="rock">
-                  <div class="duquan-population-label"><span class="duquan-population-icon is-rock"><img src="assets/rock.svg" alt="" aria-hidden="true" /></span><span>石頭</span></div>
-                  <div class="duquan-population-track"><span class="duquan-population-fill is-rock" id="population-fill-rock"></span></div>
-                  <strong id="population-value-rock">33%</strong>
-                </div>
-                <div class="duquan-population-row" data-population-type="paper">
-                  <div class="duquan-population-label"><span class="duquan-population-icon is-paper"><img src="assets/paper.svg" alt="" aria-hidden="true" /></span><span>布</span></div>
-                  <div class="duquan-population-track"><span class="duquan-population-fill is-paper" id="population-fill-paper"></span></div>
-                  <strong id="population-value-paper">33%</strong>
-                </div>
-              </div>
-            </section>
           </section>
+        </section>
 
-          <p class="duquan-help"><span aria-hidden="true">✦</span> 越靠近，方向權重越高；同類圖示會保持距離，邊界會把它們推回拳台。</p>
+        <section class="duquan-arena-section" id="arena-section" hidden>
+          <div class="duquan-stage-wrap">
+            <canvas id="duquan-canvas" width="960" height="620" tabindex="0" role="application" aria-label="剪刀石頭布模擬拳台"></canvas>
+            <div class="duquan-result-card" id="result-card" hidden aria-live="polite">
+              <strong id="result-title">剪刀稱霸</strong>
+              <p id="result-copy">—</p>
+              <button class="duquan-primary-button" id="next-round-button" type="button">開始下一輪</button>
+            </div>
+          </div>
+          <div class="duquan-status-row">
+            <p class="duquan-status" id="status-value" role="status" aria-live="polite">模擬啟動中…</p>
+            <span class="duquan-last-event" id="last-event">等待第一次碰撞</span>
+          </div>
         </section>
       </section>
-
-      <footer class="page-footer duquan-footer"><span>PUZZLE CLUB</span><span>BET ON THE LAST ONE STANDING</span></footer>
     </main>
-    <script src="../firebase-config.js"></script>
-    <script src="../firebase-runtime.js"></script>
-    <script src="../save-system.js"></script>
     <script src="script.js"></script>
   </body>
 </html>
