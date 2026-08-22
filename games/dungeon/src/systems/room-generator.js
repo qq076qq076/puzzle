@@ -12,7 +12,8 @@ import {
 } from "../data/rooms.js";
 import { createRng } from "./rng.js";
 
-export const THREAT_BUDGETS = [6, 9, 13, 17, 23];
+export const THREAT_BUDGETS = [12, 18, 25, 34, 44];
+export const ENEMY_COUNTS = [4, 5, 6, 7, 8];
 export const WAVE_COUNTS = [1, 2, 2, 3, 3];
 
 function roomConnections() {
@@ -71,7 +72,7 @@ export function generateRoom(runSeed, roomIndex, previousTemplateId = null) {
 
   const template = chooseTemplate(rng, roomIndex, previousTemplateId);
   const threatBudget = THREAT_BUDGETS[roomIndex];
-  const enemies = generateEnemyPlan(rng, roomIndex, threatBudget, template.spawnPoints.length);
+  const enemies = generateEnemyPlan(rng, roomIndex, threatBudget, template.spawnPoints.length, ENEMY_COUNTS[roomIndex]);
   const waves = splitIntoWaves(enemies, WAVE_COUNTS[roomIndex]);
   const rewardIds = pickUnique(rng, BUFF_POOL_BY_ROOM[roomIndex], 3);
   const room = {
@@ -108,7 +109,7 @@ function generateFallbackRoom(runSeed, roomIndex, rng, previousTemplateId = null
     }).valid;
   });
   const template = rng.pick(candidates.length ? candidates : ROOM_TEMPLATES);
-  const enemies = generateEnemyPlan(rng, roomIndex, THREAT_BUDGETS[roomIndex], template.spawnPoints.length);
+  const enemies = generateEnemyPlan(rng, roomIndex, THREAT_BUDGETS[roomIndex], template.spawnPoints.length, ENEMY_COUNTS[roomIndex]);
   const room = {
     roomIndex,
     roomNumber: roomIndex + 1,
@@ -144,19 +145,18 @@ function chooseTemplate(rng, roomIndex, previousTemplateId = null) {
   return rng.pick(candidates.length ? candidates : pool);
 }
 
-function generateEnemyPlan(rng, roomIndex, budget, spawnPointCount) {
+function generateEnemyPlan(rng, roomIndex, budget, spawnPointCount, targetEnemyCount) {
   const pool = NORMAL_MONSTER_POOLS[roomIndex];
-  const minimumEnemyCount = WAVE_COUNTS[roomIndex];
   const minimumThreat = Math.min(...pool.map((id) => MONSTERS[id].threat));
   const plan = [];
   let remaining = budget;
   let sequence = 0;
-  while (remaining > 0 && plan.length < 12) {
+  while (remaining > 0 && plan.length < targetEnemyCount) {
     const candidates = pool.filter((id) => MONSTERS[id].threat <= remaining);
     if (!candidates.length) break;
     const viableCandidates = candidates.filter((id) => {
       const remainingAfterPick = remaining - MONSTERS[id].threat;
-      const slotsLeft = Math.max(0, minimumEnemyCount - (plan.length + 1));
+      const slotsLeft = Math.max(0, targetEnemyCount - (plan.length + 1));
       return remainingAfterPick >= slotsLeft * minimumThreat;
     });
     const id = rng.pick(viableCandidates.length ? viableCandidates : candidates);

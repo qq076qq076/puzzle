@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { MONSTERS } from "../src/data/monsters.js";
-import { generateFloor, generateRoom, THREAT_BUDGETS, WAVE_COUNTS, validateRoom } from "../src/systems/room-generator.js";
+import { ENEMY_COUNTS, generateFloor, generateRoom, THREAT_BUDGETS, WAVE_COUNTS, validateRoom } from "../src/systems/room-generator.js";
 import { ROOM_TEMPLATES } from "../src/data/rooms.js";
 
 test("same run seed reproduces the complete six-room floor", () => {
@@ -15,9 +15,9 @@ test("same run seed reproduces the complete six-room floor", () => {
 
 test("normal rooms contain enemies within their threat budget", () => {
   const floor = generateFloor("budget-seed");
-  floor.slice(0, 5).forEach((room) => {
+  floor.slice(0, 5).forEach((room, index) => {
     const threat = room.enemies.reduce((total, enemy) => total + MONSTERS[enemy.id].threat, 0);
-    assert.ok(room.enemies.length >= 1);
+    assert.equal(room.enemies.length, ENEMY_COUNTS[index]);
     assert.ok(threat <= room.threatBudget);
     assert.ok(room.rewardIds.length >= 1);
     assert.ok(room.rewardIds.length <= 3);
@@ -32,11 +32,14 @@ test("room generation varies with the seed", () => {
 
 test("generated normal rooms satisfy the layout, wave, and template constraints", () => {
   assert.ok(ROOM_TEMPLATES.length >= 8);
-  ["layout-a", "layout-b", "layout-c"].forEach((seed) => {
+  assert.deepEqual(ENEMY_COUNTS, [4, 5, 6, 7, 8]);
+  assert.ok(ENEMY_COUNTS.every((count, index) => index === 0 || count > ENEMY_COUNTS[index - 1]));
+  Array.from({ length: 25 }, (_, index) => `layout-${index}`).forEach((seed) => {
     const floor = generateFloor(seed);
     floor.slice(0, 5).forEach((room, index, rooms) => {
       assert.equal(room.validation.valid, true);
       assert.deepEqual(room.validation, validateRoom(room));
+      assert.equal(room.enemies.length, ENEMY_COUNTS[index]);
       assert.equal(room.waves.length, WAVE_COUNTS[index]);
       assert.ok(room.enemies.reduce((sum, enemy) => sum + MONSTERS[enemy.id].threat, 0) <= THREAT_BUDGETS[index]);
       assert.ok(room.spawnPoints.every((point) => room.validation.safeSpawns && point.length === 2));

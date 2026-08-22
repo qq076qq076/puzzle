@@ -3,7 +3,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../config.js";
 import { MONSTERS } from "../data/monsters.js";
 import { Enemy } from "../entities/Enemy.js";
 import { Player } from "../entities/Player.js";
-import { applyReward, describeReward, getRewardColor, getRewardDefinition, getUsableRewardIds } from "../systems/reward-system.js";
+import { applyReward, getRewardColor, getRewardDefinition, getUsableRewardIds } from "../systems/reward-system.js";
 import { applyBuff } from "../systems/buff-system.js";
 import { clearProjectiles, spawnProjectile, updateProjectiles } from "../systems/projectile-system.js";
 import { getDungeonAudio } from "../systems/audio-system.js";
@@ -97,7 +97,7 @@ export class RoomScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(150);
-    this.showHint("WASD／方向鍵移動 · Space 攻擊 · Shift 閃避 · 清場後走過右側的門");
+    this.showHint("WASD／方向鍵移動 · Space 攻擊 · Shift 閃避");
   }
 
   applyBuild() {
@@ -449,7 +449,7 @@ export class RoomScene extends Phaser.Scene {
     rewardVisual.setScale(this.currentRoom.theme === "machine" ? 1.25 : 3.5);
     if (this.currentRoom.theme === "machine") playEnvironmentAnimation(rewardVisual, "reward-console-idle");
     this.rewardGroup.add(rewardVisual);
-    this.rewardGroup.add(this.add.text(480, 84, "房間清除", this.hudStyle(26, "#f5f1da")).setOrigin(0.5));
+    this.rewardGroup.add(this.add.text(480, 84, "選擇獎勵", this.hudStyle(26, "#f5f1da")).setOrigin(0.5));
     this.rewardGroup.add(this.add.text(480, 112, "←／→ 選擇獎勵 · Space／攻擊確認", this.hudStyle(12, "#aaa8b5")).setOrigin(0.5));
     this.rewardIds.slice(0, 3).forEach((rewardId, index) => this.createRewardCard(rewardId, index));
     this.updateRewardSelection();
@@ -493,13 +493,6 @@ export class RoomScene extends Phaser.Scene {
     this.rewardGroup?.destroy(true);
     this.rewardGroup = null;
     this.roomStatus = "transition";
-    this.transitionText = this.add.text(480, 270, `${result.converted ? "Buff 已達上限，轉化為 10 金幣" : describeReward(rewardId)}\n\n走過右側的開門進入下一間`, {
-      color: "#f5f1da",
-      fontFamily: "monospace",
-      fontSize: "15px",
-      align: "center",
-      lineSpacing: 8,
-    }).setOrigin(0.5).setDepth(140);
   }
 
   updateTransitionInput(delta) {
@@ -513,7 +506,6 @@ export class RoomScene extends Phaser.Scene {
   async goToNextRoom() {
     if (this.roomStatus !== "transition") return;
     this.roomStatus = "loading";
-    this.transitionText?.setText("走過房門，載入下一間房…");
     if (this.roomIndex >= 4) {
       const { BossScene } = await import("./BossScene.js");
       if (!this.scene.get("Boss")) this.scene.add("Boss", BossScene, false);
@@ -539,10 +531,12 @@ export class RoomScene extends Phaser.Scene {
 
   updateHud(status = null) {
     const waveLabel = this.roomStatus === "combat" ? `第 ${Math.max(1, this.currentWave + 1)}/${this.currentRoom.waves.length} 波` : null;
+    const passageOpen = this.roomStatus === "transition" || this.roomStatus === "loading";
+    this.hud.status.setVisible(!passageOpen);
     updateCombatHud(this.hud, this.player, {
       roomLabel: `FLOOR 1 · ROOM ${this.currentRoom.roomNumber}/6`,
       seed: this.runSeed,
-      status: status || waveLabel || this.statusMessage || this.roomStatus,
+      status: passageOpen ? null : status || waveLabel || this.statusMessage || this.roomStatus,
     });
   }
 
@@ -558,7 +552,6 @@ export class RoomScene extends Phaser.Scene {
     this.exitOpen = true;
     openSideDoor(this.exitDoor);
     this.tweens.add({ targets: this.exitPortal, alpha: 1, scale: 0.68, duration: 320, yoyo: true, repeat: -1 });
-    this.showStatus("怪物已清除 · 房門開啟");
   }
 
   updateDefeatInput() {
