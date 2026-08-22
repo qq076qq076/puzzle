@@ -4,40 +4,58 @@ const EPSILON = 0.001;
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
   constructor(scene, x, y) {
-    super(scene, x, y, "player-prototype");
+    super(scene, x, y, "provided-player");
     scene.add.existing(this);
     scene.physics.add.existing(this);
+    this.setScale(3);
     this.setDepth(10);
     this.setCollideWorldBounds(true);
-    this.body.setSize(14, 18).setOffset(5, 8);
+    this.body.setSize(10, 12).setOffset(3, 3);
     this.body.setDrag(900, 900);
-    this.body.setMaxVelocity(210, 210);
+    this.body.setMaxVelocity(230, 230);
 
     this.maxHealth = 100;
     this.health = 100;
     this.attackDamage = 20;
     this.attackRange = 72;
     this.attackArcDeg = 100;
-    this.moveSpeed = 190;
+    this.moveSpeed = 192;
     this.attackCooldownMs = 450;
     this.attackCooldownRemaining = 0;
     this.attackRemaining = 0;
+    this.attackElapsed = 0;
     this.attackStarted = false;
+    this.attackHitWindow = false;
+    this.attackHitResolved = false;
     this.dodgeCooldownMs = 1200;
     this.dodgeCooldownRemaining = 0;
     this.dodgeRemaining = 0;
     this.invulnerableRemaining = 0;
     this.damageReduction = 0;
+    this.knockbackMultiplier = 1;
     this.bleedDamage = 0;
+    this.lifestealAmount = 0;
+    this.lifestealTriggers = 0;
+    this.machineResonanceStacks = 0;
     this.machineDamageMultiplier = 1;
+    this.comboDrive = false;
+    this.comboHits = 0;
+    this.lastStand = false;
+    this.gold = 0;
+    this.consumables = 0;
+    this.trophy = false;
     this.buffs = [];
-    this.facing = new Phaser.Math.Vector2(0, 1);
-    this.slash = scene.add.image(0, 0, "slash-prototype").setOrigin(0.5).setDepth(9).setVisible(false);
+    this.buffStacks = {};
+    this.facing = new Phaser.Math.Vector2(1, 0);
+    this.attackFacing = this.facing.clone();
+    this.slash = scene.add.image(0, 0, "slash-effect").setOrigin(0.5).setDepth(9).setVisible(false);
+    this.shadow = scene.add.ellipse(x, y + 12, 22, 8, 0x080a10, 0.38).setDepth(5);
   }
 
   updateActor(input, delta) {
     const dt = Math.max(0, delta);
     this.attackStarted = false;
+    this.attackHitWindow = false;
     this.attackCooldownRemaining = Math.max(0, this.attackCooldownRemaining - dt);
     this.dodgeCooldownRemaining = Math.max(0, this.dodgeCooldownRemaining - dt);
     this.invulnerableRemaining = Math.max(0, this.invulnerableRemaining - dt);
@@ -58,35 +76,60 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.setVelocity(0, 0);
     }
 
-    if (input.dodge) this.tryDodge();
+    if (input.dodge) this.tryDodge(move.lengthSq() > EPSILON ? move : this.facing);
     if (input.attack) this.tryAttack();
-    this.attackRemaining = Math.max(0, this.attackRemaining - dt);
+
+    if (this.attackRemaining > 0) {
+      this.attackRemaining = Math.max(0, this.attackRemaining - dt);
+      this.attackElapsed += dt;
+      if (!this.attackHitResolved && this.attackElapsed >= 58) {
+        this.attackHitResolved = true;
+        this.attackHitWindow = true;
+      }
+    }
     this.updateVisuals();
   }
 
   tryAttack() {
-    if (this.attackCooldownRemaining > 0 || this.dodgeRemaining > 0) return false;
+    if (this.attackCooldownRemaining > 0 || this.dodgeRemaining > 0 || this.health <= 0) return false;
     this.attackCooldownRemaining = this.attackCooldownMs;
-    this.attackRemaining = 115;
+    this.attackRemaining = 142;
+    this.attackElapsed = 0;
     this.attackStarted = true;
+    this.attackHitResolved = false;
+    this.attackFacing.copy(this.facing);
+    this.scene.audio?.beep("attack");
     return true;
   }
 
-  tryDodge() {
-    if (this.dodgeCooldownRemaining > 0 || this.dodgeRemaining > 0) return false;
+  tryDodge(direction) {
+    if (this.dodgeCooldownRemaining > 0 || this.dodgeRemaining > 0 || this.health <= 0) return false;
     this.dodgeCooldownRemaining = this.dodgeCooldownMs;
     this.dodgeRemaining = 220;
     this.invulnerableRemaining = 180;
-    this.setVelocity(this.facing.x * 500, this.facing.y * 500);
+    this.setVelocity(direction.x * 500, direction.y * 500);
+    this.scene.audio?.beep("dodge");
     return true;
   }
 
   takeDamage(amount) {
     if (this.invulnerableRemaining > 0 || this.health <= 0) return false;
-    this.health = Math.max(0, this.health - Math.max(1, amount - this.damageReduction));
+    const dealt = Math.max(1, Math.round(amount - this.damageReduction));
+    this.health = Math.max(0, this.health - dealt);
     this.invulnerableRemaining = 600;
+    this.scene.runStats && (this.scene.runStats.damageTaken += dealt);
+    this.scene.onPlayerDamaged?.(dealt);
     this.setTint(0xffffff);
-    this.scene.time.delayedCall(90, () => this.clearTint());
+    this.scene.time.delayedCall(90, () => this.active && this.clearTint());
+    return true;
+  }
+
+  consumePotion() {
+    if (this.consumables <= 0 || this.health <= 0 || this.health >= this.maxHealth) return false;
+    this.consumables -= 1;
+    this.health = Math.min(this.maxHealth, this.health + 35);
+    this.scene.runStats && (this.scene.runStats.consumablesUsed += 1);
+    this.scene.audio?.beep("reward");
     return true;
   }
 
@@ -102,11 +145,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.setAlpha(this.invulnerableRemaining > 0 && Math.floor(this.scene.time.now / 70) % 2 === 0 ? 0.35 : 1);
     this.slash.setVisible(this.isAttacking()).setPosition(this.x + this.facing.x * 28, this.y + this.facing.y * 28);
     this.slash.setRotation(Math.atan2(this.facing.y, this.facing.x));
+    this.shadow.setPosition(this.x, this.y + 14).setVisible(this.active);
     this.setDepth(10 + this.y / 10000);
   }
 
   destroy(fromScene) {
     this.slash?.destroy();
+    this.shadow?.destroy();
     super.destroy(fromScene);
   }
 }

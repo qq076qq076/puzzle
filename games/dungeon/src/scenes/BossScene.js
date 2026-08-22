@@ -1,15 +1,19 @@
 import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config.js";
-import { BUFFS } from "../data/buffs.js";
 import { MONSTERS } from "../data/monsters.js";
 import { Boss } from "../entities/Boss.js";
 import { Enemy } from "../entities/Enemy.js";
 import { Player } from "../entities/Player.js";
-import { applyBuff } from "../systems/buff-system.js";
 import { resolveMeleeAttack, updateBleed } from "../systems/combat-system.js";
+import { spawnProjectile, updateProjectiles, clearProjectiles } from "../systems/projectile-system.js";
+import { cloneRunStats, createRunStats, getRunDurationSeconds } from "../systems/run-state.js";
+import { getDungeonAudio } from "../systems/audio-system.js";
 import { createRng, makeRunSeed } from "../systems/rng.js";
-import { createPrototypeTextures, createSlashTexture } from "../systems/texture-factory.js";
+import { createEnvironmentTextures } from "../systems/texture-factory.js";
+import { applyBuff } from "../systems/buff-system.js";
 import { TouchControls } from "../systems/touch-controls.js";
+import { disableMouseInput, isTouchPointer, makeTouchOnlyButton } from "../ui/input.js";
+import { createCombatHud, createPauseOverlay, toggleBuffPanel, updateCombatHud } from "../ui/hud.js";
 
 export class BossScene extends Phaser.Scene {
   constructor() {
@@ -18,81 +22,105 @@ export class BossScene extends Phaser.Scene {
 
   init(data = {}) {
     this.runSeed = data.runSeed ?? makeRunSeed();
-    this.build = { buffs: data.build?.buffs ?? [], health: data.build?.health ?? 100 };
+    this.build = {
+      buffs: data.build?.buffs ?? [],
+      health: data.build?.health ?? 100,
+      gold: data.build?.gold ?? 0,
+      consumables: data.build?.consumables ?? 0,
+      trophy: Boolean(data.build?.trophy),
+    };
+    this.runStats = cloneRunStats(data.runStats || createRunStats(this.runSeed));
     this.enemies = [];
     this.hazards = [];
+    this.projectiles = [];
+    this.telegraphs = [];
     this.bossPhase = 1;
-    this.bossTelegraphRemaining = 0;
+    this.battleStatus = "intro";
+    this.introRemaining = 1300;
+    this.paused = false;
     this.hazardRng = createRng(`${this.runSeed}:boss-hazards`);
-    this.battleStatus = "combat";
   }
 
   create() {
-    this.cameras.main.setBackgroundColor("#11131d");
-    createPrototypeTextures(this);
-    createSlashTexture(this);
+    disableMouseInput(this);
+    this.audio = getDungeonAudio();
+    createEnvironmentTextures(this);
     this.createArena();
-    this.player = new Player(this, GAME_WIDTH / 2, GAME_HEIGHT - 115);
+    this.player = new Player(this, GAME_WIDTH / 2, GAME_HEIGHT - 112);
     this.applyBuild();
     this.physics.add.collider(this.player, this.walls);
-    this.boss = new Boss(this, GAME_WIDTH / 2, 190);
+    this.boss = new Boss(this, GAME_WIDTH / 2, 168);
     this.physics.add.collider(this.boss, this.walls);
-    this.keyboard = this.input.keyboard.addKeys("W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,SHIFT,ENTER,R");
-    this.touchControls = new TouchControls(this);
+    this.keyboard = this.input.keyboard.addKeys("W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,SHIFT,ENTER,R,ESC,P,M,B,Q");
+    this.keyHandlers = {
+      pause: () => this.togglePause(),
+      sound: () => {
+        this.audio.toggle();
+        this.hud?.soundButton.text.setText(this.audio.enabled ? "SOUND" : "MUTE");
+      },
+      buffs: () => toggleBuffPanel(this, this.hud, this.player),
+    };
+    this.input.keyboard.on("keydown-ESC", this.keyHandlers.pause);
+    this.input.keyboard.on("keydown-P", this.keyHandlers.pause);
+    this.input.keyboard.on("keydown-M", this.keyHandlers.sound);
+    this.input.keyboard.on("keydown-B", this.keyHandlers.buffs);
     this.createHud();
-    this.showHint("骨面機械王 · 閃避紅色警示並在攻擊後反擊");
+    this.touchControls = new TouchControls(this, {
+      onPause: () => this.togglePause(),
+      onBuff: () => toggleBuffPanel(this, this.hud, this.player),
+    });
+    this.introText = this.add.text(480, 285, "第六房\n骨面機械王座\n\n出口封鎖", {
+      color: "#f5f1da",
+      fontFamily: "monospace",
+      fontSize: "22px",
+      fontStyle: "bold",
+      align: "center",
+      lineSpacing: 9,
+    }).setOrigin(0.5).setDepth(150);
+    this.showHint("閃避紅色預警 · 先處理鋼鐵蜘蛛 · 每個攻擊都有反擊窗口");
   }
 
   applyBuild() {
     this.build.buffs.forEach((buffId) => applyBuff(this.player, buffId));
     this.player.health = Math.min(this.player.maxHealth, this.build.health);
+    this.player.gold = this.build.gold;
+    this.player.consumables = this.build.consumables;
+    this.player.trophy = this.build.trophy;
   }
 
   createArena() {
-    this.add
-      .tileSprite(0, 0, GAME_WIDTH, GAME_HEIGHT, "room-floor-prototype")
-      .setOrigin(0)
-      .setTint(0x858ba8)
-      .setDepth(-10);
+    const floorKey = this.textures.exists("provided-machine-floor") ? "provided-machine-floor" : "room-floor-machine";
+    this.add.tileSprite(0, 0, GAME_WIDTH, GAME_HEIGHT, floorKey).setOrigin(0).setTint(0x9aa6bd).setDepth(-10);
     this.walls = this.physics.add.staticGroup();
-    const wallThickness = 32;
-    [
-      [GAME_WIDTH / 2, wallThickness / 2, GAME_WIDTH, wallThickness],
-      [GAME_WIDTH / 2, GAME_HEIGHT - wallThickness / 2, GAME_WIDTH, wallThickness],
-      [wallThickness / 2, GAME_HEIGHT / 2, wallThickness, GAME_HEIGHT],
-      [GAME_WIDTH - wallThickness / 2, GAME_HEIGHT / 2, wallThickness, GAME_HEIGHT],
-      [210, 170, 46, 46],
-      [750, 170, 46, 46],
-      [210, 370, 46, 46],
-      [750, 370, 46, 46],
-    ].forEach(([x, y, width, height]) => this.addWall(x, y, width, height));
-    this.add
-      .circle(GAME_WIDTH / 2, 270, 132, 0x4a4058, 0.12)
-      .setStrokeStyle(2, 0xb9a9d4, 0.32)
-      .setDepth(-1);
-    this.add
-      .text(GAME_WIDTH / 2, 100, "BOSS ROOM · 骨面機械王座", this.hudStyle(12, "#b9a9d4"))
-      .setOrigin(0.5)
-      .setDepth(2);
+    this.addWall(480, 76, 848, 32);
+    this.addWall(480, 500, 848, 32);
+    this.addWall(40, 288, 32, 408);
+    this.addWall(920, 288, 32, 408);
+    [[208, 164, 48, 48], [752, 164, 48, 48], [208, 372, 48, 48], [752, 372, 48, 48]].forEach(([x, y, width, height]) => this.addWall(x + width / 2, y + height / 2, width, height));
+    this.dangerRing = this.add.circle(480, 290, 214, 0xb94d45, 0.04).setStrokeStyle(2, 0xe17b70, 0.26).setDepth(-1);
+    this.safeRing = this.add.circle(480, 290, 178, 0x7b5ca4, 0.04).setStrokeStyle(2, 0xc68bd7, 0.25).setDepth(-1).setVisible(false);
+    this.portalLeft = this.add.image(178, 290, "portal").setScale(0.9).setTint(0x72b9ca).setAlpha(0.22).setDepth(2);
+    this.portalRight = this.add.image(782, 290, "portal").setScale(0.9).setTint(0x72b9ca).setAlpha(0.22).setDepth(2);
+    this.add.text(480, 94, "BOSS ROOM · 骨面機械王座", this.hudStyle(12, "#b9a9d4")).setOrigin(0.5).setDepth(2);
   }
 
   addWall(x, y, width, height) {
-    const wall = this.walls.create(x, y, "room-wall-prototype");
+    const wall = this.walls.create(x, y, "wall-machine");
     wall.setDisplaySize(width, height).refreshBody();
     wall.setDepth(-1);
+    return wall;
   }
 
   createHud() {
-    this.hud = {
-      room: this.add.text(24, 20, "FLOOR 1 · ROOM 6/6", this.hudStyle(14, "#dfb84f")).setScrollFactor(0).setDepth(110),
-      health: this.add.text(24, 48, "HP 100/100", this.hudStyle(14, "#f5f1da")).setScrollFactor(0).setDepth(110),
-      phase: this.add.text(GAME_WIDTH - 24, 22, "PHASE 1", this.hudStyle(11, "#e17b70")).setOrigin(1, 0).setScrollFactor(0).setDepth(110),
-      buffs: this.add.text(24, GAME_HEIGHT - 52, "BUFFS —", this.hudStyle(11, "#b9a9d4")).setScrollFactor(0).setDepth(110),
-      controls: this.add.text(24, GAME_HEIGHT - 30, "PROTOTYPE · NO MOUSE INPUT", this.hudStyle(11, "#77798a")).setScrollFactor(0).setDepth(110),
-    };
-    this.bossBarBack = this.add.rectangle(200, 66, 560, 12, 0x151622, 1).setOrigin(0, 0.5).setDepth(110);
-    this.bossBarFill = this.add.rectangle(200, 66, 560, 12, 0xb94d45, 1).setOrigin(0, 0.5).setDepth(111);
-    this.bossBarLabel = this.add.text(480, 78, "骨面機械王", this.hudStyle(11, "#f5f1da")).setOrigin(0.5).setDepth(111);
+    this.hud = createCombatHud(this, {
+      roomLabel: "FLOOR 1 · ROOM 6/6",
+      seed: this.runSeed,
+      onPause: () => this.togglePause(),
+      onBuff: () => toggleBuffPanel(this, this.hud, this.player),
+    });
+    this.bossBarBack = this.add.rectangle(184, 92, 592, 14, 0x151622, 1).setOrigin(0, 0.5).setDepth(110);
+    this.bossBarFill = this.add.rectangle(184, 92, 592, 14, 0xb94d45, 1).setOrigin(0, 0.5).setDepth(111);
+    this.bossBarLabel = this.add.text(480, 110, "骨面機械王 · PHASE 1", this.hudStyle(11, "#f5f1da")).setOrigin(0.5).setDepth(111);
   }
 
   hudStyle(fontSize, color) {
@@ -100,146 +128,255 @@ export class BossScene extends Phaser.Scene {
   }
 
   showHint(message) {
-    this.hint = this.add.text(GAME_WIDTH / 2, 126, message, this.hudStyle(12, "#aaa8b5")).setOrigin(0.5).setDepth(110);
-    this.time.delayedCall(4000, () => this.hint?.setVisible(false));
+    this.hint = this.add.text(480, GAME_HEIGHT - 24, message, this.hudStyle(10, "#77798a")).setOrigin(0.5).setDepth(110);
+    this.time.delayedCall(5200, () => this.hint?.setVisible(false));
   }
 
   readInput() {
     const moveX = Number(this.keyboard.D.isDown || this.keyboard.RIGHT.isDown) - Number(this.keyboard.A.isDown || this.keyboard.LEFT.isDown);
     const moveY = Number(this.keyboard.S.isDown || this.keyboard.DOWN.isDown) - Number(this.keyboard.W.isDown || this.keyboard.UP.isDown);
     const touchMove = this.touchControls?.enabled ? { x: this.touchControls.moveX, y: this.touchControls.moveY } : { x: 0, y: 0 };
-    const actions = this.touchControls?.consumeActions() ?? { attack: false, dodge: false };
+    const actions = this.touchControls?.consumeActions() ?? { attack: false, dodge: false, buff: false };
     return {
       moveX: this.touchControls?.enabled && Math.hypot(touchMove.x, touchMove.y) > 0.08 ? touchMove.x : moveX,
       moveY: this.touchControls?.enabled && Math.hypot(touchMove.x, touchMove.y) > 0.08 ? touchMove.y : moveY,
       attack: actions.attack || Phaser.Input.Keyboard.JustDown(this.keyboard.SPACE),
       dodge: actions.dodge || Phaser.Input.Keyboard.JustDown(this.keyboard.SHIFT),
+      usePotion: Phaser.Input.Keyboard.JustDown(this.keyboard.Q),
+      buff: actions.buff,
     };
   }
 
   update(_time, delta) {
-    if (this.battleStatus !== "combat") {
-      this.updateEndInput();
+    if (window.__dungeonPortraitBlocked) return;
+    this.handleGlobalInput();
+    if (this.paused) {
+      this.updateHud("已暫停");
       return;
     }
+    if (this.battleStatus === "intro") this.updateIntro(delta);
+    else if (this.battleStatus === "combat") this.updateCombat(delta);
+    else this.updateEndInput();
+    this.updateHud();
+  }
+
+  handleGlobalInput() {
+    // Global keyboard actions are bound to keydown events in create().
+  }
+
+  togglePause() {
+    if (!["intro", "combat"].includes(this.battleStatus)) return;
+    this.paused = !this.paused;
+    if (this.paused) {
+      this.pauseOverlay = createPauseOverlay(this, { onResume: () => this.togglePause(), onRestart: () => this.restartRun() });
+    } else {
+      this.pauseOverlay?.destroy(true);
+      this.pauseOverlay = null;
+    }
+  }
+
+  updateIntro(delta) {
+    this.introRemaining -= delta;
+    if (this.introRemaining <= 0) {
+      this.introText?.destroy();
+      this.introText = null;
+      this.battleStatus = "combat";
+      this.audio.beep("boss");
+    }
+  }
+
+  updateCombat(delta) {
     const input = this.readInput();
+    if (input.buff) toggleBuffPanel(this, this.hud, this.player);
+    if (input.usePotion) this.player.consumePotion();
     this.player.updateActor(input, delta);
-    const targets = [this.boss, ...this.enemies];
-    if (this.player.attackStarted) resolveMeleeAttack(this.player, targets);
+    if (this.player.attackHitWindow) resolveMeleeAttack(this.player, [this.boss, ...this.enemies]);
     this.boss.updateAI(this.player, delta);
     this.enemies.forEach((enemy) => enemy.updateAI(this.player, delta));
-    updateBleed(targets, delta);
+    updateBleed([this.boss, ...this.enemies], delta);
     this.updateHazards(delta);
-    this.updateBossTelegraph(delta);
-    this.updateHud();
+    this.updateTelegraphs(delta);
+    updateProjectiles(this, this.player, delta);
+    this.updatePhaseBoundary(delta);
     if (this.player.health <= 0) this.openDefeat();
     else if (!this.boss.active) this.openVictory();
   }
 
-  updateHud() {
-    const ratio = Phaser.Math.Clamp(this.boss.health / this.boss.maxHealth, 0, 1);
-    this.bossBarFill.setDisplaySize(Math.max(1, 560 * ratio), 12);
-    this.hud.phase.setText(`PHASE ${this.boss.phase}`);
-    this.hud.health.setText(`HP ${this.player.health}/${this.player.maxHealth}`);
-    const buffNames = this.player.buffs.map((id) => BUFFS[id]?.name ?? id);
-    this.hud.buffs.setText(buffNames.length ? `BUFFS ${buffNames.join(" · ")}` : "BUFFS —");
-  }
-
-  onBossPhaseChange(phase) {
-    this.bossPhase = phase;
-    const colors = { 1: "#e17b70", 2: "#dfb84f", 3: "#c68bd7" };
-    this.hud.phase.setColor(colors[phase]);
-    this.showHint(`魔王進入第 ${phase} 階段`);
-  }
-
-  showBossTelegraph(x, y) {
-    this.bossTelegraphRemaining = 380;
-    if (!this.bossTelegraph) {
-      this.bossTelegraph = this.add
-        .circle(x, y, 78, 0xb94d45, 0.16)
-        .setStrokeStyle(3, 0xe17b70, 0.95)
-        .setDepth(5);
+  updatePhaseBoundary(delta) {
+    if (this.bossPhase < 3) return;
+    const distance = Phaser.Math.Distance.Between(this.player.x, this.player.y, 480, 290);
+    if (distance > 205 && !this.player.isDodging()) {
+      this.outsideDamageRemaining = Math.max(0, (this.outsideDamageRemaining || 0) - delta);
+      if (this.outsideDamageRemaining === 0) {
+        this.outsideDamageRemaining = 700;
+        this.player.takeDamage(4);
+      }
+    } else {
+      this.outsideDamageRemaining = 0;
     }
-    this.bossTelegraph.setPosition(x, y).setVisible(true);
   }
 
-  updateBossTelegraph(delta) {
-    if (!this.bossTelegraph) return;
-    this.bossTelegraphRemaining = Math.max(0, this.bossTelegraphRemaining - delta);
-    this.bossTelegraph.setVisible(this.bossTelegraphRemaining > 0);
+  showBossTelegraph(x, y, kind, duration) {
+    const radius = kind === "mine" ? 48 : kind === "charge" ? 96 : 78;
+    const color = kind === "mine" ? 0xe17b70 : kind === "charge" ? 0xdfb84f : 0xb94d45;
+    const node = this.add.circle(x, y, radius, color, 0.12).setStrokeStyle(3, color, 0.96).setDepth(5);
+    this.telegraphs.push({ node, remaining: duration, source: this.boss });
   }
 
-  spawnBossMinion() {
-    const activeMinions = this.enemies.filter((enemy) => enemy.active).length;
-    if (activeMinions >= 4) return;
-    const angle = this.hazardRng.next() * Math.PI * 2;
-    const x = Phaser.Math.Clamp(this.boss.x + Math.cos(angle) * 110, 70, GAME_WIDTH - 70);
-    const y = Phaser.Math.Clamp(this.boss.y + Math.sin(angle) * 110, 100, GAME_HEIGHT - 70);
-    const enemy = new Enemy(this, x, y, MONSTERS.steel_spider, this.enemies.length);
-    this.physics.add.collider(enemy, this.walls);
-    this.enemies.push(enemy);
-  }
-
-  spawnBossHazard() {
-    const x = Phaser.Math.Between(100, GAME_WIDTH - 100);
-    const y = Phaser.Math.Between(150, GAME_HEIGHT - 90);
-    this.hazards.push({
-      x,
-      y,
-      warningMs: 700,
-      activeMs: 900,
-      circle: this.add.circle(x, y, 32, 0xb94d45, 0.18).setStrokeStyle(2, 0xe17b70, 1).setDepth(3),
-      damaged: false,
-    });
-  }
-
-  updateHazards(delta) {
-    this.hazards = this.hazards.filter((hazard) => {
-      if (hazard.warningMs > 0) {
-        hazard.warningMs -= delta;
-        hazard.circle.setAlpha(0.18 + (1 - Math.max(0, hazard.warningMs) / 700) * 0.25);
-        return true;
-      }
-      if (!hazard.damaged) {
-        hazard.damaged = true;
-        if (Phaser.Math.Distance.Between(this.player.x, this.player.y, hazard.x, hazard.y) <= 38) this.player.takeDamage(16);
-        hazard.circle.setFillStyle(0xe17b70, 0.5);
-      }
-      hazard.activeMs -= delta;
-      if (hazard.activeMs <= 0) {
-        hazard.circle.destroy();
+  updateTelegraphs(delta) {
+    this.telegraphs = this.telegraphs.filter((telegraph) => {
+      telegraph.remaining -= delta;
+      if (telegraph.source.active) telegraph.node.setPosition(telegraph.source.x, telegraph.source.y).setAlpha(0.12 + (1 - Math.max(0, telegraph.remaining) / 560) * 0.35);
+      if (telegraph.remaining <= 0) {
+        telegraph.node.destroy();
         return false;
       }
       return true;
     });
   }
 
+  spawnBossMinion() {
+    const activeMinions = this.enemies.filter((enemy) => enemy.active).length;
+    if (activeMinions >= 4) return;
+    const angle = this.hazardRng.next() * Math.PI * 2;
+    const x = Phaser.Math.Clamp(this.boss.x + Math.cos(angle) * 130, 90, GAME_WIDTH - 90);
+    const y = Phaser.Math.Clamp(this.boss.y + Math.sin(angle) * 130, 120, GAME_HEIGHT - 80);
+    const enemy = new Enemy(this, x, y, MONSTERS.steel_spider, `boss-${this.enemies.length}`);
+    enemy.spawnProtectionRemaining = 500;
+    this.physics.add.collider(enemy, this.walls);
+    this.enemies.push(enemy);
+  }
+
+  spawnBossHazard(options = {}) {
+    if (this.hazards.length >= 4) return;
+    const angle = this.hazardRng.next() * Math.PI * 2;
+    const distance = options.ring ? 150 : 80 + this.hazardRng.next() * 150;
+    const x = Phaser.Math.Clamp(480 + Math.cos(angle) * distance, 105, GAME_WIDTH - 105);
+    const y = Phaser.Math.Clamp(290 + Math.sin(angle) * distance, 130, GAME_HEIGHT - 95);
+    const node = this.add.circle(x, y, options.ring ? 34 : 30, 0xb94d45, 0.16).setStrokeStyle(2, 0xe17b70, 1).setDepth(3);
+    this.hazards.push({ x, y, warningMs: 700, activeMs: 900, node, damaged: false });
+  }
+
+  updateHazards(delta) {
+    this.hazards = this.hazards.filter((hazard) => {
+      if (hazard.warningMs > 0) {
+        hazard.warningMs -= delta;
+        hazard.node.setAlpha(0.16 + (1 - Math.max(0, hazard.warningMs) / 700) * 0.34);
+        return true;
+      }
+      if (!hazard.damaged) {
+        hazard.damaged = true;
+        if (Phaser.Math.Distance.Between(this.player.x, this.player.y, hazard.x, hazard.y) <= 38) this.player.takeDamage(16);
+        hazard.node.setFillStyle(0xe17b70, 0.5);
+      }
+      hazard.activeMs -= delta;
+      if (hazard.activeMs <= 0) {
+        hazard.node.destroy();
+        return false;
+      }
+      return true;
+    });
+  }
+
+  spawnEnemyProjectile(enemy, target, damage) {
+    spawnProjectile(this, enemy, target, { damage, color: 0x8fd1e8, strokeColor: 0xe2f5ff, speed: 220 });
+  }
+
+  onBossPhaseChange(phase) {
+    this.bossPhase = phase;
+    this.bossBarLabel.setText(`骨面機械王 · PHASE ${phase}`);
+    this.safeRing.setVisible(phase >= 3);
+    this.portalLeft.setAlpha(phase >= 2 ? 0.9 : 0.22);
+    this.portalRight.setAlpha(phase >= 2 ? 0.9 : 0.22);
+    this.showPhaseText(`魔王進入第 ${phase} 階段`);
+    this.audio.beep("boss");
+  }
+
+  showPhaseText(message) {
+    const text = this.add.text(480, 230, message, this.hudStyle(21, "#dfb84f")).setOrigin(0.5).setDepth(160);
+    this.tweens.add({ targets: text, alpha: 0, y: 200, duration: 1000, onComplete: () => text.destroy() });
+  }
+
+  showHitEffect(x, y, tint) {
+    const effect = this.add.image(x, y, "hit-spark").setScale(0.5).setTint(tint).setDepth(30);
+    this.tweens.add({ targets: effect, scale: 1.2, alpha: 0, duration: 180, onComplete: () => effect.destroy() });
+  }
+
+  showDamageNumber(x, y, amount, color = "#f5f1da") {
+    const text = this.add.text(x, y, `-${Math.round(amount)}`, this.hudStyle(12, color)).setOrigin(0.5).setDepth(130);
+    this.tweens.add({ targets: text, y: y - 30, alpha: 0, duration: 560, onComplete: () => text.destroy() });
+  }
+
+  onEnemyDefeated(enemy) {
+    this.showHitEffect(enemy.x, enemy.y, 0x8fd1e8);
+  }
+
+  onBossDefeated() {
+    this.enemies.forEach((enemy) => {
+      enemy.setActive(false).setVisible(false);
+      enemy.body.enable = false;
+    });
+    this.hazards.forEach((hazard) => hazard.node.destroy());
+    this.hazards = [];
+    this.audio.beep("victory");
+  }
+
+  onPlayerDamaged() {
+    this.audio.beep("damage");
+  }
+
+  updateHud(status = null) {
+    const ratio = Phaser.Math.Clamp(this.boss.health / this.boss.maxHealth, 0, 1);
+    this.bossBarFill.setDisplaySize(Math.max(1, 592 * ratio), 14);
+    updateCombatHud(this.hud, this.player, {
+      roomLabel: "FLOOR 1 · ROOM 6/6",
+      seed: this.runSeed,
+      status: status || `魔王階段 ${this.boss.phase}`,
+    });
+  }
+
   openVictory() {
     if (this.battleStatus !== "combat") return;
     this.battleStatus = "victory";
+    this.player.setVelocity(0, 0);
+    this.player.trophy = true;
+    this.runStats.roomsCleared = 6;
+    this.runStats.damageTaken += 0;
+    this.runStats.buffs = [...this.player.buffs];
+    this.runStats.gold = this.player.gold || 0;
+    this.runStats.trophy = true;
     this.touchControls?.destroy();
-    this.add.rectangle(480, 270, 850, 420, 0x0b0d16, 0.95).setStrokeStyle(3, 0xdfb84f, 0.95).setDepth(150);
-    this.add.text(480, 190, "VICTORY", { color: "#dfb84f", fontFamily: "monospace", fontSize: "36px", fontStyle: "bold" }).setOrigin(0.5).setDepth(151);
-    this.add.text(480, 250, "第一地層：鏽蝕王座\n骨面機械王已被擊敗", { color: "#f5f1da", fontFamily: "monospace", fontSize: "16px", align: "center", lineSpacing: 8 }).setOrigin(0.5).setDepth(151);
-    this.add.text(480, 335, `Seed ${this.runSeed}\n\n按 Enter／R 重新開始`, { color: "#aaa8b5", fontFamily: "monospace", fontSize: "12px", align: "center", lineSpacing: 6 }).setOrigin(0.5).setDepth(151);
-    this.makeRestartButton();
+    clearProjectiles(this);
+    const seconds = getRunDurationSeconds(this.runStats);
+    const summary = `完成房間：6/6\n遊玩時間：${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}\n受到傷害：${this.runStats.damageTaken}\n取得 Buff：${this.player.buffs.length} 個\nSeed：${this.runSeed}`;
+    this.add.rectangle(480, 280, 720, 410, 0x0b0d16, 0.97).setStrokeStyle(3, 0xdfb84f, 0.95).setDepth(150);
+    this.add.image(480, 140, "reward-console").setScale(0.9).setTint(0xdfb84f).setDepth(151);
+    this.add.text(480, 72, "VICTORY", { color: "#dfb84f", fontFamily: "monospace", fontSize: "36px", fontStyle: "bold" }).setOrigin(0.5).setDepth(151);
+    this.add.text(480, 224, "第一地層已通關\n骨面核心已取得", { color: "#f5f1da", fontFamily: "monospace", fontSize: "16px", align: "center", lineSpacing: 8 }).setOrigin(0.5).setDepth(151);
+    this.add.text(480, 300, summary, { color: "#aaa8b5", fontFamily: "monospace", fontSize: "11px", align: "center", lineSpacing: 6 }).setOrigin(0.5).setDepth(151);
+    this.makeEndButton("重新開始 · Enter／R", 480, 430, () => this.restartRun());
   }
 
   openDefeat() {
     if (this.battleStatus !== "combat") return;
     this.battleStatus = "defeat";
+    this.player.setVelocity(0, 0);
     this.touchControls?.destroy();
-    this.add.rectangle(480, 270, 850, 420, 0x0b0d16, 0.95).setStrokeStyle(3, 0xb94d45, 0.95).setDepth(150);
-    this.add.text(480, 205, "YOU DIED", { color: "#e17b70", fontFamily: "monospace", fontSize: "32px", fontStyle: "bold" }).setOrigin(0.5).setDepth(151);
-    this.add.text(480, 290, "你倒在骨面機械王座前\n\n按 Enter／R 重新開始", { color: "#f5f1da", fontFamily: "monospace", fontSize: "15px", align: "center", lineSpacing: 8 }).setOrigin(0.5).setDepth(151);
-    this.makeRestartButton();
+    clearProjectiles(this);
+    this.audio.beep("defeat");
+    const seconds = getRunDurationSeconds(this.runStats);
+    const summary = `完成房間：5/6\n遊玩時間：${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}\n受到傷害：${this.runStats.damageTaken}\nSeed：${this.runSeed}`;
+    this.add.rectangle(480, 280, 700, 360, 0x0b0d16, 0.97).setStrokeStyle(3, 0xb94d45, 0.95).setDepth(150);
+    this.add.text(480, 155, "YOU DIED", { color: "#e17b70", fontFamily: "monospace", fontSize: "32px", fontStyle: "bold" }).setOrigin(0.5).setDepth(151);
+    this.add.text(480, 250, summary, { color: "#f5f1da", fontFamily: "monospace", fontSize: "13px", align: "center", lineSpacing: 8 }).setOrigin(0.5).setDepth(151);
+    this.makeEndButton("重新開始 · Enter／R", 480, 425, () => this.restartRun());
   }
 
-  makeRestartButton() {
-    const button = this.add.rectangle(480, 425, 220, 44, 0x303a55, 1).setStrokeStyle(2, 0x9aa2c1, 1).setDepth(151).setInteractive();
-    this.add.text(480, 425, "重新開始", this.hudStyle(13, "#f5f1da")).setOrigin(0.5).setDepth(152);
-    button.on("pointerdown", (pointer) => {
-      if (this.isTouchPointer(pointer)) this.restartRun();
+  makeEndButton(label, x, y, action) {
+    this.endButton = makeTouchOnlyButton(this, x, y, 220, 44, label, action, {
+      color: 0x4c303d,
+      strokeColor: 0xe17b70,
+      depth: 152,
     });
   }
 
@@ -248,14 +385,20 @@ export class BossScene extends Phaser.Scene {
   }
 
   restartRun() {
-    this.scene.start("Room", { runSeed: makeRunSeed(), roomIndex: 0, build: { buffs: [], health: 100 } });
-  }
-
-  isTouchPointer(pointer) {
-    return pointer?.event?.pointerType === "touch" || pointer?.event?.pointerType === "pen";
+    const seed = makeRunSeed();
+    this.scene.start("Room", { runSeed: seed, roomIndex: 0, build: { buffs: [], health: 100 }, runStats: createRunStats(seed) });
   }
 
   shutdown() {
+    if (this.keyHandlers) {
+      this.input.keyboard.off("keydown-ESC", this.keyHandlers.pause);
+      this.input.keyboard.off("keydown-P", this.keyHandlers.pause);
+      this.input.keyboard.off("keydown-M", this.keyHandlers.sound);
+      this.input.keyboard.off("keydown-B", this.keyHandlers.buffs);
+    }
     this.touchControls?.destroy();
+    clearProjectiles(this);
+    this.telegraphs.forEach((telegraph) => telegraph.node.destroy());
+    this.hazards.forEach((hazard) => hazard.node.destroy());
   }
 }

@@ -2,68 +2,92 @@ import Phaser from "phaser";
 
 export class Boss extends Phaser.Physics.Arcade.Sprite {
   constructor(scene, x, y) {
-    super(scene, x, y, "boss-prototype");
+    super(scene, x, y, "provided-boss");
     scene.add.existing(this);
     scene.physics.add.existing(this);
     this.definition = {
       id: "boss",
       name: "骨面機械王",
       damage: 20,
-      attackRange: 76,
+      attackRange: 92,
+      armor: 2,
+      machine: true,
     };
     this.maxHealth = 450;
     this.health = this.maxHealth;
     this.phase = 1;
-    this.attackCooldownRemaining = 1300;
+    this.state = "combat";
+    this.attackCooldownRemaining = 1200;
     this.attackWindupRemaining = 0;
-    this.summonCooldownRemaining = 3000;
-    this.hazardCooldownRemaining = 2000;
-    this.hitFlashRemaining = 0;
+    this.recoverRemaining = 0;
+    this.phaseTransitionRemaining = 0;
+    this.staggerRemaining = 0;
+    this.sustainedDamage = 0;
+    this.patternIndex = 0;
+    this.comboStep = 0;
+    this.chargeRemaining = 0;
+    this.chargeHit = false;
+    this.setScale(5);
+    this.setTint(0xf2b36e);
     this.setDepth(12);
     this.setCollideWorldBounds(true);
-    this.body.setCircle(22, 10, 10);
+    this.body.setCircle(25, -4, -4);
     this.body.setDrag(160, 160);
-    this.body.setMaxVelocity(72, 72);
+    this.body.setMaxVelocity(520, 520);
+    this.shadow = scene.add.ellipse(x, y + 28, 56, 15, 0x080a10, 0.46).setDepth(5);
   }
 
   updateAI(player, delta) {
     if (!this.active || !player.active || player.health <= 0) return;
     this.attackCooldownRemaining = Math.max(0, this.attackCooldownRemaining - delta);
     this.attackWindupRemaining = Math.max(0, this.attackWindupRemaining - delta);
-    this.summonCooldownRemaining = Math.max(0, this.summonCooldownRemaining - delta);
-    this.hazardCooldownRemaining = Math.max(0, this.hazardCooldownRemaining - delta);
-    this.hitFlashRemaining = Math.max(0, this.hitFlashRemaining - delta);
+    this.recoverRemaining = Math.max(0, this.recoverRemaining - delta);
+    this.phaseTransitionRemaining = Math.max(0, this.phaseTransitionRemaining - delta);
+    this.staggerRemaining = Math.max(0, this.staggerRemaining - delta);
+    this.hitFlashRemaining = Math.max(0, (this.hitFlashRemaining || 0) - delta);
     this.updatePhase();
+
+    if (this.phaseTransitionRemaining > 0 || this.staggerRemaining > 0) {
+      this.state = this.staggerRemaining > 0 ? "stagger" : "phase_transition";
+      this.setVelocity(0, 0);
+      this.updateVisuals();
+      return;
+    }
+    if (this.chargeRemaining > 0) {
+      this.chargeRemaining = Math.max(0, this.chargeRemaining - delta);
+      this.state = "charge";
+      if (!this.chargeHit && Phaser.Math.Distance.Between(this.x, this.y, player.x, player.y) <= 48) {
+        this.chargeHit = true;
+        player.takeDamage(28 + this.phase * 4);
+      }
+      if (this.chargeRemaining === 0) {
+        this.setVelocity(0, 0);
+        this.recoverRemaining = 420;
+      }
+      this.updateVisuals();
+      return;
+    }
+    if (this.attackWindupRemaining > 0) {
+      this.state = "telegraph";
+      this.setVelocity(0, 0);
+      if (this.attackWindupRemaining === 0) this.performAttack(player);
+      this.updateVisuals();
+      return;
+    }
+    if (this.recoverRemaining > 0) {
+      this.state = "recover";
+      this.setVelocity(0, 0);
+      this.updateVisuals();
+      return;
+    }
 
     const dx = player.x - this.x;
     const dy = player.y - this.y;
     const distance = Math.hypot(dx, dy) || 1;
-    if (distance > 86 && this.attackWindupRemaining <= 0) {
-      const speed = this.phase === 3 ? 82 : 68;
-      this.setVelocity((dx / distance) * speed, (dy / distance) * speed);
-    } else {
-      this.setVelocity(0, 0);
-    }
-
-    if (this.attackWindupRemaining <= 0 && this.attackCooldownRemaining <= 0) {
-      this.attackWindupRemaining = 380;
-      this.attackCooldownRemaining = this.phase === 3 ? 760 : 1050;
-      this.scene.showBossTelegraph(this.x, this.y);
-    }
-    if (this.attackWindupRemaining === 0 && distance <= this.definition.attackRange + 15) {
-      player.takeDamage(this.definition.damage + this.phase * 3);
-    }
-
-    if (this.phase >= 2 && this.summonCooldownRemaining <= 0) {
-      this.summonCooldownRemaining = this.phase === 3 ? 2600 : 3600;
-      this.scene.spawnBossMinion();
-    }
-    if (this.phase === 3 && this.hazardCooldownRemaining <= 0) {
-      this.hazardCooldownRemaining = 2300;
-      this.scene.spawnBossHazard();
-    }
-    this.setAlpha(this.hitFlashRemaining > 0 ? 0.55 : 1);
-    this.setDepth(12 + this.y / 10000);
+    if (distance > 116) this.setVelocity((dx / distance) * (this.phase === 3 ? 86 : 70), (dy / distance) * (this.phase === 3 ? 86 : 70));
+    else this.setVelocity(0, 0);
+    if (this.attackCooldownRemaining <= 0) this.startPattern();
+    this.updateVisuals();
   }
 
   updatePhase() {
@@ -71,19 +95,96 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     const nextPhase = ratio <= 0.35 ? 3 : ratio <= 0.7 ? 2 : 1;
     if (nextPhase !== this.phase) {
       this.phase = nextPhase;
-      this.scene.onBossPhaseChange(this.phase);
+      this.phaseTransitionRemaining = 1000;
+      this.attackCooldownRemaining = 1200;
+      this.scene.onBossPhaseChange?.(this.phase);
     }
   }
 
-  takeDamage(amount, multiplier = 1) {
-    if (!this.active) return false;
-    this.health = Math.max(0, this.health - Math.max(1, Math.round(amount * multiplier)));
-    this.hitFlashRemaining = 100;
+  startPattern() {
+    const patterns = this.phase === 1
+      ? ["combo", "charge", "combo"]
+      : this.phase === 2
+        ? ["combo", "summon", "charge"]
+        : ["combo", "mine", "charge", "combo"];
+    const kind = patterns[this.patternIndex % patterns.length];
+    this.patternIndex += 1;
+    this.attackCooldownRemaining = this.phase === 3 ? 720 : 1000;
+    this.attackWindupRemaining = kind === "mine" ? 560 : kind === "charge" ? 440 : 360;
+    this.attackKind = kind;
+    this.comboStep = kind === "combo" ? 0 : this.comboStep;
+    this.scene.showBossTelegraph?.(this.x, this.y, kind, this.attackWindupRemaining);
+    this.scene.audio?.beep(kind === "mine" ? "boss" : "telegraph");
+  }
+
+  performAttack(player) {
+    if (this.attackKind === "combo") {
+      this.comboStep += 1;
+      if (Phaser.Math.Distance.Between(this.x, this.y, player.x, player.y) <= this.definition.attackRange + 20) player.takeDamage(20 + this.phase * 3);
+      if (this.comboStep < 3) {
+        this.attackWindupRemaining = this.phase === 3 ? 190 : 240;
+        this.scene.showBossTelegraph?.(this.x, this.y, "combo", this.attackWindupRemaining);
+      } else {
+        this.comboStep = 0;
+        this.recoverRemaining = 400;
+      }
+      return;
+    }
+    if (this.attackKind === "charge") {
+      const target = this.scene.player;
+      const direction = new Phaser.Math.Vector2(target.x - this.x, target.y - this.y).normalize();
+      this.setVelocity(direction.x * 430, direction.y * 430);
+      this.chargeRemaining = this.phase === 3 ? 380 : 300;
+      this.chargeHit = false;
+      return;
+    }
+    if (this.attackKind === "summon") {
+      this.scene.spawnBossMinion?.();
+      this.scene.spawnBossMinion?.();
+      this.recoverRemaining = 520;
+      return;
+    }
+    if (this.attackKind === "mine") {
+      this.scene.spawnBossHazard?.({ ring: true });
+      this.scene.spawnBossHazard?.({ ring: true });
+      this.recoverRemaining = 520;
+    }
+  }
+
+  takeDamage(amount, multiplier = 1, context = {}) {
+    if (!this.active || this.phaseTransitionRemaining > 0) return { hit: false, damage: 0, killed: false };
+    const damage = Math.max(1, Math.round(amount * multiplier - this.definition.armor));
+    this.health = Math.max(0, this.health - damage);
+    this.sustainedDamage += damage;
+    this.hitFlashRemaining = 110;
+    if (this.sustainedDamage >= 80) {
+      this.sustainedDamage = 0;
+      this.staggerRemaining = 360;
+    }
+    if (context.knockback && this.staggerRemaining <= 0) {
+      const direction = new Phaser.Math.Vector2(context.knockback.x, context.knockback.y).normalize();
+      this.setVelocity(direction.x * 45, direction.y * 45);
+    }
     if (this.health <= 0) {
+      this.state = "dead";
       this.setActive(false);
       this.setVisible(false);
       this.body.enable = false;
+      this.shadow?.setVisible(false);
+      this.scene.onBossDefeated?.();
+      return { hit: true, damage, killed: true };
     }
-    return true;
+    return { hit: true, damage, killed: false };
+  }
+
+  updateVisuals() {
+    this.setAlpha(this.hitFlashRemaining > 0 ? 0.58 : 1);
+    this.shadow?.setPosition(this.x, this.y + 28).setVisible(this.active);
+    this.setDepth(12 + this.y / 10000);
+  }
+
+  destroy(fromScene) {
+    this.shadow?.destroy();
+    super.destroy(fromScene);
   }
 }

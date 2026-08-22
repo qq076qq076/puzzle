@@ -1,15 +1,17 @@
 const isTouchDevice = () => window.matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
-
 const isPortrait = () => window.matchMedia("(orientation: portrait)").matches;
 
-export function setupOrientationGuard() {
+export function setupOrientationGuard(onChange = () => {}) {
   const overlay = document.querySelector("#portrait-overlay");
-  if (!overlay) return () => {};
+  if (!overlay) return { isBlocked: () => false, destroy: () => {} };
+  let blocked = false;
 
   const update = () => {
-    const blocked = isTouchDevice() && isPortrait();
+    blocked = isTouchDevice() && isPortrait();
     overlay.hidden = !blocked;
     document.body.classList.toggle("is-portrait-blocked", blocked);
+    window.__dungeonPortraitBlocked = blocked;
+    onChange(blocked);
   };
 
   const requestLandscape = async () => {
@@ -26,8 +28,11 @@ export function setupOrientationGuard() {
   window.addEventListener("pointerdown", requestLandscape, { once: true, passive: true });
   update();
 
-  return () => {
-    window.removeEventListener("resize", update);
-    window.removeEventListener("orientationchange", update);
+  return {
+    isBlocked: () => blocked,
+    destroy() {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("orientationchange", update);
+    },
   };
 }

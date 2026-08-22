@@ -1,15 +1,20 @@
 import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config.js";
-import { BUFFS } from "../data/buffs.js";
 import { MONSTERS } from "../data/monsters.js";
 import { Enemy } from "../entities/Enemy.js";
 import { Player } from "../entities/Player.js";
-import { applyBuff, describeBuff } from "../systems/buff-system.js";
-import { resolveMeleeAttack, updateBleed } from "../systems/combat-system.js";
+import { applyReward, describeReward, getRewardColor, getRewardDefinition, getUsableRewardIds } from "../systems/reward-system.js";
+import { applyBuff } from "../systems/buff-system.js";
+import { clearProjectiles, spawnProjectile, updateProjectiles } from "../systems/projectile-system.js";
+import { getDungeonAudio } from "../systems/audio-system.js";
+import { cloneRunStats, createRunStats, getRunDurationSeconds } from "../systems/run-state.js";
 import { makeRunSeed } from "../systems/rng.js";
 import { generateFloor } from "../systems/room-generator.js";
-import { createPrototypeTextures, createSlashTexture } from "../systems/texture-factory.js";
+import { resolveMeleeAttack, updateBleed } from "../systems/combat-system.js";
+import { createEnvironmentTextures } from "../systems/texture-factory.js";
 import { TouchControls } from "../systems/touch-controls.js";
+import { disableMouseInput, isTouchPointer, makeTouchOnlyButton } from "../ui/input.js";
+import { createCombatHud, createPauseOverlay, toggleBuffPanel, updateCombatHud } from "../ui/hud.js";
 
 export class RoomScene extends Phaser.Scene {
   constructor() {
@@ -23,86 +28,126 @@ export class RoomScene extends Phaser.Scene {
     this.build = {
       buffs: data.build?.buffs ?? [],
       health: data.build?.health ?? 100,
+      gold: data.build?.gold ?? 0,
+      consumables: data.build?.consumables ?? 0,
+      trophy: Boolean(data.build?.trophy),
     };
-    this.roomStatus = "combat";
+    this.runStats = cloneRunStats(data.runStats || createRunStats(this.runSeed));
+    this.roomStatus = "room_intro";
+    this.currentWave = -1;
     this.pendingSpawns = 0;
+    this.waveTransitionRemaining = 0;
     this.enemies = [];
+    this.projectiles = [];
+    this.telegraphs = [];
+    this.traps = [];
+    this.spawnMarkers = [];
+    this.paused = false;
   }
 
   create() {
-    this.cameras.main.setBackgroundColor("#11131d");
-    createPrototypeTextures(this);
-    createSlashTexture(this);
+    disableMouseInput(this);
+    this.audio = getDungeonAudio();
+    createEnvironmentTextures(this);
     this.currentRoom = this.floor[this.roomIndex];
     this.createRoom();
-    this.player = new Player(this, GAME_WIDTH / 2, GAME_HEIGHT / 2);
+    this.player = new Player(this, this.currentRoom.entry[0], this.currentRoom.entry[1]);
     this.applyBuild();
     this.physics.add.collider(this.player, this.walls);
-    this.keyboard = this.input.keyboard.addKeys("W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,SHIFT,ONE,TWO,THREE,ENTER,R");
-    this.touchControls = new TouchControls(this);
+    this.keyboard = this.input.keyboard.addKeys("W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,SHIFT,ONE,TWO,THREE,ENTER,R,ESC,P,M,B,Q");
+    this.keyHandlers = {
+      pause: () => this.togglePause(),
+      sound: () => {
+        this.audio.toggle();
+        this.hud?.soundButton.text.setText(this.audio.enabled ? "SOUND" : "MUTE");
+      },
+      buffs: () => toggleBuffPanel(this, this.hud, this.player),
+    };
+    this.input.keyboard.on("keydown-ESC", this.keyHandlers.pause);
+    this.input.keyboard.on("keydown-P", this.keyHandlers.pause);
+    this.input.keyboard.on("keydown-M", this.keyHandlers.sound);
+    this.input.keyboard.on("keydown-B", this.keyHandlers.buffs);
     this.createHud();
-    this.spawnRoomEnemies();
-    this.showHint("SPACE 攻擊 · SHIFT 閃避 · WASD／方向鍵移動");
+    this.touchControls = new TouchControls(this, {
+      onPause: () => this.togglePause(),
+      onBuff: () => toggleBuffPanel(this, this.hud, this.player),
+    });
+    this.introRemaining = 1050;
+    this.introText = this.add
+      .text(GAME_WIDTH / 2, 270, `ROOM ${this.currentRoom.roomNumber}/6\n${this.currentRoom.name}\n\n準備進入…`, {
+        color: "#f5f1da",
+        fontFamily: "monospace",
+        fontSize: "20px",
+        fontStyle: "bold",
+        align: "center",
+        lineSpacing: 8,
+      })
+      .setOrigin(0.5)
+      .setDepth(150);
+    this.showHint("WASD／方向鍵移動 · Space 攻擊 · Shift 閃避 · Q 使用藥瓶 · B 查看 Buff");
   }
 
   applyBuild() {
     this.build.buffs.forEach((buffId) => applyBuff(this.player, buffId));
     this.player.health = Math.min(this.player.maxHealth, this.build.health);
+    this.player.gold = this.build.gold;
+    this.player.consumables = this.build.consumables;
+    this.player.trophy = this.build.trophy;
+    this.player.lifestealTriggers = 0;
   }
 
   createRoom() {
-    const machineTint = this.currentRoom.theme === "machine" ? 0x858ba8 : 0xffffff;
-    this.add
-      .tileSprite(0, 0, GAME_WIDTH, GAME_HEIGHT, "room-floor-prototype")
-      .setOrigin(0)
-      .setTint(machineTint)
-      .setDepth(-10);
+    const machine = this.currentRoom.theme === "machine";
+    const floorKey = machine && this.textures.exists("provided-machine-floor") ? "provided-machine-floor" : machine ? "room-floor-machine" : "room-floor-fantasy";
+    this.add.tileSprite(0, 0, GAME_WIDTH, GAME_HEIGHT, floorKey).setOrigin(0).setTint(machine ? 0x9aa6bd : 0xffffff).setDepth(-10);
     this.walls = this.physics.add.staticGroup();
     const wallThickness = 32;
-    [
-      [GAME_WIDTH / 2, wallThickness / 2, GAME_WIDTH, wallThickness],
-      [GAME_WIDTH / 2, GAME_HEIGHT - wallThickness / 2, GAME_WIDTH, wallThickness],
-      [wallThickness / 2, GAME_HEIGHT / 2, wallThickness, GAME_HEIGHT],
-      [GAME_WIDTH - wallThickness / 2, GAME_HEIGHT / 2, wallThickness, GAME_HEIGHT],
-    ].forEach(([x, y, width, height]) => this.addWall(x, y, width, height));
-    this.currentRoom.obstacles.forEach(([x, y, width, height]) => this.addWall(x, y, width, height));
-    if (this.currentRoom.theme === "machine") {
-      this.add
-        .text(GAME_WIDTH / 2, 102, "機械污染區", this.hudStyle(11, "#8d96ba"))
-        .setOrigin(0.5)
-        .setDepth(2);
-    }
+    this.addWall(GAME_WIDTH / 2, 76, GAME_WIDTH - 80, wallThickness, machine);
+    this.addWall(GAME_WIDTH / 2, GAME_HEIGHT - 28, GAME_WIDTH - 80, wallThickness, machine);
+    this.addWall(40, 286, wallThickness, GAME_HEIGHT - 100, machine);
+    this.addWall(920, 170, wallThickness, 160, machine);
+    this.addWall(920, 410, wallThickness, 160, machine);
+    this.currentRoom.obstacles.forEach(([x, y, width, height]) => this.addWall(x + width / 2, y + height / 2, width, height, machine));
+
+    this.exitPortal = this.add.image(this.currentRoom.exit[0], this.currentRoom.exit[1], "portal").setScale(0.78).setAlpha(0.3).setDepth(2);
+    this.exitPortal.setTint(machine ? 0x75b8d0 : 0xb593d8);
+    this.doorVisual = this.add.image(920, 290, "door-closed").setScale(0.9).setDepth(6);
+    this.doorBlocker = this.addWall(900, 290, 32, 88, machine);
+    this.createTraps();
+    this.currentRoom.machineDecor.forEach(([x, y]) => {
+      this.add.image(x, y, "portal").setScale(0.42).setAlpha(0.36).setTint(0x72b9ca).setDepth(1);
+    });
+    this.add.text(GAME_WIDTH / 2, 94, machine ? "機械污染區" : "古老地城", this.hudStyle(11, machine ? "#8fd1e8" : "#cdb28e")).setOrigin(0.5).setDepth(2);
   }
 
-  addWall(x, y, width, height) {
-    const wall = this.walls.create(x, y, "room-wall-prototype");
+  addWall(x, y, width, height, machine = false) {
+    const wall = this.walls.create(x, y, machine ? "wall-machine" : "wall-fantasy");
     wall.setDisplaySize(width, height).refreshBody();
     wall.setDepth(-1);
+    return wall;
   }
 
-  spawnRoomEnemies() {
-    this.pendingSpawns = this.currentRoom.enemies.length;
-    this.currentRoom.enemies.forEach((plan, sequence) => {
-      this.time.delayedCall(plan.delayMs, () => {
-        this.pendingSpawns = Math.max(0, this.pendingSpawns - 1);
-        if (this.roomStatus !== "combat" || !this.player.active) return;
-        const definition = MONSTERS[plan.id];
-        const point = this.currentRoom.spawnPoints[plan.spawnIndex % this.currentRoom.spawnPoints.length];
-        const enemy = new Enemy(this, point[0], point[1], definition, sequence);
-        this.physics.add.collider(enemy, this.walls);
-        this.enemies.push(enemy);
-      });
+  createTraps() {
+    this.traps = this.currentRoom.trapPoints.map((point, index) => {
+      const node = this.add.image(point[0], point[1], "trap").setScale(0.72).setAlpha(0.22).setDepth(1);
+      return {
+        x: point[0],
+        y: point[1],
+        node,
+        phase: index * 440,
+        active: false,
+        damaged: false,
+      };
     });
   }
 
   createHud() {
-    this.hud = {
-      room: this.add.text(24, 20, `FLOOR 1 · ROOM ${this.currentRoom.roomNumber}/6`, this.hudStyle(14, "#dfb84f")).setScrollFactor(0).setDepth(110),
-      health: this.add.text(24, 48, "HP 100/100", this.hudStyle(14, "#f5f1da")).setScrollFactor(0).setDepth(110),
-      controls: this.add.text(24, GAME_HEIGHT - 30, "PROTOTYPE · NO MOUSE INPUT", this.hudStyle(11, "#77798a")).setScrollFactor(0).setDepth(110),
-      dodge: this.add.text(GAME_WIDTH - 24, 22, "DODGE READY", this.hudStyle(11, "#82a8d8")).setOrigin(1, 0).setScrollFactor(0).setDepth(110),
-      buffs: this.add.text(24, GAME_HEIGHT - 52, "BUFFS —", this.hudStyle(11, "#b9a9d4")).setScrollFactor(0).setDepth(110),
-    };
+    this.hud = createCombatHud(this, {
+      roomLabel: `FLOOR 1 · ROOM ${this.currentRoom.roomNumber}/6`,
+      seed: this.runSeed,
+      onPause: () => this.togglePause(),
+      onBuff: () => toggleBuffPanel(this, this.hud, this.player),
+    });
   }
 
   hudStyle(fontSize, color) {
@@ -110,47 +155,189 @@ export class RoomScene extends Phaser.Scene {
   }
 
   showHint(message) {
-    this.hint = this.add
-      .text(GAME_WIDTH / 2, 58, message, this.hudStyle(12, "#aaa8b5"))
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(110);
-    this.time.delayedCall(3500, () => this.hint?.setVisible(false));
+    this.hint = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 24, message, this.hudStyle(10, "#77798a")).setOrigin(0.5).setDepth(110);
+    this.time.delayedCall(5200, () => this.hint?.setVisible(false));
   }
 
   readInput() {
     const moveX = Number(this.keyboard.D.isDown || this.keyboard.RIGHT.isDown) - Number(this.keyboard.A.isDown || this.keyboard.LEFT.isDown);
     const moveY = Number(this.keyboard.S.isDown || this.keyboard.DOWN.isDown) - Number(this.keyboard.W.isDown || this.keyboard.UP.isDown);
     const touchMove = this.touchControls?.enabled ? { x: this.touchControls.moveX, y: this.touchControls.moveY } : { x: 0, y: 0 };
-    const actions = this.touchControls?.consumeActions() ?? { attack: false, dodge: false };
+    const actions = this.touchControls?.consumeActions() ?? { attack: false, dodge: false, buff: false };
     return {
       moveX: this.touchControls?.enabled && Math.hypot(touchMove.x, touchMove.y) > 0.08 ? touchMove.x : moveX,
       moveY: this.touchControls?.enabled && Math.hypot(touchMove.x, touchMove.y) > 0.08 ? touchMove.y : moveY,
       attack: actions.attack || Phaser.Input.Keyboard.JustDown(this.keyboard.SPACE),
       dodge: actions.dodge || Phaser.Input.Keyboard.JustDown(this.keyboard.SHIFT),
+      usePotion: Phaser.Input.Keyboard.JustDown(this.keyboard.Q),
+      buff: actions.buff,
     };
   }
 
   update(_time, delta) {
-    if (!this.player || !this.player.active) return;
-    if (this.roomStatus === "combat") this.updateCombat(delta);
+    if (window.__dungeonPortraitBlocked) return;
+    this.handleGlobalInput();
+    if (this.paused) {
+      this.updateHud("已暫停");
+      return;
+    }
+    if (this.roomStatus === "room_intro") this.updateRoomIntro(delta);
+    else if (this.roomStatus === "combat") this.updateCombat(delta);
     else if (this.roomStatus === "reward") this.updateRewardInput();
     else if (this.roomStatus === "transition") this.updateTransitionInput();
     else if (this.roomStatus === "defeat") this.updateDefeatInput();
     this.updateHud();
   }
 
+  handleGlobalInput() {
+    // Global keyboard actions are bound to keydown events in create(). The
+    // update loop remains responsible for combat input and pause freezing.
+  }
+
+  togglePause() {
+    if (["defeat", "loading", "victory"].includes(this.roomStatus)) return;
+    this.paused = !this.paused;
+    if (this.paused) {
+      this.pauseOverlay = createPauseOverlay(this, {
+        onResume: () => this.togglePause(),
+        onRestart: () => this.restartRun(),
+      });
+      this.audio.beep("ui");
+    } else {
+      this.pauseOverlay?.destroy(true);
+      this.pauseOverlay = null;
+      this.audio.beep("ui");
+    }
+  }
+
+  updateRoomIntro(delta) {
+    this.introRemaining -= delta;
+    if (this.introRemaining <= 0) {
+      this.introText?.destroy();
+      this.introText = null;
+      this.startCombat();
+    }
+  }
+
+  startCombat() {
+    if (this.roomStatus !== "room_intro") return;
+    this.roomStatus = "combat";
+    this.audio.beep("telegraph");
+    this.showStatus("房間封鎖 · 敵人接近");
+    this.time.delayedCall(320, () => this.startNextWave());
+  }
+
+  startNextWave() {
+    if (this.roomStatus !== "combat") return;
+    this.currentWave += 1;
+    const wave = this.currentRoom.waves[this.currentWave];
+    if (!wave) {
+      this.openReward();
+      return;
+    }
+    this.waveTransitionRemaining = 0;
+    this.pendingSpawns = wave.enemies.length;
+    this.audio.beep("wave");
+    wave.enemies.forEach((plan, sequence) => {
+      const point = this.currentRoom.spawnPoints[plan.spawnIndex % this.currentRoom.spawnPoints.length];
+      const marker = this.add.image(point[0], point[1], "spawn-marker").setDepth(4).setTint(this.currentRoom.theme === "machine" ? 0x8fd1e8 : 0xdfb84f);
+      this.spawnMarkers.push(marker);
+      this.time.delayedCall(plan.delayMs, () => {
+        this.pendingSpawns = Math.max(0, this.pendingSpawns - 1);
+        marker.destroy();
+        if (this.roomStatus !== "combat" || !this.player.active) return;
+        const definition = MONSTERS[plan.id];
+        const enemy = new Enemy(this, point[0], point[1], definition, `${this.currentWave}-${sequence}`);
+        this.physics.add.collider(enemy, this.walls);
+        this.enemies.push(enemy);
+      });
+    });
+  }
+
   updateCombat(delta) {
     const input = this.readInput();
+    if (input.buff) toggleBuffPanel(this, this.hud, this.player);
+    if (input.usePotion) this.player.consumePotion();
     this.player.updateActor(input, delta);
-    if (this.player.attackStarted) resolveMeleeAttack(this.player, this.enemies);
+    if (this.player.attackHitWindow) resolveMeleeAttack(this.player, this.enemies);
     this.enemies.forEach((enemy) => enemy.updateAI(this.player, delta));
     updateBleed(this.enemies, delta);
+    this.updateTraps(delta);
+    this.updateTelegraphs(delta);
+    updateProjectiles(this, this.player, delta);
     if (this.player.health <= 0) {
       this.openDefeat();
       return;
     }
-    if (this.pendingSpawns === 0 && this.enemies.every((enemy) => !enemy.active)) this.openReward();
+    const waveCleared = this.pendingSpawns === 0 && this.enemies.every((enemy) => !enemy.active);
+    if (!waveCleared) return;
+    if (this.waveTransitionRemaining > 0) {
+      this.waveTransitionRemaining -= delta;
+      if (this.waveTransitionRemaining <= 0) this.startNextWave();
+    } else if (this.currentWave < this.currentRoom.waves.length - 1) {
+      this.waveTransitionRemaining = 800;
+      this.showStatus(`第 ${this.currentWave + 1} 波已清除 · 下一波準備中`);
+    } else {
+      this.openReward();
+    }
+  }
+
+  updateTraps(delta) {
+    const time = this.time.now;
+    this.traps.forEach((trap) => {
+      const cycle = (time + trap.phase) % 2500;
+      const warning = cycle >= 1300 && cycle < 1800;
+      trap.active = cycle >= 1800 && cycle < 2280;
+      trap.damaged = cycle < 1800 ? false : trap.damaged;
+      trap.node.setAlpha(trap.active ? 0.78 : warning ? 0.46 : 0.2).setTint(trap.active ? 0xe17b70 : 0xc15c59);
+      if (trap.active && !trap.damaged && Phaser.Math.Distance.Between(trap.x, trap.y, this.player.x, this.player.y) <= 28) {
+        trap.damaged = true;
+        this.player.takeDamage(12);
+        this.showStatus("陷阱命中");
+      }
+    });
+    void delta;
+  }
+
+  showEnemyTelegraph(enemy, kind, duration) {
+    const color = kind === "ranged" ? 0x8fd1e8 : kind === "pounce" || kind === "dash" ? 0xe17b70 : 0xdfb84f;
+    const radius = kind === "ranged" ? 34 : 42;
+    const node = this.add.circle(enemy.x, enemy.y, radius, color, 0.12).setStrokeStyle(2, color, 0.9).setDepth(3);
+    this.telegraphs.push({ node, remaining: duration, enemy });
+  }
+
+  updateTelegraphs(delta) {
+    this.telegraphs = this.telegraphs.filter((telegraph) => {
+      telegraph.remaining -= delta;
+      if (telegraph.enemy.active) telegraph.node.setPosition(telegraph.enemy.x, telegraph.enemy.y).setAlpha(0.12 + (1 - Math.max(0, telegraph.remaining) / 520) * 0.32);
+      if (telegraph.remaining <= 0) {
+        telegraph.node.destroy();
+        return false;
+      }
+      return true;
+    });
+  }
+
+  spawnEnemyProjectile(enemy, target, damage) {
+    spawnProjectile(this, enemy, target, { damage, color: 0x8fd1e8, strokeColor: 0xe2f5ff, speed: 220 });
+  }
+
+  showHitEffect(x, y, tint) {
+    const effect = this.add.image(x, y, "hit-spark").setScale(0.45).setTint(tint).setDepth(30);
+    this.tweens.add({ targets: effect, scale: 1.1, alpha: 0, duration: 180, onComplete: () => effect.destroy() });
+  }
+
+  showDamageNumber(x, y, amount, color = "#f5f1da") {
+    const text = this.add.text(x, y, `-${Math.round(amount)}`, this.hudStyle(12, color)).setOrigin(0.5).setDepth(130);
+    this.tweens.add({ targets: text, y: y - 28, alpha: 0, duration: 520, onComplete: () => text.destroy() });
+  }
+
+  onEnemyDefeated(enemy) {
+    this.showHitEffect(enemy.x, enemy.y, enemy.definition.machine ? 0x8fd1e8 : 0xf6d36c);
+  }
+
+  onPlayerDamaged() {
+    this.audio.beep("damage");
   }
 
   updateRewardInput() {
@@ -159,134 +346,163 @@ export class RoomScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.keyboard.THREE)) this.chooseReward(2);
   }
 
-  updateTransitionInput() {
-    if (Phaser.Input.Keyboard.JustDown(this.keyboard.ENTER) || Phaser.Input.Keyboard.JustDown(this.keyboard.SPACE)) this.goToNextRoom();
-  }
-
-  updateDefeatInput() {
-    if (Phaser.Input.Keyboard.JustDown(this.keyboard.ENTER) || Phaser.Input.Keyboard.JustDown(this.keyboard.R)) {
-      this.scene.restart({ runSeed: makeRunSeed(), roomIndex: 0, build: { buffs: [], health: 100 } });
-    }
-  }
-
-  updateHud() {
-    const dodgeReady = this.player.dodgeCooldownRemaining <= 0;
-    this.hud.health.setText(`HP ${this.player.health}/${this.player.maxHealth}`);
-    this.hud.dodge.setText(dodgeReady ? "DODGE READY" : `DODGE ${(this.player.dodgeCooldownRemaining / 1000).toFixed(1)}s`);
-    this.hud.dodge.setColor(dodgeReady ? "#82a8d8" : "#77798a");
-    const buffNames = this.player.buffs.map((id) => BUFFS[id]?.name ?? id);
-    this.hud.buffs.setText(buffNames.length ? `BUFFS ${buffNames.join(" · ")}` : "BUFFS —");
-  }
-
   openReward() {
     if (this.roomStatus !== "combat") return;
     this.roomStatus = "reward";
-    this.rewardGroup = this.add.container(0, 0).setDepth(150);
-    this.rewardGroup.add(this.add.rectangle(480, 270, 850, 420, 0x0b0d16, 0.94).setStrokeStyle(3, 0xdfb84f, 0.9));
-    this.rewardGroup.add(this.add.text(480, 105, "房間清除", this.hudStyle(26, "#f5f1da")).setOrigin(0.5));
-    this.rewardGroup.add(this.add.text(480, 145, "選擇一項 Buff（1／2／3）", this.hudStyle(13, "#aaa8b5")).setOrigin(0.5));
-    this.currentRoom.rewardIds.forEach((buffId, index) => this.createRewardCard(buffId, index));
+    this.player.setVelocity(0, 0);
+    this.traps.forEach((trap) => trap.node.setAlpha(0.16));
+    this.rewardIds = getUsableRewardIds(this.player, this.currentRoom.rewardIds);
+    while (this.rewardIds.length < 3) this.rewardIds.push(["minor_heal", "gold_cache", "emergency_vial"][this.rewardIds.length]);
+    this.rewardGroup = this.add.container(0, 0).setDepth(180);
+    this.rewardGroup.add(this.add.rectangle(480, 282, 820, 385, 0x0b0d16, 0.97).setStrokeStyle(3, this.currentRoom.theme === "machine" ? 0x8fd1e8 : 0xdfb84f, 0.95));
+    this.rewardGroup.add(this.add.image(480, 138, this.currentRoom.theme === "machine" ? "reward-console" : "reward-chest").setScale(0.8));
+    this.rewardGroup.add(this.add.text(480, 84, "房間清除", this.hudStyle(26, "#f5f1da")).setOrigin(0.5));
+    this.rewardGroup.add(this.add.text(480, 112, "選擇一項獎勵（1／2／3）", this.hudStyle(12, "#aaa8b5")).setOrigin(0.5));
+    this.rewardIds.slice(0, 3).forEach((rewardId, index) => this.createRewardCard(rewardId, index));
+    this.audio.beep("reward");
   }
 
-  createRewardCard(buffId, index) {
-    const buff = BUFFS[buffId];
-    if (!buff) return;
+  createRewardCard(rewardId, index) {
+    const reward = getRewardDefinition(rewardId);
+    if (!reward) return;
     const x = 250 + index * 230;
-    const card = this.add
-      .rectangle(x, 285, 200, 170, 0x202439, 1)
-      .setStrokeStyle(2, index === 2 ? 0xb9a9d4 : 0x69718d, 1)
-      .setInteractive(new Phaser.Geom.Rectangle(-100, -85, 200, 170), Phaser.Geom.Rectangle.Contains);
-    const text = this.add
-      .text(x, 285, `${index + 1}\n${buff.name}\n\n${buff.rarity}\n${buff.description}`, {
-        color: "#f5f1da",
-        fontFamily: "monospace",
-        fontSize: "12px",
-        align: "center",
-        wordWrap: { width: 170 },
-        lineSpacing: 5,
-      })
-      .setOrigin(0.5);
+    const card = this.add.rectangle(x, 300, 200, 164, 0x202439, 1).setStrokeStyle(2, getRewardColor(rewardId), 1).setInteractive(new Phaser.Geom.Rectangle(-100, -82, 200, 164), Phaser.Geom.Rectangle.Contains);
+    const text = this.add.text(x, 300, `${index + 1}\n${reward.name}\n\n${reward.rarity}\n${reward.description}`, {
+      color: "#f5f1da",
+      fontFamily: "monospace",
+      fontSize: "11px",
+      align: "center",
+      wordWrap: { width: 172 },
+      lineSpacing: 4,
+    }).setOrigin(0.5);
     card.on("pointerdown", (pointer) => {
-      if (this.isTouchPointer(pointer)) this.chooseReward(index);
+      if (isTouchPointer(pointer)) this.chooseReward(index);
     });
     this.rewardGroup.add([card, text]);
   }
 
   chooseReward(index) {
-    if (this.roomStatus !== "reward") return;
-    const buffId = this.currentRoom.rewardIds[index];
-    if (!applyBuff(this.player, buffId)) return;
+    if (this.roomStatus !== "reward" || !this.rewardIds[index]) return;
+    const rewardId = this.rewardIds[index];
+    const result = applyReward(this.player, rewardId);
+    if (!result.applied) return;
+    this.runStats.buffs = [...this.player.buffs];
+    this.runStats.gold = this.player.gold || 0;
+    this.runStats.roomsCleared = Math.max(this.runStats.roomsCleared, this.roomIndex + 1);
+    this.runStats.trophy = Boolean(this.player.trophy);
     this.rewardGroup?.destroy(true);
     this.rewardGroup = null;
-    if (this.roomIndex >= 4) {
-      this.openStageGate();
-      return;
-    }
+    this.doorBlocker?.disableBody(true, true);
+    this.doorVisual?.setTexture("door-open");
+    this.exitPortal?.setAlpha(1);
+    this.tweens.add({ targets: this.exitPortal, angle: 360, duration: 1000, repeat: -1 });
     this.roomStatus = "transition";
-    this.transitionText = this.add
-      .text(480, 270, `${describeBuff(buffId)}\n\n按 Enter／Space 進入下一間`, {
-        color: "#f5f1da",
-        fontFamily: "monospace",
-        fontSize: "16px",
-        align: "center",
-        lineSpacing: 8,
-      })
-      .setOrigin(0.5)
-      .setDepth(140);
+    this.transitionText = this.add.text(480, 270, `${result.converted ? "Buff 已達上限，轉化為 10 金幣" : describeReward(rewardId)}\n\n走向傳送門，按 Enter／Space 進入下一間`, {
+      color: "#f5f1da",
+      fontFamily: "monospace",
+      fontSize: "15px",
+      align: "center",
+      lineSpacing: 8,
+    }).setOrigin(0.5).setDepth(140);
+    this.nextButton = makeTouchOnlyButton(this, 480, 390, 220, 44, "進入下一間", () => this.goToNextRoom(), {
+      color: 0x303a55,
+      strokeColor: 0xdfb84f,
+      depth: 142,
+    });
   }
 
-  openStageGate() {
-    this.roomStatus = "transition";
-    this.transitionText = this.add
-      .text(480, 270, "五間普通房完成\n\n下一階段：第六房魔王", {
-        color: "#dfb84f",
-        fontFamily: "monospace",
-        fontSize: "20px",
-        align: "center",
-        lineSpacing: 10,
-      })
-      .setOrigin(0.5)
-      .setDepth(140);
+  updateTransitionInput() {
+    if (Phaser.Input.Keyboard.JustDown(this.keyboard.ENTER) || Phaser.Input.Keyboard.JustDown(this.keyboard.SPACE)) this.goToNextRoom();
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, this.currentRoom.exit[0], this.currentRoom.exit[1]) <= 58) this.goToNextRoom();
   }
 
   async goToNextRoom() {
+    if (this.roomStatus !== "transition") return;
+    this.roomStatus = "loading";
+    this.transitionText?.setText("載入下一間房…");
+    this.nextButton?.destroy();
     if (this.roomIndex >= 4) {
-      this.roomStatus = "loading";
-      this.transitionText?.setText("載入魔王房…");
       const { BossScene } = await import("./BossScene.js");
       if (!this.scene.get("Boss")) this.scene.add("Boss", BossScene, false);
       this.scene.start("Boss", {
         runSeed: this.runSeed,
-        build: { buffs: this.player.buffs, health: this.player.health },
+        build: this.buildForNextRoom(),
+        runStats: cloneRunStats(this.runStats),
       });
       return;
     }
-    this.scene.restart({
-      runSeed: this.runSeed,
-      roomIndex: this.roomIndex + 1,
-      build: { buffs: this.player.buffs, health: this.player.health },
+    this.scene.restart({ runSeed: this.runSeed, roomIndex: this.roomIndex + 1, build: this.buildForNextRoom(), runStats: cloneRunStats(this.runStats) });
+  }
+
+  buildForNextRoom() {
+    return {
+      buffs: [...this.player.buffs],
+      health: this.player.health,
+      gold: this.player.gold,
+      consumables: this.player.consumables,
+      trophy: this.player.trophy,
+    };
+  }
+
+  updateHud(status = null) {
+    const waveLabel = this.roomStatus === "combat" ? `第 ${Math.max(1, this.currentWave + 1)}/${this.currentRoom.waves.length} 波` : null;
+    updateCombatHud(this.hud, this.player, {
+      roomLabel: `FLOOR 1 · ROOM ${this.currentRoom.roomNumber}/6`,
+      seed: this.runSeed,
+      status: status || waveLabel || this.statusMessage || this.roomStatus,
     });
+  }
+
+  showStatus(message) {
+    this.statusMessage = message;
+    this.time.delayedCall(1500, () => {
+      if (this.statusMessage === message) this.statusMessage = null;
+    });
+  }
+
+  updateDefeatInput() {
+    if (Phaser.Input.Keyboard.JustDown(this.keyboard.ENTER) || Phaser.Input.Keyboard.JustDown(this.keyboard.R)) this.restartRun();
   }
 
   openDefeat() {
     if (this.roomStatus === "defeat") return;
     this.roomStatus = "defeat";
-    this.add.rectangle(480, 270, 850, 420, 0x0b0d16, 0.94).setStrokeStyle(3, 0xb94d45, 0.9).setDepth(150);
-    this.add
-      .text(480, 235, "YOU DIED", { color: "#e17b70", fontFamily: "monospace", fontSize: "30px", fontStyle: "bold" })
-      .setOrigin(0.5)
-      .setDepth(151);
-    this.add
-      .text(480, 300, "按 Enter／R 重新開始", { color: "#f5f1da", fontFamily: "monospace", fontSize: "15px" })
-      .setOrigin(0.5)
-      .setDepth(151);
+    this.player.setVelocity(0, 0);
+    this.touchControls?.destroy();
+    clearProjectiles(this);
+    this.audio.beep("defeat");
+    const seconds = getRunDurationSeconds(this.runStats);
+    const summary = `已清除房間：${this.runStats.roomsCleared}/5\n遊玩時間：${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}\n受到傷害：${this.runStats.damageTaken}\nSeed：${this.runSeed}`;
+    this.add.rectangle(480, 280, 700, 360, 0x0b0d16, 0.97).setStrokeStyle(3, 0xb94d45, 0.95).setDepth(150);
+    this.add.text(480, 160, "YOU DIED", { color: "#e17b70", fontFamily: "monospace", fontSize: "32px", fontStyle: "bold" }).setOrigin(0.5).setDepth(151);
+    this.add.text(480, 250, summary, { color: "#f5f1da", fontFamily: "monospace", fontSize: "13px", align: "center", lineSpacing: 8 }).setOrigin(0.5).setDepth(151);
+    this.makeEndButton("重新開始 · Enter／R", 400, 425, () => this.restartRun());
   }
 
-  isTouchPointer(pointer) {
-    return pointer?.event?.pointerType === "touch" || pointer?.event?.pointerType === "pen";
+  makeEndButton(label, x, y, action) {
+    this.endButton?.destroy();
+    this.endButton = makeTouchOnlyButton(this, x, y, 220, 44, label, action, {
+      color: 0x4c303d,
+      strokeColor: 0xe17b70,
+      depth: 152,
+    });
+  }
+
+  restartRun() {
+    const seed = makeRunSeed();
+    this.scene.start("Room", { runSeed: seed, roomIndex: 0, build: { buffs: [], health: 100 }, runStats: createRunStats(seed) });
   }
 
   shutdown() {
+    if (this.keyHandlers) {
+      this.input.keyboard.off("keydown-ESC", this.keyHandlers.pause);
+      this.input.keyboard.off("keydown-P", this.keyHandlers.pause);
+      this.input.keyboard.off("keydown-M", this.keyHandlers.sound);
+      this.input.keyboard.off("keydown-B", this.keyHandlers.buffs);
+    }
     this.touchControls?.destroy();
+    clearProjectiles(this);
+    this.telegraphs.forEach((telegraph) => telegraph.node.destroy());
+    this.spawnMarkers.forEach((marker) => marker.destroy());
   }
 }

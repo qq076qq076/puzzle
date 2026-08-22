@@ -1,6 +1,8 @@
 # dungeon 資產放置說明
 
-目前 CraftPix 下載頁需要登入，因此此工作區先使用 `src/systems/texture-factory.js` 產生的像素原型素材完成遊戲邏輯。取得素材壓縮檔後，請依下列方式整理：
+目前 dungeon runtime 直接使用 workspace 內已提供的 Kenney Tiny Dungeon PNG，manifest 位於 `src/data/assets.js`，相對路徑指向 `../dice-tower-defense/assets/`。地板、牆、傳送門、陷阱、預警與命中特效則由 `src/systems/texture-factory.js` 以 nearest-neighbor 像素風格產生。CraftPix 頁面只保留在 [ASSET-CREDITS.md](../ASSET-CREDITS.md) 作為原始規格參考，沒有將未取得的檔案放入 runtime。
+
+若日後取得其他素材壓縮檔，請依下列方式整理：
 
 ```text
 assets/

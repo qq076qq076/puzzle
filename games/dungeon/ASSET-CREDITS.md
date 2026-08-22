@@ -17,10 +17,25 @@
 - 不要求署名或回鏈，但保留署名會受到鼓勵。
 - 不可以單獨重新販售 PNG、PSD 或其他原始素材，也不能以讓終端使用者取出素材的方式重新分發。
 
+## 本階段實際使用的本地素材
+
+本階段沒有重新下載或生成素材；runtime manifest 直接重用專案內已提供的 Kenney Tiny Dungeon PNG，來源路徑為 `../dice-tower-defense/assets/`，並維持 nearest-neighbor 顯示：
+
+| dungeon 用途 | 提供素材 |
+| --- | --- |
+| 玩家 | `enemies/armored-knight.png` |
+| 巨鼠 | `enemies/swift-bat.png` |
+| 棒棍哥布林 | `enemies/splitter-slime.png` |
+| 匕首哥布林 | `enemies/shadow-ghost.png` |
+| 鋼鐵蜘蛛 | `enemies/child-spider.png` |
+| 蜘蛛護衛／骨面機械王 | `enemies/boss-demon.png` |
+| 機械地板 | `road/pebble-road.png` |
+
+Kenney Tiny Dungeon 的既有 `games/dice-tower-defense/assets/enemies/README.md` 標示為 CC0 1.0；遊戲中的行為、色調與預警效果由 dungeon runtime 以程式繪製。素材只從既有 workspace 取用，沒有新增外部下載依賴。
+
 ## 專案內的使用規則
 
 - 素材只作為《dungeon》遊戲的一部分，不提供素材檔案匯出或單獨下載功能。
 - 發佈前再次確認素材頁面與授權頁面的最新版本。
 - 若日後加入第三方音效、字型或額外素材，必須在本檔案追加來源與授權。
-- 只有在取得素材檔案並完成匯入後，才補上實際檔名、作者欄位與版本資訊；目前不猜測素材包內部檔名。
-
+- 若日後替換為 CraftPix 素材，仍須在本檔案追加實際檔名、作者欄位與版本資訊；目前不把 CraftPix 檔案宣稱為已匯入素材。
