@@ -50,6 +50,8 @@ export class BossScene extends Phaser.Scene {
     createEnvironmentTextures(this);
     this.createArena();
     this.player = new Player(this, ENTRY_SPAWN_POINT[0], ENTRY_SPAWN_POINT[1]);
+    this.enemyGroup = this.physics.add.group({ allowGravity: false });
+    this.physics.add.collider(this.enemyGroup, this.enemyGroup);
     this.player.facing.set(1, 0);
     this.applyBuild();
     this.physics.add.collider(this.player, this.walls);
@@ -280,6 +282,7 @@ export class BossScene extends Phaser.Scene {
     const y = Phaser.Math.Clamp(this.boss.y + Math.sin(angle) * 130, 120, GAME_HEIGHT - 80);
     const enemy = new Enemy(this, x, y, MONSTERS.steel_spider, `boss-${this.enemies.length}`);
     enemy.spawnProtectionRemaining = 500;
+    this.enemyGroup.add(enemy);
     this.physics.add.collider(enemy, this.walls);
     this.physics.add.collider(this.player, enemy, () => enemy.tryContactDamage(this.player));
     this.enemies.push(enemy);

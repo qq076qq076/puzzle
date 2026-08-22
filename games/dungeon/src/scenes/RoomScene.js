@@ -60,6 +60,8 @@ export class RoomScene extends Phaser.Scene {
     this.currentRoom = this.floor[this.roomIndex];
     this.createRoom();
     this.player = new Player(this, this.currentRoom.entrySpawn[0], this.currentRoom.entrySpawn[1]);
+    this.enemyGroup = this.physics.add.group({ allowGravity: false });
+    this.physics.add.collider(this.enemyGroup, this.enemyGroup);
     this.player.facing.set(1, 0);
     this.applyBuild();
     this.physics.add.collider(this.player, this.walls);
@@ -313,6 +315,7 @@ export class RoomScene extends Phaser.Scene {
   }
 
   attachEnemyPhysics(enemy) {
+    this.enemyGroup.add(enemy);
     this.physics.add.collider(enemy, this.walls);
     this.physics.add.collider(this.player, enemy, () => enemy.tryContactDamage(this.player));
   }
