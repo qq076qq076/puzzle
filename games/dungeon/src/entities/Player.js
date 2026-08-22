@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { playActorAnimation } from "../systems/actor-animations.js";
 
 const EPSILON = 0.001;
 
@@ -7,10 +8,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     super(scene, x, y, "provided-player");
     scene.add.existing(this);
     scene.physics.add.existing(this);
-    this.setScale(3);
+    this.setScale(2);
     this.setDepth(10);
     this.setCollideWorldBounds(true);
-    this.body.setSize(10, 12).setOffset(3, 3);
+    this.body.setSize(12, 12).setOffset(10, 16);
     this.body.setDrag(900, 900);
     this.body.setMaxVelocity(230, 230);
 
@@ -50,6 +51,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.attackFacing = this.facing.clone();
     this.slash = scene.add.image(0, 0, "slash-effect").setOrigin(0.5).setDepth(9).setVisible(false);
     this.shadow = scene.add.ellipse(x, y + 12, 22, 8, 0x080a10, 0.38).setDepth(5);
+    playActorAnimation(this, "player", "idle", this.facing);
   }
 
   updateActor(input, delta) {
@@ -143,9 +145,15 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   updateVisuals() {
     this.setAlpha(this.invulnerableRemaining > 0 && Math.floor(this.scene.time.now / 70) % 2 === 0 ? 0.35 : 1);
-    this.slash.setVisible(this.isAttacking()).setPosition(this.x + this.facing.x * 28, this.y + this.facing.y * 28);
-    this.slash.setRotation(Math.atan2(this.facing.y, this.facing.x));
-    this.shadow.setPosition(this.x, this.y + 14).setVisible(this.active);
+    const visualFacing = this.isAttacking() ? this.attackFacing : this.facing;
+    if (this.attackStarted) playActorAnimation(this, "player", "attack", visualFacing, { restart: true });
+    else if (!this.isAttacking()) {
+      const moving = this.isDodging() || this.body.velocity.lengthSq() > 16;
+      playActorAnimation(this, "player", moving ? "walk" : "idle", visualFacing);
+    }
+    this.slash.setVisible(this.isAttacking()).setPosition(this.x + visualFacing.x * 28, this.y + visualFacing.y * 28);
+    this.slash.setRotation(Math.atan2(visualFacing.y, visualFacing.x));
+    this.shadow.setPosition(this.x, this.y + 18).setVisible(this.active);
     this.setDepth(10 + this.y / 10000);
   }
 

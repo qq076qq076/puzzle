@@ -5,7 +5,7 @@ import { makeTouchOnlyButton } from "./input.js";
 
 export function createCombatHud(scene, options = {}) {
   const hud = {
-    avatar: scene.add.image(30, 54, "provided-player").setScale(2.2).setScrollFactor(0).setDepth(110),
+    avatar: scene.add.image(30, 54, "provided-player").setScale(1.35).setScrollFactor(0).setDepth(110),
     room: scene.add.text(58, 20, options.roomLabel || "FLOOR 1 · ROOM 1/6", scene.hudStyle(14, "#dfb84f")).setScrollFactor(0).setDepth(110),
     health: scene.add.text(58, 48, "HP 100/100", scene.hudStyle(12, "#f5f1da")).setScrollFactor(0).setDepth(110),
     status: scene.add.text(58, 70, "房間準備中", scene.hudStyle(10, "#aaa8b5")).setScrollFactor(0).setDepth(110),

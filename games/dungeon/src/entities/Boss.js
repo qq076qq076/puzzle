@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { playActorAnimation } from "../systems/actor-animations.js";
 
 export class Boss extends Phaser.Physics.Arcade.Sprite {
   constructor(scene, x, y) {
@@ -27,14 +28,16 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     this.comboStep = 0;
     this.chargeRemaining = 0;
     this.chargeHit = false;
-    this.setScale(5);
-    this.setTint(0xf2b36e);
+    this.facing = new Phaser.Math.Vector2(0, 1);
+    this.setScale(2.5);
     this.setDepth(12);
     this.setCollideWorldBounds(true);
-    this.body.setCircle(25, -4, -4);
+    this.body.setCircle(19);
+    this.body.setOffset((this.width - this.body.width) / 2, (this.height - this.body.height) / 2 + 4);
     this.body.setDrag(160, 160);
     this.body.setMaxVelocity(520, 520);
     this.shadow = scene.add.ellipse(x, y + 28, 56, 15, 0x080a10, 0.46).setDepth(5);
+    playActorAnimation(this, "boss", "idle", this.facing);
   }
 
   updateAI(player, delta) {
@@ -84,6 +87,7 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     const dx = player.x - this.x;
     const dy = player.y - this.y;
     const distance = Math.hypot(dx, dy) || 1;
+    this.facing.set(dx / distance, dy / distance);
     if (distance > 116) this.setVelocity((dx / distance) * (this.phase === 3 ? 86 : 70), (dy / distance) * (this.phase === 3 ? 86 : 70));
     else this.setVelocity(0, 0);
     if (this.attackCooldownRemaining <= 0) this.startPattern();
@@ -133,6 +137,7 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     if (this.attackKind === "charge") {
       const target = this.scene.player;
       const direction = new Phaser.Math.Vector2(target.x - this.x, target.y - this.y).normalize();
+      this.facing.copy(direction);
       this.setVelocity(direction.x * 430, direction.y * 430);
       this.chargeRemaining = this.phase === 3 ? 380 : 300;
       this.chargeHit = false;
@@ -179,7 +184,9 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
 
   updateVisuals() {
     this.setAlpha(this.hitFlashRemaining > 0 ? 0.58 : 1);
-    this.shadow?.setPosition(this.x, this.y + 28).setVisible(this.active);
+    const moving = this.chargeRemaining > 0 || this.body.velocity.lengthSq() > 16;
+    playActorAnimation(this, "boss", moving ? "walk" : "idle", this.facing);
+    this.shadow?.setPosition(this.x, this.y + 38).setVisible(this.active);
     this.setDepth(12 + this.y / 10000);
   }
 

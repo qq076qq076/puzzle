@@ -37,7 +37,8 @@ export class MenuScene extends Phaser.Scene {
     this.add.rectangle(480, 270, 780, 380, 0x121727, 0.96).setStrokeStyle(2, 0x4b536d, 0.9);
     this.add.rectangle(480, 270, 728, 328, 0x0d111d, 1).setStrokeStyle(1, 0x252e43, 1);
     this.add.circle(480, 226, 102, 0x352d4a, 0.25).setStrokeStyle(2, 0x9a76d1, 0.45);
-    this.add.image(480, 226, "provided-boss").setScale(7).setTint(0xdfb84f).setAlpha(0.78);
+    const bossPreview = this.add.sprite(480, 226, "provided-boss").setScale(3).setAlpha(0.9);
+    if (this.anims.exists("actor-boss-idle-down")) bossPreview.play("actor-boss-idle-down");
     this.add.text(480, 92, "第一地層：鏽蝕王座", {
       color: "#9aa2c1",
       fontFamily: "monospace",

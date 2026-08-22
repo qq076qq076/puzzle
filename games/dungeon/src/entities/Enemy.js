@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { playActorAnimation } from "../systems/actor-animations.js";
 
 export class Enemy extends Phaser.Physics.Arcade.Sprite {
   constructor(scene, x, y, definition, sequence = 0) {
@@ -6,6 +7,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     scene.add.existing(this);
     scene.physics.add.existing(this);
     this.definition = definition;
+    this.assetId = definition.assetId || definition.id;
     this.sequence = sequence;
     this.health = definition.maxHealth;
     this.state = "idle";
@@ -17,6 +19,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.hitFlashRemaining = 0;
     this.bleedRemaining = 0;
     this.machineMarkedRemaining = 0;
+    this.facing = new Phaser.Math.Vector2(0, 1);
+    this.visualState = "idle";
     this.setScale(definition.scale ?? 3);
     this.setTint(definition.color ?? 0xffffff);
     this.setDepth(8);
@@ -26,6 +30,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.body.setDrag(240, 240);
     this.body.setMaxVelocity(definition.speed + 100, definition.speed + 100);
     this.shadow = scene.add.ellipse(x, y + 12, 20, 7, 0x080a10, 0.32).setDepth(5);
+    playActorAnimation(this, this.assetId, "idle", this.facing);
   }
 
   updateAI(player, delta) {
@@ -70,6 +75,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     const dx = player.x - this.x;
     const dy = player.y - this.y;
     const distance = Math.hypot(dx, dy) || 1;
+    this.facing.set(dx / distance, dy / distance);
     const attackRange = this.definition.attackRange;
     if (distance > attackRange || this.definition.attackKind === "ranged") {
       this.state = "chase";
@@ -92,6 +98,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.scene.showEnemyTelegraph?.(this, this.definition.attackKind, this.attackWindupRemaining);
     this.scene.audio?.beep("telegraph");
     if (this.definition.stealth) this.setAlpha(1);
+    this.visualState = "attack";
+    playActorAnimation(this, this.assetId, "attack", this.facing, { restart: true });
     void player;
   }
 
@@ -137,7 +145,12 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (this.definition.stealth && this.state === "chase") this.setAlpha(0.62);
     if (this.hitFlashRemaining > 0) this.setAlpha(1);
     if (this.hitFlashRemaining <= 0 && this.spawnProtectionRemaining <= 0 && this.alertRemaining <= 0 && !(this.definition.stealth && this.state === "chase")) this.setAlpha(1);
-    this.shadow?.setPosition(this.x, this.y + 12).setVisible(this.active);
+    if (this.state !== "telegraph") {
+      const moving = this.body.velocity.lengthSq() > 16;
+      this.visualState = moving ? "walk" : "idle";
+      playActorAnimation(this, this.assetId, this.visualState, this.facing);
+    }
+    this.shadow?.setPosition(this.x, this.y + (this.definition.shadowOffsetY ?? 16)).setVisible(this.active);
     this.setDepth(8 + this.y / 10000);
   }
 

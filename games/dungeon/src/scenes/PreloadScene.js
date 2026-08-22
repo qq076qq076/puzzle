@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { PROVIDED_ASSETS } from "../data/assets.js";
+import { registerCraftPixAnimations } from "../systems/actor-animations.js";
 import { createEnvironmentTextures } from "../systems/texture-factory.js";
 
 export class PreloadScene extends Phaser.Scene {
@@ -25,15 +26,13 @@ export class PreloadScene extends Phaser.Scene {
       fontSize: "12px",
     }).setOrigin(0.5);
 
-    if (PROVIDED_ASSETS.localFilesAvailable) {
-      Object.entries(PROVIDED_ASSETS.images).forEach(([key, path]) => {
-        const textureKey = key === "machineFloor" ? "provided-machine-floor" : `provided-${key.replaceAll("_", "-")}`;
-        this.load.image(textureKey, path);
+    Object.entries(PROVIDED_ASSETS.images).forEach(([key, path]) => this.load.image(key, path));
+    PROVIDED_ASSETS.spritesheets.forEach((definition) => {
+      this.load.spritesheet(definition.key, definition.path, {
+        frameWidth: definition.frameWidth,
+        frameHeight: definition.frameHeight,
       });
-    } else {
-      this.progressFill.width = 400;
-      this.progressText.setText("尚未啟用 CraftPix PNG，使用像素備援圖形");
-    }
+    });
     this.load.on("progress", (value) => {
       this.progressFill.width = 400 * value;
       this.progressText.setText(`讀取 CraftPix 素材… ${Math.round(value * 100)}%`);
@@ -45,6 +44,7 @@ export class PreloadScene extends Phaser.Scene {
 
   create() {
     createEnvironmentTextures(this);
+    registerCraftPixAnimations(this);
     this.time.delayedCall(180, () => this.scene.start("Menu"));
   }
 }
