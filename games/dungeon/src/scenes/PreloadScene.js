@@ -19,7 +19,7 @@ export class PreloadScene extends Phaser.Scene {
       .setOrigin(0.5);
     this.progressBar = this.add.rectangle(280, 270, 400, 12, 0x2d3346, 1).setOrigin(0, 0.5);
     this.progressFill = this.add.rectangle(280, 270, 0, 12, 0xdfb84f, 1).setOrigin(0, 0.5);
-    this.progressText = this.add.text(480, 304, "讀取已提供素材…", {
+    this.progressText = this.add.text(480, 304, "讀取 CraftPix 素材…", {
       color: "#77798a",
       fontFamily: "monospace",
       fontSize: "12px",
@@ -31,10 +31,10 @@ export class PreloadScene extends Phaser.Scene {
     });
     this.load.on("progress", (value) => {
       this.progressFill.width = 400 * value;
-      this.progressText.setText(`讀取已提供素材… ${Math.round(value * 100)}%`);
+      this.progressText.setText(`讀取 CraftPix 素材… ${Math.round(value * 100)}%`);
     });
     this.load.on("loaderror", (file) => {
-      this.progressText.setText(`素材載入失敗：${file.key}，使用內建備援圖形`);
+      this.progressText.setText(`CraftPix 檔案未找到：${file.key}，使用像素備援圖形`);
     });
   }
 

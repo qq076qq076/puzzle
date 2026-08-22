@@ -17,25 +17,20 @@
 - 不要求署名或回鏈，但保留署名會受到鼓勵。
 - 不可以單獨重新販售 PNG、PSD 或其他原始素材，也不能以讓終端使用者取出素材的方式重新分發。
 
-## 本階段實際使用的本地素材
+## 本階段素材狀態
 
-本階段沒有重新下載或生成素材；runtime manifest 直接重用專案內已提供的 Kenney Tiny Dungeon PNG，來源路徑為 `../dice-tower-defense/assets/`，並維持 nearest-neighbor 顯示：
+runtime manifest 已不再引用其他遊戲的 Kenney 素材，改為指向上述兩個 CraftPix 素材包的本地化路徑：
 
-| dungeon 用途 | 提供素材 |
-| --- | --- |
-| 玩家 | `enemies/armored-knight.png` |
-| 巨鼠 | `enemies/swift-bat.png` |
-| 棒棍哥布林 | `enemies/splitter-slime.png` |
-| 匕首哥布林 | `enemies/shadow-ghost.png` |
-| 鋼鐵蜘蛛 | `enemies/child-spider.png` |
-| 蜘蛛護衛／骨面機械王 | `enemies/boss-demon.png` |
-| 機械地板 | `road/pebble-road.png` |
+| dungeon 用途 | manifest 路徑 | 來源 |
+| --- | --- | --- |
+| 玩家、巨鼠、哥布林 | `assets/fantasy/*.png` | Top-Down Roguelike Game Kit |
+| 鋼鐵蜘蛛、Boss、機械地板 | `assets/machine/*.png` | Roguelike Shoot 'em up Game Kit |
 
-Kenney Tiny Dungeon 的既有 `games/dice-tower-defense/assets/enemies/README.md` 標示為 CC0 1.0；遊戲中的行為、色調與預警效果由 dungeon runtime 以程式繪製。素材只從既有 workspace 取用，沒有新增外部下載依賴。
+由於 CraftPix 免費下載端點要求登入，本次 commit 沒有取得原始 ZIP，因此上述 PNG 尚未放入 repository。缺少檔案時會由 `texture-factory.js` 提供可執行的程序化像素備援；這不代表備援圖形是 CraftPix 原始素材。
 
 ## 專案內的使用規則
 
 - 素材只作為《dungeon》遊戲的一部分，不提供素材檔案匯出或單獨下載功能。
 - 發佈前再次確認素材頁面與授權頁面的最新版本。
 - 若日後加入第三方音效、字型或額外素材，必須在本檔案追加來源與授權。
-- 若日後替換為 CraftPix 素材，仍須在本檔案追加實際檔名、作者欄位與版本資訊；目前不把 CraftPix 檔案宣稱為已匯入素材。
+- 取得並匯入 CraftPix PNG 後，應在本檔案追加實際檔名、作者欄位與版本資訊。
