@@ -14,7 +14,6 @@ import { hasCrossedExit } from "../systems/room-transition.js";
 import { resolveMeleeAttack, updateBleed } from "../systems/combat-system.js";
 import { playEnvironmentAnimation } from "../systems/actor-animations.js";
 import { closeSideDoor, constrainActorToClosedDoor, createSideDoor, openSideDoor } from "../systems/door-system.js";
-import { createEnvironmentTextures } from "../systems/texture-factory.js";
 import { TouchControls } from "../systems/touch-controls.js";
 import { disableMouseInput, makeTouchOnlyButton } from "../ui/input.js";
 import { createCombatHud, createPauseOverlay, toggleBuffPanel, updateCombatHud } from "../ui/hud.js";
@@ -56,7 +55,6 @@ export class RoomScene extends Phaser.Scene {
   create() {
     disableMouseInput(this);
     this.audio = getDungeonAudio();
-    createEnvironmentTextures(this);
     this.currentRoom = this.floor[this.roomIndex];
     this.createRoom();
     this.player = new Player(this, this.currentRoom.entrySpawn[0], this.currentRoom.entrySpawn[1]);
@@ -116,7 +114,7 @@ export class RoomScene extends Phaser.Scene {
     const floorKey = machine ? "room-floor-machine" : "room-floor-fantasy";
     this.floorVisual = this.add.tileSprite(0, 0, GAME_WIDTH, GAME_HEIGHT, floorKey).setOrigin(0).setDepth(-10);
     if (!machine) this.floorVisual.setTileScale(2, 2);
-    this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, machine ? 0x111526 : 0x141321, machine ? 0.2 : 0.12).setOrigin(0).setDepth(-9);
+    this.floorVisual.setTint(machine ? 0xb9c8e4 : 0xd3c0c9);
     this.walls = this.physics.add.staticGroup();
     const wallThickness = 32;
     this.addWall(GAME_WIDTH / 2, 76, GAME_WIDTH - 80, wallThickness, machine);
@@ -170,13 +168,14 @@ export class RoomScene extends Phaser.Scene {
 
   createTraps() {
     this.traps = this.currentRoom.trapPoints.map((point, index) => {
-      const node = this.add.image(point[0], point[1], "trap").setScale(0.72).setAlpha(0.22).setDepth(1);
+      const node = this.add.sprite(point[0], point[1], "trap", 0).setScale(2.3).setAlpha(0.34).setDepth(1);
       return {
         x: point[0],
         y: point[1],
         node,
         phase: index * 440,
         active: false,
+        wasActive: false,
         damaged: false,
       };
     });
@@ -300,7 +299,8 @@ export class RoomScene extends Phaser.Scene {
     this.audio.beep("wave");
     wave.enemies.forEach((plan, sequence) => {
       const point = this.currentRoom.spawnPoints[plan.spawnIndex % this.currentRoom.spawnPoints.length];
-      const marker = this.add.image(point[0], point[1], "spawn-marker").setDepth(4).setTint(this.currentRoom.theme === "machine" ? 0x8fd1e8 : 0xdfb84f);
+      const marker = this.add.sprite(point[0], point[1], "spawn-marker", 0).setScale(0.58).setDepth(4);
+      playEnvironmentAnimation(marker, "spawn-marker-start");
       this.spawnMarkers.push(marker);
       this.time.delayedCall(plan.delayMs, () => {
         this.pendingSpawns = Math.max(0, this.pendingSpawns - 1);
@@ -356,7 +356,11 @@ export class RoomScene extends Phaser.Scene {
       const warning = cycle >= 1300 && cycle < 1800;
       trap.active = cycle >= 1800 && cycle < 2280;
       trap.damaged = cycle < 1800 ? false : trap.damaged;
-      trap.node.setAlpha(trap.active ? 0.78 : warning ? 0.46 : 0.2).setTint(trap.active ? 0xe17b70 : 0xc15c59);
+      if (trap.active && !trap.wasActive) playEnvironmentAnimation(trap.node, "trap-rise");
+      if (!trap.active && warning) trap.node.stop().setFrame(2);
+      if (!trap.active && !warning) trap.node.stop().setFrame(0);
+      trap.node.setAlpha(trap.active ? 1 : warning ? 0.68 : 0.34);
+      trap.wasActive = trap.active;
       if (trap.active && !trap.damaged && Phaser.Math.Distance.Between(trap.x, trap.y, this.player.x, this.player.y) <= 28) {
         trap.damaged = true;
         this.player.takeDamage(12);
@@ -386,12 +390,13 @@ export class RoomScene extends Phaser.Scene {
   }
 
   spawnEnemyProjectile(enemy, target, damage) {
-    spawnProjectile(this, enemy, target, { damage, color: 0x8fd1e8, strokeColor: 0xe2f5ff, speed: 220 });
+    spawnProjectile(this, enemy, target, { damage, speed: 220 });
   }
 
-  showHitEffect(x, y, tint) {
-    const effect = this.add.image(x, y, "hit-spark").setScale(0.45).setTint(tint).setDepth(30);
-    this.tweens.add({ targets: effect, scale: 1.1, alpha: 0, duration: 180, onComplete: () => effect.destroy() });
+  showHitEffect(x, y) {
+    const effect = this.add.sprite(x, y, "hit-spark", 0).setScale(1.6).setDepth(30);
+    effect.once("animationcomplete-hit-spark-burst", () => effect.destroy());
+    playEnvironmentAnimation(effect, "hit-spark-burst");
   }
 
   showDamageNumber(x, y, amount, color = "#f5f1da") {
@@ -400,7 +405,7 @@ export class RoomScene extends Phaser.Scene {
   }
 
   onEnemyDefeated(enemy) {
-    this.showHitEffect(enemy.x, enemy.y, enemy.definition.machine ? 0x8fd1e8 : 0xf6d36c);
+    this.showHitEffect(enemy.x, enemy.y);
   }
 
   onPlayerDamaged(amount) {

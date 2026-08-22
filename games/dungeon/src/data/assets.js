@@ -131,6 +131,33 @@ const environmentSpritesheets = [
     6,
     7,
   ),
+  sheet(
+    "trap",
+    `${FANTASY_ROOT}/2 Dungeon Tileset/3 Animated objects/Spikes.png`,
+    17,
+    17,
+    6,
+    12,
+    0,
+  ),
+  sheet(
+    "spawn-marker",
+    `${MACHINE_ROOT}/2 Location/3 Animated objects/Portal1_Start.png`,
+    96,
+    96,
+    6,
+    10,
+    0,
+  ),
+  sheet(
+    "hit-spark",
+    `${FANTASY_ROOT}/1 Characters/Other/D_Blood.png`,
+    32,
+    32,
+    4,
+    18,
+    0,
+  ),
 ];
 
 export const PROVIDED_ASSETS = {
@@ -138,6 +165,7 @@ export const PROVIDED_ASSETS = {
   images: {
     "provided-shadow": `${FANTASY_ROOT}/1 Characters/Other/Shadow.png`,
     "potion-icon": `${FANTASY_ROOT}/4 GUI/3 Icons/Icon_32.png`,
+    "enemy-projectile": `${MACHINE_ROOT}/1 Main Character/2 Weapons/Projectiles/10.png`,
     "room-floor-fantasy": `${FANTASY_ROOT}/2 Dungeon Tileset/1 Tiles/Tile_20.png`,
     "wall-fantasy": `${FANTASY_ROOT}/2 Dungeon Tileset/1 Tiles/Tile_16.png`,
     "reward-chest": `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects/Boxes/12.png`,
@@ -149,10 +177,13 @@ export const PROVIDED_ASSETS = {
     { key: "door-side-open", texture: "door-side", frameCount: 4, frameRate: 12, repeat: 0 },
     { key: "portal-idle", texture: "portal", frameCount: 4, frameRate: 6 },
     { key: "reward-console-idle", texture: "reward-console", frameCount: 6, frameRate: 7 },
+    { key: "trap-rise", texture: "trap", frameCount: 6, frameRate: 12, repeat: 0 },
+    { key: "spawn-marker-start", texture: "spawn-marker", frameCount: 6, frameRate: 10, repeat: 0 },
+    { key: "hit-spark-burst", texture: "hit-spark", frameCount: 4, frameRate: 18, repeat: 0 },
   ],
   credits: {
     sources: CRAFTPIX_SOURCES,
     licenseUrl: "https://craftpix.net/file-licenses/",
-    fallback: "Procedural nearest-neighbor pixel art is retained only as a missing-file safeguard.",
+    runtimePolicy: "Runtime game art is loaded only from the two supplied CraftPix packs; generated fallback textures are disabled.",
   },
 };

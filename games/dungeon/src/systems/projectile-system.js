@@ -16,8 +16,9 @@ export function spawnProjectile(scene, source, target, options = {}) {
     damage: options.damage ?? 12,
     radius: options.radius ?? 8,
     node: scene.add
-      .circle(source.x, source.y, options.radius ?? 8, options.color ?? 0x9aa2c1, 0.95)
-      .setStrokeStyle(2, options.strokeColor ?? 0xe2dfca, 0.95)
+      .image(source.x, source.y, options.texture ?? "enemy-projectile")
+      .setScale(options.scale ?? 1.7)
+      .setRotation(angle - Math.PI / 4)
       .setDepth(7),
   };
   scene.projectiles.push(projectile);

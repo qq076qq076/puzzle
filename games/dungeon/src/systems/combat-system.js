@@ -50,7 +50,7 @@ export function resolveMeleeAttack(player, enemies) {
       player.lifestealTriggers += 1;
     }
     player.scene.showDamageNumber?.(enemy.x, enemy.y - 22, result.damage, result.killed ? "#f6d36c" : "#f5f1da");
-    player.scene.showHitEffect?.(enemy.x, enemy.y, enemy.definition.machine ? 0x8fd1e8 : 0xf6d36c);
+    player.scene.showHitEffect?.(enemy.x, enemy.y);
     player.scene.audio?.beep("hit");
     hits += 1;
   });

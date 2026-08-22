@@ -12,7 +12,6 @@ import { getDungeonAudio } from "../systems/audio-system.js";
 import { createRng, makeRunSeed } from "../systems/rng.js";
 import { playEnvironmentAnimation } from "../systems/actor-animations.js";
 import { closeSideDoor, constrainActorToClosedDoor, createSideDoor } from "../systems/door-system.js";
-import { createEnvironmentTextures } from "../systems/texture-factory.js";
 import { applyBuff } from "../systems/buff-system.js";
 import { TouchControls } from "../systems/touch-controls.js";
 import { disableMouseInput, isTouchPointer, makeTouchOnlyButton } from "../ui/input.js";
@@ -47,7 +46,6 @@ export class BossScene extends Phaser.Scene {
   create() {
     disableMouseInput(this);
     this.audio = getDungeonAudio();
-    createEnvironmentTextures(this);
     this.createArena();
     this.player = new Player(this, ENTRY_SPAWN_POINT[0], ENTRY_SPAWN_POINT[1]);
     this.enemyGroup = this.physics.add.group({ allowGravity: false });
@@ -96,8 +94,7 @@ export class BossScene extends Phaser.Scene {
   }
 
   createArena() {
-    this.add.tileSprite(0, 0, GAME_WIDTH, GAME_HEIGHT, "room-floor-machine").setOrigin(0).setDepth(-10);
-    this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x111526, 0.24).setOrigin(0).setDepth(-9);
+    this.add.tileSprite(0, 0, GAME_WIDTH, GAME_HEIGHT, "room-floor-machine").setOrigin(0).setTint(0xb9c8e4).setDepth(-10);
     this.walls = this.physics.add.staticGroup();
     this.addWall(480, 76, 848, 32);
     this.addWall(480, 500, 848, 32);
@@ -295,21 +292,25 @@ export class BossScene extends Phaser.Scene {
     const distance = options.ring ? 150 : 80 + this.hazardRng.next() * 150;
     const x = Phaser.Math.Clamp(480 + Math.cos(angle) * distance, 105, GAME_WIDTH - 105);
     const y = Phaser.Math.Clamp(290 + Math.sin(angle) * distance, 130, GAME_HEIGHT - 95);
-    const node = this.add.circle(x, y, options.ring ? 34 : 30, 0xb94d45, 0.16).setStrokeStyle(2, 0xe17b70, 1).setDepth(3);
-    this.hazards.push({ x, y, warningMs: 700, activeMs: 900, node, damaged: false });
+    const node = this.add.sprite(x, y, "trap", 0).setScale(options.ring ? 3 : 2.7).setAlpha(0.34).setDepth(3);
+    this.hazards.push({ x, y, warningMs: 700, activeMs: 900, node, activated: false, damaged: false });
   }
 
   updateHazards(delta) {
     this.hazards = this.hazards.filter((hazard) => {
       if (hazard.warningMs > 0) {
         hazard.warningMs -= delta;
-        hazard.node.setAlpha(0.16 + (1 - Math.max(0, hazard.warningMs) / 700) * 0.34);
+        const progress = 1 - Math.max(0, hazard.warningMs) / 700;
+        hazard.node.setFrame(Math.min(2, Math.floor(progress * 3))).setAlpha(0.34 + progress * 0.34);
         return true;
       }
-      if (!hazard.damaged) {
+      if (!hazard.activated) {
+        hazard.activated = true;
+        playEnvironmentAnimation(hazard.node, "trap-rise");
+      }
+      if (!hazard.damaged && Phaser.Math.Distance.Between(this.player.x, this.player.y, hazard.x, hazard.y) <= 38) {
         hazard.damaged = true;
-        if (Phaser.Math.Distance.Between(this.player.x, this.player.y, hazard.x, hazard.y) <= 38) this.player.takeDamage(16);
-        hazard.node.setFillStyle(0xe17b70, 0.5);
+        this.player.takeDamage(16);
       }
       hazard.activeMs -= delta;
       if (hazard.activeMs <= 0) {
@@ -321,7 +322,7 @@ export class BossScene extends Phaser.Scene {
   }
 
   spawnEnemyProjectile(enemy, target, damage) {
-    spawnProjectile(this, enemy, target, { damage, color: 0x8fd1e8, strokeColor: 0xe2f5ff, speed: 220 });
+    spawnProjectile(this, enemy, target, { damage, speed: 220 });
   }
 
   onBossPhaseChange(phase) {
@@ -339,9 +340,10 @@ export class BossScene extends Phaser.Scene {
     this.tweens.add({ targets: text, alpha: 0, y: 200, duration: 1000, onComplete: () => text.destroy() });
   }
 
-  showHitEffect(x, y, tint) {
-    const effect = this.add.image(x, y, "hit-spark").setScale(0.5).setTint(tint).setDepth(30);
-    this.tweens.add({ targets: effect, scale: 1.2, alpha: 0, duration: 180, onComplete: () => effect.destroy() });
+  showHitEffect(x, y) {
+    const effect = this.add.sprite(x, y, "hit-spark", 0).setScale(1.6).setDepth(30);
+    effect.once("animationcomplete-hit-spark-burst", () => effect.destroy());
+    playEnvironmentAnimation(effect, "hit-spark-burst");
   }
 
   showDamageNumber(x, y, amount, color = "#f5f1da") {
@@ -350,7 +352,7 @@ export class BossScene extends Phaser.Scene {
   }
 
   onEnemyDefeated(enemy) {
-    this.showHitEffect(enemy.x, enemy.y, 0x8fd1e8);
+    this.showHitEffect(enemy.x, enemy.y);
   }
 
   onBossDefeated() {

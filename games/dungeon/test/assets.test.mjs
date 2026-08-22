@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import test from "node:test";
@@ -8,6 +8,7 @@ import { ACTOR_ASSETS, PROVIDED_ASSETS } from "../src/data/assets.js";
 import { getActorOrientation } from "../src/systems/actor-animations.js";
 
 const assetsRoot = fileURLToPath(new URL("../assets/", import.meta.url));
+const sourceRoot = fileURLToPath(new URL("../src/", import.meta.url));
 
 function resolveAsset(relativePath) {
   assert.match(relativePath, /^\.\//, `asset path must be relative to assets/: ${relativePath}`);
@@ -17,6 +18,17 @@ function resolveAsset(relativePath) {
 function readPngDimensions(buffer) {
   assert.equal(buffer.subarray(1, 4).toString("ascii"), "PNG", "asset must be a PNG file");
   return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
+}
+
+async function readJavaScriptTree(directory) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const values = await Promise.all(entries.map(async (entry) => {
+    const entryPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) return readJavaScriptTree(entryPath);
+    if (!entry.name.endsWith(".js")) return [];
+    return [await readFile(entryPath, "utf8")];
+  }));
+  return values.flat();
 }
 
 test("all runtime CraftPix assets exist in the checked-in source packs", async () => {
@@ -41,6 +53,18 @@ test("spritesheet dimensions match the animation manifest", async () => {
     assert.equal(width, definition.frameWidth * definition.frameCount, `${definition.key} frame count`);
     assert.equal(height, definition.frameHeight, `${definition.key} frame height`);
   }));
+});
+
+test("world effects are mapped to supplied CraftPix files without generated fallbacks", async () => {
+  const spritesheets = new Map(PROVIDED_ASSETS.spritesheets.map((definition) => [definition.key, definition.path]));
+  assert.match(spritesheets.get("trap"), /Spikes\.png$/);
+  assert.match(spritesheets.get("spawn-marker"), /Portal1_Start\.png$/);
+  assert.match(spritesheets.get("hit-spark"), /D_Blood\.png$/);
+  assert.match(PROVIDED_ASSETS.images["enemy-projectile"], /Projectiles\/10\.png$/);
+  assert.match(PROVIDED_ASSETS.credits.runtimePolicy, /generated fallback textures are disabled/i);
+
+  const source = (await readJavaScriptTree(sourceRoot)).join("\n");
+  assert.doesNotMatch(source, /generateTexture|slash-effect|texture-factory/);
 });
 
 test("player and fantasy enemies provide directional movement and attacks", () => {

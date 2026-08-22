@@ -1,7 +1,6 @@
 import Phaser from "phaser";
 import { PROVIDED_ASSETS } from "../data/assets.js";
 import { registerCraftPixAnimations } from "../systems/actor-animations.js";
-import { createEnvironmentTextures } from "../systems/texture-factory.js";
 
 export class PreloadScene extends Phaser.Scene {
   constructor() {
@@ -9,6 +8,7 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   preload() {
+    this.assetLoadFailed = false;
     this.cameras.main.setBackgroundColor("#090b13");
     this.add
       .text(480, 218, "LOADING DUNGEON", {
@@ -38,12 +38,16 @@ export class PreloadScene extends Phaser.Scene {
       this.progressText.setText(`讀取 CraftPix 素材… ${Math.round(value * 100)}%`);
     });
     this.load.on("loaderror", (file) => {
-      this.progressText.setText(`CraftPix 檔案未找到：${file.key}，使用像素備援圖形`);
+      this.assetLoadFailed = true;
+      this.progressText.setColor("#e17b70").setText(`CraftPix 檔案未找到：${file.key}`);
     });
   }
 
   create() {
-    createEnvironmentTextures(this);
+    if (this.assetLoadFailed) {
+      this.progressText.setText("素材讀取失敗，請確認兩包 CraftPix 檔案完整");
+      return;
+    }
     registerCraftPixAnimations(this);
     this.time.delayedCall(180, () => this.scene.start("Menu"));
   }
