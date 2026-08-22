@@ -4,8 +4,13 @@ function setBlockerEnabled(door, enabled) {
   if (!door?.blocker) return;
   if (!enabled) {
     door.blocker.disableBody(true, true);
+    // Static groups keep a spatial index for collisions. Removing an open
+    // door from the group guarantees its stale static body cannot seal the
+    // visual doorway until the next physics-tree refresh.
+    door.walls?.remove(door.blocker, false, false);
     return;
   }
+  if (door.walls && !door.walls.contains(door.blocker)) door.walls.add(door.blocker);
   door.blocker.enableBody(false, door.x, door.y, true, false);
   door.blocker.setVisible(false).setDisplaySize(32, 88).refreshBody();
 }
@@ -20,7 +25,7 @@ export function createSideDoor(scene, options) {
   visual.setFlipX(side === "left");
   if (machine) visual.setTint(0xb5e4ee);
 
-  const door = { x, y, side, blocker, visual, isOpen: initiallyOpen, isAnimating: false };
+  const door = { x, y, side, walls, blocker, visual, isOpen: initiallyOpen, isAnimating: false };
   setBlockerEnabled(door, !initiallyOpen);
   return door;
 }

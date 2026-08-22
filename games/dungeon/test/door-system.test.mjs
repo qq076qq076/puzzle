@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { constrainActorToClosedDoor } from "../src/systems/door-system.js";
+import { closeSideDoor, constrainActorToClosedDoor, openSideDoor } from "../src/systems/door-system.js";
 
 function makeActor(x) {
   const actor = {
@@ -42,4 +42,59 @@ test("open doors do not constrain actors crossing the doorway", () => {
   const actor = makeActor(32);
   assert.equal(constrainActorToClosedDoor(actor, makeDoor("left", true)), false);
   assert.equal(actor.x, 32);
+});
+
+function makeAnimatedDoor() {
+  const group = {
+    children: new Set(),
+    add(blocker) {
+      this.children.add(blocker);
+    },
+    remove(blocker) {
+      this.children.delete(blocker);
+    },
+    contains(blocker) {
+      return this.children.has(blocker);
+    },
+  };
+  const blocker = {
+    body: { halfWidth: 16 },
+    disableBody() {
+      this.body.enabled = false;
+      return this;
+    },
+    enableBody() {
+      this.body.enabled = true;
+      return this;
+    },
+    setVisible() { return this; },
+    setDisplaySize() { return this; },
+    refreshBody() { return this; },
+  };
+  const visual = {
+    once(_event, callback) {
+      this.callback = callback;
+      return this;
+    },
+    setVisible() { return this; },
+    setAlpha() { return this; },
+    setFrame() { return this; },
+    anims: {
+      play() {},
+      playReverse() {},
+    },
+  };
+  group.add(blocker);
+  return { x: 920, y: 290, side: "right", walls: group, blocker, visual, isOpen: false, isAnimating: false };
+}
+
+test("opening removes the static blocker and closing restores it", () => {
+  const door = makeAnimatedDoor();
+  assert.equal(openSideDoor(door), true);
+  assert.equal(door.blocker.body.enabled, false);
+  assert.equal(door.walls.contains(door.blocker), false);
+
+  assert.equal(closeSideDoor(door), true);
+  assert.equal(door.walls.contains(door.blocker), true);
+  assert.equal(door.blocker.body.enabled, true);
 });
