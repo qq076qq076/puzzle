@@ -136,6 +136,7 @@ const environmentSpritesheets = [
 export const PROVIDED_ASSETS = {
   localFilesAvailable: true,
   images: {
+    "provided-shadow": `${FANTASY_ROOT}/1 Characters/Other/Shadow.png`,
     "room-floor-fantasy": `${FANTASY_ROOT}/2 Dungeon Tileset/1 Tiles/Tile_20.png`,
     "wall-fantasy": `${FANTASY_ROOT}/2 Dungeon Tileset/1 Tiles/Tile_16.png`,
     "reward-chest": `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects/Boxes/12.png`,

@@ -21,6 +21,7 @@ function readPngDimensions(buffer) {
 
 test("all runtime CraftPix assets exist in the checked-in source packs", async () => {
   assert.equal(PROVIDED_ASSETS.localFilesAvailable, true);
+  assert.match(PROVIDED_ASSETS.images["provided-shadow"], /Shadow\.png$/);
   const files = [
     ...Object.values(PROVIDED_ASSETS.images),
     ...PROVIDED_ASSETS.spritesheets.map(({ path: assetPath }) => assetPath),

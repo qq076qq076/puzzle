@@ -4,7 +4,7 @@ export function tickContactDamage(attacker, delta) {
 
 export function tryContactDamage(attacker, player) {
   if (!attacker?.active || !player?.active || player.health <= 0) return false;
-  if (attacker.state === "dead" || attacker.spawnProtectionRemaining > 0 || attacker.contactDamageCooldownRemaining > 0) return false;
+  if (["attack", "charge", "dead"].includes(attacker.state) || attacker.spawnProtectionRemaining > 0 || attacker.contactDamageCooldownRemaining > 0) return false;
 
   const definition = attacker.definition || {};
   const damage = definition.contactDamage ?? Math.max(1, Math.round((definition.damage || 1) * 0.5));

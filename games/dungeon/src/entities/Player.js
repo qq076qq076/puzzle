@@ -54,7 +54,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.facing = new Phaser.Math.Vector2(1, 0);
     this.attackFacing = this.facing.clone();
     this.slash = scene.add.image(0, 0, "slash-effect").setOrigin(0.5).setDepth(9).setVisible(false);
-    this.shadow = scene.add.ellipse(x, y + 12, 22, 8, 0x080a10, 0.38).setDepth(5);
+    this.shadow = scene.add.image(x, y + 10, "provided-shadow").setScale(2).setAlpha(0.62).setDepth(5);
     playActorAnimation(this, "player", "idle", this.facing);
   }
 
@@ -167,7 +167,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
     this.slash.setVisible(this.isAttacking()).setPosition(this.x + visualFacing.x * 28, this.y + visualFacing.y * 28);
     this.slash.setRotation(Math.atan2(visualFacing.y, visualFacing.x));
-    this.shadow.setPosition(this.x, this.y + 18).setVisible(this.active);
+    this.shadow.setPosition(this.x, this.y + 10).setVisible(this.active);
     this.setDepth(10 + this.y / 10000);
   }
 

@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { playActorAnimation } from "../systems/actor-animations.js";
 import { tickContactDamage, tryContactDamage } from "../systems/contact-damage.js";
+import { createEnemyDashMotion } from "../systems/enemy-attack.js";
 import { startKnockback, updateKnockback } from "../systems/knockback.js";
 
 export class Enemy extends Phaser.Physics.Arcade.Sprite {
@@ -19,6 +20,12 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.contactDamageCooldownRemaining = 0;
     this.attackWindupRemaining = 0;
     this.recoverRemaining = 0;
+    this.dashRemaining = 0;
+    this.dashVelocityX = 0;
+    this.dashVelocityY = 0;
+    this.dashHitRange = 0;
+    this.dashKnockbackDistance = 18;
+    this.dashHit = false;
     this.hitFlashRemaining = 0;
     this.knockbackRemaining = 0;
     this.knockbackVelocityX = 0;
@@ -34,8 +41,12 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.body.setCircle(definition.bodyRadius ?? 14);
     this.body.setOffset((this.width - this.body.width) / 2, (this.height - this.body.height) / 2);
     this.body.setDrag(240, 240);
-    this.body.setMaxVelocity(definition.speed + 100, definition.speed + 100);
-    this.shadow = scene.add.ellipse(x, y + 12, 20, 7, 0x080a10, 0.32).setDepth(5);
+    const maxVelocity = Math.max(definition.speed + 100, definition.dashSpeed || 0);
+    this.body.setMaxVelocity(maxVelocity, maxVelocity);
+    this.shadow = scene.add.image(x, y + (definition.shadowOffsetY ?? 10), "provided-shadow")
+      .setScale(definition.shadowScale ?? 1.9)
+      .setAlpha(0.58)
+      .setDepth(5);
     playActorAnimation(this, this.assetId, "idle", this.facing);
   }
 
@@ -66,6 +77,33 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.state = "alert";
       this.setVelocity(0, 0);
       this.setAlpha(this.alertRemaining % 180 < 90 ? 0.7 : 1);
+      this.updateVisuals();
+      return;
+    }
+    if (this.dashRemaining > 0) {
+      const dx = player.x - this.x;
+      const dy = player.y - this.y;
+      const distance = Math.hypot(dx, dy) || 1;
+      this.facing.set(dx / distance, dy / distance);
+      this.dashRemaining = Math.max(0, this.dashRemaining - delta);
+      this.state = "attack";
+      this.setVelocity(this.dashVelocityX, this.dashVelocityY);
+      if (!this.dashHit && distance <= this.dashHitRange) {
+        this.dashHit = true;
+        player.takeDamage(this.definition.damage, {
+          knockback: {
+            x: dx,
+            y: dy,
+            distance: this.dashKnockbackDistance,
+            durationMs: 110,
+          },
+        });
+      }
+      if (this.dashRemaining === 0) {
+        this.setVelocity(0, 0);
+        this.state = "recover";
+        this.recoverRemaining = this.definition.recoverMs;
+      }
       this.updateVisuals();
       return;
     }
@@ -119,20 +157,28 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   performAttack(player) {
     const distance = Phaser.Math.Distance.Between(this.x, this.y, player.x, player.y);
     const kind = this.definition.attackKind;
+    const dash = createEnemyDashMotion(this.definition, player.x - this.x, player.y - this.y);
+    if (dash) {
+      this.dashRemaining = dash.durationMs;
+      this.dashVelocityX = dash.velocityX;
+      this.dashVelocityY = dash.velocityY;
+      this.dashHitRange = dash.hitRange;
+      this.dashKnockbackDistance = dash.knockbackDistance;
+      this.dashHit = false;
+      this.state = "attack";
+      this.setVelocity(dash.velocityX, dash.velocityY);
+      playActorAnimation(this, this.assetId, "attack", this.facing, { restart: true });
+      return;
+    }
     if (kind === "ranged") {
       this.scene.spawnEnemyProjectile?.(this, player, this.definition.projectileDamage);
     } else {
-      if (kind === "dash" || kind === "pounce") {
-        const direction = new Phaser.Math.Vector2(player.x - this.x, player.y - this.y).normalize();
-        const speed = kind === "pounce" ? 300 : 420;
-        this.setVelocity(direction.x * speed, direction.y * speed);
-      }
-      if (distance <= this.definition.attackRange + (kind === "pounce" ? 44 : 30)) {
+      if (distance <= this.definition.attackRange + 30) {
         player.takeDamage(this.definition.damage, {
           knockback: {
             x: player.x - this.x,
             y: player.y - this.y,
-            distance: kind === "pounce" || kind === "dash" ? 18 : 14,
+            distance: 14,
             durationMs: 110,
           },
         });
@@ -151,7 +197,11 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     const damage = Math.max(1, Math.round(amount * multiplier - (this.definition.armor || 0)));
     this.health = Math.max(0, this.health - damage);
     this.hitFlashRemaining = 110;
-    if (context.knockback) startKnockback(this, context.knockback, { distance: 18, durationMs: 110 });
+    if (context.knockback) {
+      this.dashRemaining = 0;
+      this.recoverRemaining = Math.max(this.recoverRemaining, 160);
+      startKnockback(this, context.knockback, { distance: 18, durationMs: 110 });
+    }
     if (this.health <= 0) {
       this.state = "dead";
       this.setActive(false);
@@ -168,12 +218,15 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (this.definition.stealth && this.state === "chase") this.setAlpha(0.62);
     if (this.hitFlashRemaining > 0) this.setAlpha(1);
     if (this.hitFlashRemaining <= 0 && this.spawnProtectionRemaining <= 0 && this.alertRemaining <= 0 && !(this.definition.stealth && this.state === "chase")) this.setAlpha(1);
-    if (this.state !== "telegraph") {
+    if (this.state === "attack") {
+      this.visualState = "attack";
+      playActorAnimation(this, this.assetId, "attack", this.facing);
+    } else if (this.state !== "telegraph") {
       const moving = this.body.velocity.lengthSq() > 16;
       this.visualState = moving ? "walk" : "idle";
       playActorAnimation(this, this.assetId, this.visualState, this.facing);
     }
-    this.shadow?.setPosition(this.x, this.y + (this.definition.shadowOffsetY ?? 16)).setVisible(this.active);
+    this.shadow?.setPosition(this.x, this.y + (this.definition.shadowOffsetY ?? 10)).setVisible(this.active);
     this.setDepth(8 + this.y / 10000);
   }
 

@@ -44,7 +44,7 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     this.body.setOffset((this.width - this.body.width) / 2, (this.height - this.body.height) / 2 + 4);
     this.body.setDrag(160, 160);
     this.body.setMaxVelocity(520, 520);
-    this.shadow = scene.add.ellipse(x, y + 28, 56, 15, 0x080a10, 0.46).setDepth(5);
+    this.shadow = scene.add.image(x, y + 22, "provided-shadow").setScale(4).setAlpha(0.64).setDepth(5);
     playActorAnimation(this, "boss", "idle", this.facing);
   }
 
@@ -161,6 +161,7 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
       this.setVelocity(direction.x * 430, direction.y * 430);
       this.chargeRemaining = this.phase === 3 ? 380 : 300;
       this.chargeHit = false;
+      this.state = "charge";
       return;
     }
     if (this.attackKind === "summon") {
@@ -209,7 +210,7 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     this.setAlpha(this.hitFlashRemaining > 0 ? 0.58 : 1);
     const moving = this.chargeRemaining > 0 || this.body.velocity.lengthSq() > 16;
     playActorAnimation(this, "boss", moving ? "walk" : "idle", this.facing);
-    this.shadow?.setPosition(this.x, this.y + 38).setVisible(this.active);
+    this.shadow?.setPosition(this.x, this.y + 22).setVisible(this.active);
     this.setDepth(12 + this.y / 10000);
   }
 

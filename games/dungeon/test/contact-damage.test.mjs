@@ -52,6 +52,14 @@ test("contact damage is disabled during spawn protection and player invulnerabil
   assert.equal(invulnerablePlayer.attacker.contactDamageCooldownRemaining, 0);
 });
 
+test("dash and boss charge attacks do not also deal contact damage", () => {
+  for (const state of ["attack", "charge"]) {
+    const { attacker, player, received } = makeCombatants({ attacker: { state } });
+    assert.equal(tryContactDamage(attacker, player), false);
+    assert.deepEqual(received, []);
+  }
+});
+
 test("contact cooldown ticks down without becoming negative", () => {
   const { attacker } = makeCombatants({ attacker: { contactDamageCooldownRemaining: 500 } });
   tickContactDamage(attacker, 180);
