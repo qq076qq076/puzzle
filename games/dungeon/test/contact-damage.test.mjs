@@ -7,6 +7,8 @@ function makeCombatants(overrides = {}) {
   const received = [];
   const attacker = {
     active: true,
+    x: 20,
+    y: 30,
     state: "chase",
     spawnProtectionRemaining: 0,
     contactDamageCooldownRemaining: 0,
@@ -16,9 +18,11 @@ function makeCombatants(overrides = {}) {
   };
   const player = {
     active: true,
+    x: 44,
+    y: 18,
     health: 100,
-    takeDamage: (amount) => {
-      received.push(amount);
+    takeDamage: (amount, context) => {
+      received.push({ amount, context });
       return true;
     },
     ...overrides.player,
@@ -29,7 +33,12 @@ function makeCombatants(overrides = {}) {
 test("enemy contact deals configured damage and starts its own cooldown", () => {
   const { attacker, player, received } = makeCombatants();
   assert.equal(tryContactDamage(attacker, player), true);
-  assert.deepEqual(received, [6]);
+  assert.deepEqual(received, [{
+    amount: 6,
+    context: {
+      knockback: { x: 24, y: -12, distance: 14, durationMs: 100 },
+    },
+  }]);
   assert.equal(attacker.contactDamageCooldownRemaining, 800);
   assert.equal(tryContactDamage(attacker, player), false);
 });

@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { playActorAnimation } from "../systems/actor-animations.js";
+import { startKnockback, updateKnockback } from "../systems/knockback.js";
 
 const EPSILON = 0.001;
 
@@ -32,6 +33,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.dodgeCooldownRemaining = 0;
     this.dodgeRemaining = 0;
     this.invulnerableRemaining = 0;
+    this.knockbackRemaining = 0;
+    this.knockbackVelocityX = 0;
+    this.knockbackVelocityY = 0;
     this.damageReduction = 0;
     this.knockbackMultiplier = 1;
     this.bleedDamage = 0;
@@ -65,6 +69,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (this.dodgeRemaining > 0) {
       this.dodgeRemaining = Math.max(0, this.dodgeRemaining - dt);
       if (this.dodgeRemaining === 0) this.setVelocity(0, 0);
+      this.updateVisuals();
+      return;
+    }
+
+    if (updateKnockback(this, dt)) {
       this.updateVisuals();
       return;
     }
@@ -114,11 +123,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     return true;
   }
 
-  takeDamage(amount) {
+  takeDamage(amount, context = {}) {
     if (this.invulnerableRemaining > 0 || this.health <= 0) return false;
     const dealt = Math.max(1, Math.round(amount - this.damageReduction));
     this.health = Math.max(0, this.health - dealt);
     this.invulnerableRemaining = 600;
+    if (context.knockback) startKnockback(this, context.knockback, { distance: 14, durationMs: 110 });
+    this.attackRemaining = 0;
+    this.attackElapsed = 0;
+    this.attackHitWindow = false;
+    this.attackHitResolved = true;
     this.scene.runStats && (this.scene.runStats.damageTaken += dealt);
     this.scene.onPlayerDamaged?.(dealt);
     this.setTint(0xffffff);

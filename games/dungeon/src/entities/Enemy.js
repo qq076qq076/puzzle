@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { playActorAnimation } from "../systems/actor-animations.js";
 import { tickContactDamage, tryContactDamage } from "../systems/contact-damage.js";
+import { startKnockback, updateKnockback } from "../systems/knockback.js";
 
 export class Enemy extends Phaser.Physics.Arcade.Sprite {
   constructor(scene, x, y, definition, sequence = 0) {
@@ -19,6 +20,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.attackWindupRemaining = 0;
     this.recoverRemaining = 0;
     this.hitFlashRemaining = 0;
+    this.knockbackRemaining = 0;
+    this.knockbackVelocityX = 0;
+    this.knockbackVelocityY = 0;
     this.bleedRemaining = 0;
     this.machineMarkedRemaining = 0;
     this.facing = new Phaser.Math.Vector2(0, 1);
@@ -44,6 +48,12 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.hitFlashRemaining = Math.max(0, this.hitFlashRemaining - delta);
     this.bleedRemaining = Math.max(0, this.bleedRemaining - delta);
     this.machineMarkedRemaining = Math.max(0, this.machineMarkedRemaining - delta);
+
+    if (updateKnockback(this, delta)) {
+      this.state = "hurt";
+      this.updateVisuals();
+      return;
+    }
 
     if (this.spawnProtectionRemaining > 0) {
       this.state = "idle";
@@ -117,7 +127,16 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
         const speed = kind === "pounce" ? 300 : 420;
         this.setVelocity(direction.x * speed, direction.y * speed);
       }
-      if (distance <= this.definition.attackRange + (kind === "pounce" ? 44 : 30)) player.takeDamage(this.definition.damage);
+      if (distance <= this.definition.attackRange + (kind === "pounce" ? 44 : 30)) {
+        player.takeDamage(this.definition.damage, {
+          knockback: {
+            x: player.x - this.x,
+            y: player.y - this.y,
+            distance: kind === "pounce" || kind === "dash" ? 18 : 14,
+            durationMs: 110,
+          },
+        });
+      }
     }
     this.state = "recover";
     this.recoverRemaining = this.definition.recoverMs;
@@ -132,10 +151,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     const damage = Math.max(1, Math.round(amount * multiplier - (this.definition.armor || 0)));
     this.health = Math.max(0, this.health - damage);
     this.hitFlashRemaining = 110;
-    if (context.knockback) {
-      const direction = new Phaser.Math.Vector2(context.knockback.x, context.knockback.y).normalize();
-      this.setVelocity(direction.x * (context.knockback.distance || 90), direction.y * (context.knockback.distance || 90));
-    }
+    if (context.knockback) startKnockback(this, context.knockback, { distance: 18, durationMs: 110 });
     if (this.health <= 0) {
       this.state = "dead";
       this.setActive(false);

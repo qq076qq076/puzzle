@@ -34,7 +34,9 @@ export function updateProjectiles(scene, player, delta) {
     const hit = Phaser.Math.Distance.Between(projectile.x, projectile.y, player.x, player.y) <= projectile.radius + 13;
     const outside = projectile.x < 20 || projectile.x > 940 || projectile.y < 80 || projectile.y > 520;
     if (hit) {
-      player.takeDamage(projectile.damage);
+      player.takeDamage(projectile.damage, {
+        knockback: { x: projectile.vx, y: projectile.vy, distance: 12, durationMs: 90 },
+      });
       projectile.node.destroy();
       return false;
     }

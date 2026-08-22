@@ -8,7 +8,14 @@ export function tryContactDamage(attacker, player) {
 
   const definition = attacker.definition || {};
   const damage = definition.contactDamage ?? Math.max(1, Math.round((definition.damage || 1) * 0.5));
-  if (!player.takeDamage(damage)) return false;
+  if (!player.takeDamage(damage, {
+    knockback: {
+      x: (player.x || 0) - (attacker.x || 0),
+      y: (player.y || 0) - (attacker.y || 0),
+      distance: definition.contactKnockbackDistance ?? 14,
+      durationMs: 100,
+    },
+  })) return false;
 
   attacker.contactDamageCooldownRemaining = definition.contactCooldownMs ?? 850;
   attacker.scene?.showStatus?.(`${definition.name || "敵人"} 接觸命中`);

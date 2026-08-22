@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { playActorAnimation } from "../systems/actor-animations.js";
 import { tickContactDamage, tryContactDamage } from "../systems/contact-damage.js";
+import { startKnockback, updateKnockback } from "../systems/knockback.js";
 
 export class Boss extends Phaser.Physics.Arcade.Sprite {
   constructor(scene, x, y) {
@@ -27,6 +28,9 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     this.recoverRemaining = 0;
     this.phaseTransitionRemaining = 0;
     this.staggerRemaining = 0;
+    this.knockbackRemaining = 0;
+    this.knockbackVelocityX = 0;
+    this.knockbackVelocityY = 0;
     this.sustainedDamage = 0;
     this.patternIndex = 0;
     this.comboStep = 0;
@@ -60,12 +64,19 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
       this.updateVisuals();
       return;
     }
+    if (updateKnockback(this, delta)) {
+      this.state = "hurt";
+      this.updateVisuals();
+      return;
+    }
     if (this.chargeRemaining > 0) {
       this.chargeRemaining = Math.max(0, this.chargeRemaining - delta);
       this.state = "charge";
       if (!this.chargeHit && Phaser.Math.Distance.Between(this.x, this.y, player.x, player.y) <= 48) {
         this.chargeHit = true;
-        player.takeDamage(28 + this.phase * 4);
+        player.takeDamage(28 + this.phase * 4, {
+          knockback: { x: player.x - this.x, y: player.y - this.y, distance: 20, durationMs: 110 },
+        });
       }
       if (this.chargeRemaining === 0) {
         this.setVelocity(0, 0);
@@ -129,7 +140,11 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
   performAttack(player) {
     if (this.attackKind === "combo") {
       this.comboStep += 1;
-      if (Phaser.Math.Distance.Between(this.x, this.y, player.x, player.y) <= this.definition.attackRange + 20) player.takeDamage(20 + this.phase * 3);
+      if (Phaser.Math.Distance.Between(this.x, this.y, player.x, player.y) <= this.definition.attackRange + 20) {
+        player.takeDamage(20 + this.phase * 3, {
+          knockback: { x: player.x - this.x, y: player.y - this.y, distance: 16, durationMs: 110 },
+        });
+      }
       if (this.comboStep < 3) {
         this.attackWindupRemaining = this.phase === 3 ? 190 : 240;
         this.scene.showBossTelegraph?.(this.x, this.y, "combo", this.attackWindupRemaining);
@@ -175,9 +190,8 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
       this.sustainedDamage = 0;
       this.staggerRemaining = 360;
     }
-    if (context.knockback && this.staggerRemaining <= 0) {
-      const direction = new Phaser.Math.Vector2(context.knockback.x, context.knockback.y).normalize();
-      this.setVelocity(direction.x * 45, direction.y * 45);
+    if (context.knockback && this.staggerRemaining <= 0 && this.chargeRemaining <= 0) {
+      startKnockback(this, context.knockback, { distance: 8, durationMs: 90 });
     }
     if (this.health <= 0) {
       this.state = "dead";

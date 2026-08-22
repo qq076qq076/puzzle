@@ -36,7 +36,8 @@ export function resolveMeleeAttack(player, enemies) {
       knockback: {
         x: direction.x,
         y: direction.y,
-        distance: 90 * (player.knockbackMultiplier || 1),
+        distance: 18 * (player.knockbackMultiplier || 1),
+        durationMs: 110,
       },
     });
     if (!result.hit) return;
