@@ -4,12 +4,12 @@ import { MONSTERS } from "../data/monsters.js";
 import { Enemy } from "../entities/Enemy.js";
 import { Player } from "../entities/Player.js";
 import { applyReward, getRewardCategoryLabel, getRewardChoices, getRewardColor, getRewardDefinition } from "../systems/reward-system.js";
-import { applyBuff } from "../systems/buff-system.js";
 import { clearProjectiles, spawnProjectile, updateProjectiles } from "../systems/projectile-system.js";
 import { getDungeonAudio } from "../systems/audio-system.js";
 import { cloneRunStats, createRunStats, getRunDurationSeconds } from "../systems/run-state.js";
+import { applyPlayerBuild, capturePlayerBuild, normalizeRunBuild } from "../systems/player-build.js";
 import { makeRunSeed } from "../systems/rng.js";
-import { generateFloor } from "../systems/room-generator.js";
+import { generateFloorMap } from "../systems/room-generator.js";
 import { hasCrossedExit } from "../systems/room-transition.js";
 import { ROOM_CLEAR_REWARD_DELAY_MS, tickRoomClearDelay } from "../systems/room-clear-delay.js";
 import { resolveMeleeAttack, updateBleed } from "../systems/combat-system.js";
@@ -18,6 +18,7 @@ import { closeSideDoor, constrainActorToClosedDoor, createSideDoor, openSideDoor
 import { TouchControls } from "../systems/touch-controls.js";
 import { disableMouseInput, makeTouchOnlyButton } from "../ui/input.js";
 import { createCombatHud, createPauseOverlay, toggleBuffPanel, updateCombatHud } from "../ui/hud.js";
+import { bindPauseKeyboard, createPauseKeyboardHandlers, unbindPauseKeyboard } from "../ui/pause-keyboard.js";
 
 export class RoomScene extends Phaser.Scene {
   constructor() {
@@ -26,15 +27,10 @@ export class RoomScene extends Phaser.Scene {
 
   init(data = {}) {
     this.runSeed = data.runSeed ?? makeRunSeed();
-    this.floor = generateFloor(this.runSeed);
+    this.floorMap = generateFloorMap(this.runSeed);
+    this.floor = this.floorMap.rooms;
     this.roomIndex = data.roomIndex ?? 0;
-    this.build = {
-      buffs: data.build?.buffs ?? [],
-      health: data.build?.health ?? 100,
-      gold: data.build?.gold ?? 0,
-      consumables: data.build?.consumables ?? 0,
-      trophy: Boolean(data.build?.trophy),
-    };
+    this.build = normalizeRunBuild(data.build);
     this.runStats = cloneRunStats(data.runStats || createRunStats(this.runSeed));
     this.roomStatus = "entering";
     this.currentWave = -1;
@@ -85,23 +81,8 @@ export class RoomScene extends Phaser.Scene {
       potion: () => {
         if (!this.paused && ["combat", "transition"].includes(this.roomStatus)) this.keyboardActions.potion = true;
       },
-      pausePrevious: () => {
-        if (!this.paused) return;
-        this.pauseOverlay?.moveSelection(-1);
-        this.audio.beep("ui");
-      },
-      pauseNext: () => {
-        if (!this.paused) return;
-        this.pauseOverlay?.moveSelection(1);
-        this.audio.beep("ui");
-      },
-      pauseConfirm: () => {
-        if (!this.paused) return;
-        this.keyboardActions.attack = false;
-        this.keyboard.SPACE.reset();
-        this.pauseOverlay?.activateSelection();
-      },
     };
+    this.pauseKeyHandlers = createPauseKeyboardHandlers(this);
     this.input.keyboard.on("keydown-ESC", this.keyHandlers.pause);
     this.input.keyboard.on("keydown-P", this.keyHandlers.pause);
     this.input.keyboard.on("keydown-M", this.keyHandlers.sound);
@@ -109,12 +90,7 @@ export class RoomScene extends Phaser.Scene {
     this.input.keyboard.on("keydown-SPACE", this.keyHandlers.attack);
     this.input.keyboard.on("keydown-SHIFT", this.keyHandlers.dodge);
     this.input.keyboard.on("keydown-Q", this.keyHandlers.potion);
-    this.input.keyboard.on("keydown-UP", this.keyHandlers.pausePrevious);
-    this.input.keyboard.on("keydown-W", this.keyHandlers.pausePrevious);
-    this.input.keyboard.on("keydown-DOWN", this.keyHandlers.pauseNext);
-    this.input.keyboard.on("keydown-S", this.keyHandlers.pauseNext);
-    this.input.keyboard.on("keydown-ENTER", this.keyHandlers.pauseConfirm);
-    this.input.keyboard.on("keydown-SPACE", this.keyHandlers.pauseConfirm);
+    bindPauseKeyboard(this, this.pauseKeyHandlers);
     this.createHud();
     this.touchControls = new TouchControls(this, {
       onPause: () => this.togglePause(),
@@ -136,12 +112,7 @@ export class RoomScene extends Phaser.Scene {
   }
 
   applyBuild() {
-    this.build.buffs.forEach((buffId) => applyBuff(this.player, buffId));
-    this.player.health = Math.min(this.player.maxHealth, this.build.health);
-    this.player.gold = this.build.gold;
-    this.player.consumables = this.build.consumables;
-    this.player.trophy = this.build.trophy;
-    this.player.lifestealTriggers = 0;
+    applyPlayerBuild(this.player, this.build, { resetRoomTriggers: true });
   }
 
   createRoom() {
@@ -590,30 +561,19 @@ export class RoomScene extends Phaser.Scene {
     });
   }
 
-  async goToNextRoom() {
+  goToNextRoom() {
     if (this.roomStatus !== "transition") return;
     this.roomStatus = "loading";
-    if (this.roomIndex >= 4) {
-      const { BossScene } = await import("./BossScene.js");
-      if (!this.scene.get("Boss")) this.scene.add("Boss", BossScene, false);
-      this.scene.start("Boss", {
-        runSeed: this.runSeed,
-        build: this.buildForNextRoom(),
-        runStats: cloneRunStats(this.runStats),
-      });
-      return;
-    }
-    this.scene.restart({ runSeed: this.runSeed, roomIndex: this.roomIndex + 1, build: this.buildForNextRoom(), runStats: cloneRunStats(this.runStats) });
+    this.scene.start("Corridor", {
+      runSeed: this.runSeed,
+      corridorIndex: this.roomIndex,
+      build: this.buildForNextRoom(),
+      runStats: cloneRunStats(this.runStats),
+    });
   }
 
   buildForNextRoom() {
-    return {
-      buffs: [...this.player.buffs],
-      health: this.player.health,
-      gold: this.player.gold,
-      consumables: this.player.consumables,
-      trophy: this.player.trophy,
-    };
+    return capturePlayerBuild(this.player);
   }
 
   updateHud(status = null) {
@@ -689,13 +649,8 @@ export class RoomScene extends Phaser.Scene {
       this.input.keyboard.off("keydown-SPACE", this.keyHandlers.attack);
       this.input.keyboard.off("keydown-SHIFT", this.keyHandlers.dodge);
       this.input.keyboard.off("keydown-Q", this.keyHandlers.potion);
-      this.input.keyboard.off("keydown-UP", this.keyHandlers.pausePrevious);
-      this.input.keyboard.off("keydown-W", this.keyHandlers.pausePrevious);
-      this.input.keyboard.off("keydown-DOWN", this.keyHandlers.pauseNext);
-      this.input.keyboard.off("keydown-S", this.keyHandlers.pauseNext);
-      this.input.keyboard.off("keydown-ENTER", this.keyHandlers.pauseConfirm);
-      this.input.keyboard.off("keydown-SPACE", this.keyHandlers.pauseConfirm);
     }
+    unbindPauseKeyboard(this, this.pauseKeyHandlers);
     this.touchControls?.destroy();
     clearProjectiles(this);
     this.telegraphs.forEach((telegraph) => telegraph.node.destroy());

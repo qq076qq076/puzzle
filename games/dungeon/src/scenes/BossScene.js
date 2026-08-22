@@ -12,10 +12,11 @@ import { getDungeonAudio } from "../systems/audio-system.js";
 import { createRng, makeRunSeed } from "../systems/rng.js";
 import { playEnvironmentAnimation } from "../systems/actor-animations.js";
 import { closeSideDoor, constrainActorToClosedDoor, createSideDoor } from "../systems/door-system.js";
-import { applyBuff } from "../systems/buff-system.js";
+import { applyPlayerBuild, normalizeRunBuild } from "../systems/player-build.js";
 import { TouchControls } from "../systems/touch-controls.js";
 import { disableMouseInput, isTouchPointer, makeTouchOnlyButton } from "../ui/input.js";
 import { createCombatHud, createPauseOverlay, toggleBuffPanel, updateCombatHud } from "../ui/hud.js";
+import { bindPauseKeyboard, createPauseKeyboardHandlers, unbindPauseKeyboard } from "../ui/pause-keyboard.js";
 
 export class BossScene extends Phaser.Scene {
   constructor() {
@@ -24,13 +25,7 @@ export class BossScene extends Phaser.Scene {
 
   init(data = {}) {
     this.runSeed = data.runSeed ?? makeRunSeed();
-    this.build = {
-      buffs: data.build?.buffs ?? [],
-      health: data.build?.health ?? 100,
-      gold: data.build?.gold ?? 0,
-      consumables: data.build?.consumables ?? 0,
-      trophy: Boolean(data.build?.trophy),
-    };
+    this.build = normalizeRunBuild(data.build);
     this.runStats = cloneRunStats(data.runStats || createRunStats(this.runSeed));
     this.enemies = [];
     this.hazards = [];
@@ -74,23 +69,8 @@ export class BossScene extends Phaser.Scene {
       potion: () => {
         if (!this.paused && this.battleStatus === "combat") this.keyboardActions.potion = true;
       },
-      pausePrevious: () => {
-        if (!this.paused) return;
-        this.pauseOverlay?.moveSelection(-1);
-        this.audio.beep("ui");
-      },
-      pauseNext: () => {
-        if (!this.paused) return;
-        this.pauseOverlay?.moveSelection(1);
-        this.audio.beep("ui");
-      },
-      pauseConfirm: () => {
-        if (!this.paused) return;
-        this.keyboardActions.attack = false;
-        this.keyboard.SPACE.reset();
-        this.pauseOverlay?.activateSelection();
-      },
     };
+    this.pauseKeyHandlers = createPauseKeyboardHandlers(this);
     this.input.keyboard.on("keydown-ESC", this.keyHandlers.pause);
     this.input.keyboard.on("keydown-P", this.keyHandlers.pause);
     this.input.keyboard.on("keydown-M", this.keyHandlers.sound);
@@ -98,12 +78,7 @@ export class BossScene extends Phaser.Scene {
     this.input.keyboard.on("keydown-SPACE", this.keyHandlers.attack);
     this.input.keyboard.on("keydown-SHIFT", this.keyHandlers.dodge);
     this.input.keyboard.on("keydown-Q", this.keyHandlers.potion);
-    this.input.keyboard.on("keydown-UP", this.keyHandlers.pausePrevious);
-    this.input.keyboard.on("keydown-W", this.keyHandlers.pausePrevious);
-    this.input.keyboard.on("keydown-DOWN", this.keyHandlers.pauseNext);
-    this.input.keyboard.on("keydown-S", this.keyHandlers.pauseNext);
-    this.input.keyboard.on("keydown-ENTER", this.keyHandlers.pauseConfirm);
-    this.input.keyboard.on("keydown-SPACE", this.keyHandlers.pauseConfirm);
+    bindPauseKeyboard(this, this.pauseKeyHandlers);
     this.createHud();
     this.touchControls = new TouchControls(this, {
       onPause: () => this.togglePause(),
@@ -121,11 +96,7 @@ export class BossScene extends Phaser.Scene {
   }
 
   applyBuild() {
-    this.build.buffs.forEach((buffId) => applyBuff(this.player, buffId));
-    this.player.health = Math.min(this.player.maxHealth, this.build.health);
-    this.player.gold = this.build.gold;
-    this.player.consumables = this.build.consumables;
-    this.player.trophy = this.build.trophy;
+    applyPlayerBuild(this.player, this.build);
   }
 
   createArena() {
@@ -488,13 +459,8 @@ export class BossScene extends Phaser.Scene {
       this.input.keyboard.off("keydown-SPACE", this.keyHandlers.attack);
       this.input.keyboard.off("keydown-SHIFT", this.keyHandlers.dodge);
       this.input.keyboard.off("keydown-Q", this.keyHandlers.potion);
-      this.input.keyboard.off("keydown-UP", this.keyHandlers.pausePrevious);
-      this.input.keyboard.off("keydown-W", this.keyHandlers.pausePrevious);
-      this.input.keyboard.off("keydown-DOWN", this.keyHandlers.pauseNext);
-      this.input.keyboard.off("keydown-S", this.keyHandlers.pauseNext);
-      this.input.keyboard.off("keydown-ENTER", this.keyHandlers.pauseConfirm);
-      this.input.keyboard.off("keydown-SPACE", this.keyHandlers.pauseConfirm);
     }
+    unbindPauseKeyboard(this, this.pauseKeyHandlers);
     this.touchControls?.destroy();
     clearProjectiles(this);
     this.telegraphs.forEach((telegraph) => telegraph.node.destroy());
