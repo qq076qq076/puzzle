@@ -52,6 +52,7 @@ export class BossScene extends Phaser.Scene {
     this.physics.add.collider(this.player, this.walls);
     this.boss = new Boss(this, GAME_WIDTH / 2, 168);
     this.physics.add.collider(this.boss, this.walls);
+    this.physics.add.collider(this.player, this.boss, () => this.boss.tryContactDamage(this.player));
     this.keyboard = this.input.keyboard.addKeys("W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,SHIFT,ENTER,R,ESC,P,M,B,Q");
     this.keyHandlers = {
       pause: () => this.togglePause(),
@@ -248,6 +249,7 @@ export class BossScene extends Phaser.Scene {
     const enemy = new Enemy(this, x, y, MONSTERS.steel_spider, `boss-${this.enemies.length}`);
     enemy.spawnProtectionRemaining = 500;
     this.physics.add.collider(enemy, this.walls);
+    this.physics.add.collider(this.player, enemy, () => enemy.tryContactDamage(this.player));
     this.enemies.push(enemy);
   }
 
@@ -325,8 +327,9 @@ export class BossScene extends Phaser.Scene {
     this.audio.beep("victory");
   }
 
-  onPlayerDamaged() {
+  onPlayerDamaged(amount) {
     this.audio.beep("damage");
+    this.showDamageNumber(this.player.x, this.player.y - 26, amount, "#e17b70");
   }
 
   updateHud(status = null) {

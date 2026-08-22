@@ -18,7 +18,7 @@ function sheet(key, path, frameWidth, frameHeight, frameCount, frameRate, repeat
   return { key, path, frameWidth, frameHeight, frameCount, frameRate, repeat };
 }
 
-function fantasyActor(textureKey, folder) {
+function fantasyActor(textureKey, folder, options = {}) {
   const root = `${FANTASY_ROOT}/${folder}`;
   const directionFile = { down: "D", side: "S", up: "U" };
   const stateFile = {
@@ -42,28 +42,12 @@ function fantasyActor(textureKey, folder) {
       );
     });
   });
-  return { baseTexture: textureKey, states };
+  return { baseTexture: textureKey, sideFaces: options.sideFaces ?? "right", states };
 }
 
-const steelSpiderDown = sheet(
+const steelSpiderWalk = sheet(
   "provided-steel-spider",
   `${MACHINE_ROOT}/1 Main Character/1 Character/Walk1.png`,
-  48,
-  48,
-  4,
-  7,
-);
-const steelSpiderSide = sheet(
-  "provided-steel-spider-side",
-  `${MACHINE_ROOT}/1 Main Character/1 Character/Walk2.png`,
-  48,
-  48,
-  4,
-  7,
-);
-const steelSpiderUp = sheet(
-  "provided-steel-spider-up",
-  `${MACHINE_ROOT}/1 Main Character/1 Character/Walk3.png`,
   48,
   48,
   4,
@@ -87,20 +71,23 @@ const bossUp = sheet(
 );
 
 export const ACTOR_ASSETS = {
-  player: fantasyActor("provided-player", "1 Characters/2"),
-  rat: fantasyActor("provided-rat", "3 Dungeon Enemies/1"),
+  player: fantasyActor("provided-player", "1 Characters/2", { sideFaces: "left" }),
+  rat: fantasyActor("provided-rat", "3 Dungeon Enemies/1", { sideFaces: "left" }),
   goblin_bat: fantasyActor("provided-goblin-bat", "3 Dungeon Enemies/2"),
   goblin_dagger: fantasyActor("provided-goblin-dagger", "3 Dungeon Enemies/3"),
   spider_guard: fantasyActor("provided-spider-guard", "3 Dungeon Enemies/4"),
   steel_spider: {
     baseTexture: "provided-steel-spider",
+    rotationMode: "from-down",
     states: {
-      idle: { down: steelSpiderDown, side: steelSpiderSide, up: steelSpiderUp },
-      walk: { down: steelSpiderDown, side: steelSpiderSide, up: steelSpiderUp },
+      idle: { down: steelSpiderWalk, side: steelSpiderWalk, up: steelSpiderWalk },
+      walk: { down: steelSpiderWalk, side: steelSpiderWalk, up: steelSpiderWalk },
     },
   },
   boss: {
     baseTexture: "provided-boss",
+    sideFaces: "right",
+    flipVerticalByHorizontalFacing: true,
     states: {
       idle: { down: bossDown, side: bossDown, up: bossUp },
       walk: { down: bossDown, side: bossDown, up: bossUp },

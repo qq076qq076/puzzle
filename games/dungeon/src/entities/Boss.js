@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { playActorAnimation } from "../systems/actor-animations.js";
+import { tickContactDamage, tryContactDamage } from "../systems/contact-damage.js";
 
 export class Boss extends Phaser.Physics.Arcade.Sprite {
   constructor(scene, x, y) {
@@ -10,6 +11,8 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
       id: "boss",
       name: "骨面機械王",
       damage: 20,
+      contactDamage: 12,
+      contactCooldownMs: 900,
       attackRange: 92,
       armor: 2,
       machine: true,
@@ -19,6 +22,7 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     this.phase = 1;
     this.state = "combat";
     this.attackCooldownRemaining = 1200;
+    this.contactDamageCooldownRemaining = 0;
     this.attackWindupRemaining = 0;
     this.recoverRemaining = 0;
     this.phaseTransitionRemaining = 0;
@@ -43,6 +47,7 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
   updateAI(player, delta) {
     if (!this.active || !player.active || player.health <= 0) return;
     this.attackCooldownRemaining = Math.max(0, this.attackCooldownRemaining - delta);
+    tickContactDamage(this, delta);
     this.recoverRemaining = Math.max(0, this.recoverRemaining - delta);
     this.phaseTransitionRemaining = Math.max(0, this.phaseTransitionRemaining - delta);
     this.staggerRemaining = Math.max(0, this.staggerRemaining - delta);
@@ -154,6 +159,10 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
       this.scene.spawnBossHazard?.({ ring: true });
       this.recoverRemaining = 520;
     }
+  }
+
+  tryContactDamage(player) {
+    return tryContactDamage(this, player);
   }
 
   takeDamage(amount, multiplier = 1, context = {}) {

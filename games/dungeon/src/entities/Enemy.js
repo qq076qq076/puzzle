@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { playActorAnimation } from "../systems/actor-animations.js";
+import { tickContactDamage, tryContactDamage } from "../systems/contact-damage.js";
 
 export class Enemy extends Phaser.Physics.Arcade.Sprite {
   constructor(scene, x, y, definition, sequence = 0) {
@@ -14,6 +15,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.spawnProtectionRemaining = 850;
     this.alertRemaining = 380;
     this.attackCooldownRemaining = 600 + sequence * 90;
+    this.contactDamageCooldownRemaining = 0;
     this.attackWindupRemaining = 0;
     this.recoverRemaining = 0;
     this.hitFlashRemaining = 0;
@@ -36,6 +38,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   updateAI(player, delta) {
     if (!this.active || !player.active || player.health <= 0) return;
     this.attackCooldownRemaining = Math.max(0, this.attackCooldownRemaining - delta);
+    tickContactDamage(this, delta);
     this.spawnProtectionRemaining = Math.max(0, this.spawnProtectionRemaining - delta);
     this.alertRemaining = Math.max(0, this.alertRemaining - delta);
     this.hitFlashRemaining = Math.max(0, this.hitFlashRemaining - delta);
@@ -118,6 +121,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     }
     this.state = "recover";
     this.recoverRemaining = this.definition.recoverMs;
+  }
+
+  tryContactDamage(player) {
+    return tryContactDamage(this, player);
   }
 
   takeDamage(amount, multiplier = 1, context = {}) {

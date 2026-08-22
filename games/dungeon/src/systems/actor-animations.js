@@ -44,16 +44,34 @@ export function getFacingDirection(vector) {
   return y < 0 ? "up" : "down";
 }
 
+export function getActorOrientation(actorId, facing) {
+  const actor = ACTOR_ASSETS[actorId];
+  const direction = getFacingDirection(facing);
+  const x = Number(facing?.x) || 0;
+  if (!actor) return { direction, flipX: false, rotation: 0 };
+
+  if (actor.rotationMode === "from-down") {
+    const rotation = direction === "up" ? Math.PI : direction === "side" ? (x < 0 ? Math.PI / 2 : -Math.PI / 2) : 0;
+    return { direction, flipX: false, rotation };
+  }
+
+  const canFlip = direction === "side" || (actor.flipVerticalByHorizontalFacing && Math.abs(x) > 0.05);
+  const baseFacesLeft = actor.sideFaces === "left";
+  const flipX = canFlip && (baseFacesLeft ? x >= 0 : x < 0);
+  return { direction, flipX, rotation: 0 };
+}
+
 export function playActorAnimation(sprite, actorId, state, facing, options = {}) {
   const actor = ACTOR_ASSETS[actorId];
   if (!actor) return false;
-  const direction = getFacingDirection(facing);
+  const { direction, flipX, rotation } = getActorOrientation(actorId, facing);
   const requestedState = actor.states[state] ? state : actor.states.walk ? "walk" : "idle";
   const definition = actor.states[requestedState]?.[direction] || actor.states.idle?.[direction];
   if (!definition) return false;
   const key = animationKey(actorId, requestedState, direction);
   if (!sprite.scene.anims.exists(key)) return false;
-  sprite.setFlipX(direction === "side" && (Number(facing?.x) || 0) < 0);
+  sprite.setFlipX(flipX);
+  sprite.setRotation(rotation);
   sprite.anims.play(key, !options.restart);
   return true;
 }

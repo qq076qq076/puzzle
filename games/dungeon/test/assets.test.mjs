@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { ACTOR_ASSETS, PROVIDED_ASSETS } from "../src/data/assets.js";
+import { getActorOrientation } from "../src/systems/actor-animations.js";
 
 const assetsRoot = fileURLToPath(new URL("../assets/", import.meta.url));
 
@@ -48,4 +49,14 @@ test("player and fantasy enemies provide directional movement and attacks", () =
       assert.deepEqual(Object.keys(actor.states[state]).sort(), ["down", "side", "up"], `${actorId} ${state}`);
     }
   }
+});
+
+test("actor orientation follows each source sprite's modeled direction", () => {
+  assert.equal(getActorOrientation("player", { x: 1, y: 0 }).flipX, true);
+  assert.equal(getActorOrientation("player", { x: -1, y: 0 }).flipX, false);
+  assert.equal(getActorOrientation("rat", { x: 1, y: 0 }).flipX, true);
+  assert.equal(getActorOrientation("goblin_bat", { x: 1, y: 0 }).flipX, false);
+  assert.equal(getActorOrientation("goblin_bat", { x: -1, y: 0 }).flipX, true);
+  assert.equal(getActorOrientation("steel_spider", { x: 1, y: 0 }).rotation, -Math.PI / 2);
+  assert.equal(getActorOrientation("steel_spider", { x: 0, y: -1 }).rotation, Math.PI);
 });

@@ -267,10 +267,15 @@ export class RoomScene extends Phaser.Scene {
         if (this.roomStatus !== "combat" || !this.player.active) return;
         const definition = MONSTERS[plan.id];
         const enemy = new Enemy(this, point[0], point[1], definition, `${this.currentWave}-${sequence}`);
-        this.physics.add.collider(enemy, this.walls);
+        this.attachEnemyPhysics(enemy);
         this.enemies.push(enemy);
       });
     });
+  }
+
+  attachEnemyPhysics(enemy) {
+    this.physics.add.collider(enemy, this.walls);
+    this.physics.add.collider(this.player, enemy, () => enemy.tryContactDamage(this.player));
   }
 
   updateCombat(delta) {
@@ -355,8 +360,9 @@ export class RoomScene extends Phaser.Scene {
     this.showHitEffect(enemy.x, enemy.y, enemy.definition.machine ? 0x8fd1e8 : 0xf6d36c);
   }
 
-  onPlayerDamaged() {
+  onPlayerDamaged(amount) {
     this.audio.beep("damage");
+    this.showDamageNumber(this.player.x, this.player.y - 26, amount, "#e17b70");
   }
 
   updateRewardInput(delta) {
