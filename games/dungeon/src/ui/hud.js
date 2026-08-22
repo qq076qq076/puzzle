@@ -12,7 +12,9 @@ export function createCombatHud(scene, options = {}) {
     seed: scene.add.text(480, 20, `SEED ${options.seed || "—"}`, scene.hudStyle(10, "#77798a")).setOrigin(0.5, 0).setScrollFactor(0).setDepth(110),
     dodge: scene.add.text(936, 64, "DODGE READY", scene.hudStyle(10, "#82a8d8")).setOrigin(1, 0).setScrollFactor(0).setDepth(110),
     buffs: scene.add.text(24, 496, "BUFFS —", scene.hudStyle(10, "#b9a9d4")).setScrollFactor(0).setDepth(110),
-    inventory: scene.add.text(590, 496, "GOLD 0 · POTION 0", scene.hudStyle(10, "#dfb84f")).setOrigin(0, 1).setScrollFactor(0).setDepth(110),
+    gold: scene.add.text(590, 496, "GOLD 0", scene.hudStyle(10, "#dfb84f")).setOrigin(0, 1).setScrollFactor(0).setDepth(110),
+    potionIcon: scene.add.image(734, 486, "potion-icon").setScale(2).setScrollFactor(0).setDepth(110),
+    potion: scene.add.text(750, 496, "POTION 0 [Q]", scene.hudStyle(10, "#77bd88")).setOrigin(0, 1).setScrollFactor(0).setDepth(110),
   };
   const audio = scene.audio || getDungeonAudio();
   hud.pauseButton = makeTouchOnlyButton(scene, 778, 30, 72, 28, "PAUSE", () => options.onPause?.(), {
@@ -48,7 +50,8 @@ export function updateCombatHud(hud, player, options = {}) {
   hud.dodge.setColor(dodgeReady ? "#82a8d8" : "#77798a");
   const buffNames = player.buffs.map((id) => `${BUFFS[id]?.name ?? id}×${getBuffStack(player, id)}`).filter((value, index, all) => all.indexOf(value) === index);
   hud.buffs.setText(buffNames.length ? `BUFFS ${buffNames.join(" · ")}` : "BUFFS —");
-  hud.inventory.setText(`GOLD ${player.gold || 0} · POTION ${player.consumables || 0}`);
+  hud.gold.setText(`GOLD ${player.gold || 0}`);
+  hud.potion.setText(`POTION ${player.consumables || 0} [Q]`);
   if (options.status) hud.status.setText(options.status);
   if (options.roomLabel) hud.room.setText(options.roomLabel);
   if (options.seed) hud.seed.setText(`SEED ${options.seed}`);

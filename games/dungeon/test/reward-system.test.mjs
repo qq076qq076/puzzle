@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { applyReward, getUsableRewardIds } from "../src/systems/reward-system.js";
+import { applyReward, getRewardCategoryLabel, getRewardChoices, getUsableRewardIds, isRewardAvailable } from "../src/systems/reward-system.js";
 
 function makePlayer() {
   return {
@@ -34,13 +34,29 @@ test("reward types update the run build", () => {
   assert.equal(player.gold, 25);
 });
 
+test("reward categories distinguish passive, instant, and active consumables", () => {
+  assert.equal(getRewardCategoryLabel("sharp_edge"), "被動 Buff · 取得即生效");
+  assert.equal(getRewardCategoryLabel("minor_heal"), "立即生效");
+  assert.equal(getRewardCategoryLabel("emergency_vial"), "消耗品 · Q／POTION 使用");
+});
+
 test("a maxed buff converts to gold and unusable choices fall back", () => {
   const player = makePlayer();
   for (let index = 0; index < 5; index += 1) assert.equal(applyReward(player, "sharp_edge").applied, true);
   const converted = applyReward(player, "sharp_edge");
   assert.equal(converted.converted, true);
   assert.equal(player.gold, 10);
-  assert.deepEqual(getUsableRewardIds(player, ["sharp_edge"]), ["minor_heal", "gold_cache", "emergency_vial"]);
+  assert.deepEqual(getUsableRewardIds(player, ["sharp_edge"]), []);
+  assert.deepEqual(getRewardChoices(player, ["sharp_edge"]), ["gold_cache", "emergency_vial", "minor_heal"]);
+});
+
+test("full-health players are not offered a zero-effect instant heal", () => {
+  const player = makePlayer();
+  player.health = player.maxHealth;
+  assert.equal(isRewardAvailable(player, "minor_heal"), false);
+  const choices = getRewardChoices(player, ["minor_heal"]);
+  assert.equal(choices.length, 3);
+  assert.equal(choices.includes("minor_heal"), false);
 });
 
 test("boss trophy is a fixed completion reward", () => {

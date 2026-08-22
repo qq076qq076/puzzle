@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { playActorAnimation } from "../systems/actor-animations.js";
+import { useEmergencyPotion } from "../systems/consumable-system.js";
 import { startKnockback, updateKnockback } from "../systems/knockback.js";
 
 const EPSILON = 0.001;
@@ -141,9 +142,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   consumePotion() {
-    if (this.consumables <= 0 || this.health <= 0 || this.health >= this.maxHealth) return false;
-    this.consumables -= 1;
-    this.health = Math.min(this.maxHealth, this.health + 35);
+    const result = useEmergencyPotion(this);
+    this.scene.showStatus?.(result.message);
+    if (!result.used) {
+      this.scene.audio?.beep("ui");
+      return false;
+    }
     this.scene.runStats && (this.scene.runStats.consumablesUsed += 1);
     this.scene.audio?.beep("reward");
     return true;

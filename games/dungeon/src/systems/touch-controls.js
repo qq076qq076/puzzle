@@ -12,6 +12,7 @@ export class TouchControls {
     this.moveY = 0;
     this.attackPressed = false;
     this.dodgePressed = false;
+    this.potionPressed = false;
     this.buffPressed = false;
     this.activePointerId = null;
     this.joystickCenter = new Phaser.Math.Vector2(820, 408);
@@ -41,8 +42,9 @@ export class TouchControls {
       .setDepth(101);
     const attack = this.makeButton(126, 358, 54, 0xb94d45, "ATTACK", () => { this.attackPressed = true; });
     const dodge = this.makeButton(126, 458, 48, 0x4f79a8, "DODGE", () => { this.dodgePressed = true; });
+    const potion = this.makeButton(235, 458, 42, 0x4f8a62, "POTION", () => { this.potionPressed = true; });
     const buff = this.makeButton(690, 462, 42, 0x6e5b9b, "BUFF", () => { this.buffPressed = true; });
-    this.elements.push(base, knob, attack, dodge, buff);
+    this.elements.push(base, knob, attack, dodge, potion, buff);
     this.knob = knob;
 
     base.on("pointerdown", (pointer) => {
@@ -109,10 +111,12 @@ export class TouchControls {
     const actions = {
       attack: this.attackPressed,
       dodge: this.dodgePressed,
+      potion: this.potionPressed,
       buff: this.buffPressed,
     };
     this.attackPressed = false;
     this.dodgePressed = false;
+    this.potionPressed = false;
     this.buffPressed = false;
     return actions;
   }

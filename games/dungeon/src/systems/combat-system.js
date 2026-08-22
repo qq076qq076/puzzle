@@ -1,12 +1,10 @@
 import Phaser from "phaser";
+import { applyMachineResonanceHit, getBleedTickDamage, previewComboHit } from "./buff-effects.js";
 
-export function calculateMeleeDamage(player, enemy) {
+export function calculateMeleeDamage(player, enemy, comboMultiplier = 1) {
   let multiplier = 1;
   if (player.lastStand && player.health / player.maxHealth < 0.3) multiplier *= 1.4;
-  if (player.comboDrive && player.comboHits >= 3) multiplier *= 1.35;
-  if (enemy.definition.machine && enemy.machineMarkedRemaining > 0 && player.machineResonanceStacks > 0) {
-    player.attackCooldownRemaining *= Math.max(0.55, 1 - player.machineResonanceStacks * 0.15);
-  }
+  multiplier *= comboMultiplier;
   return Math.max(1, Math.round(player.attackDamage * multiplier));
 }
 
@@ -25,13 +23,10 @@ export function resolveMeleeAttack(player, enemies) {
     const direction = new Phaser.Math.Vector2(dx / distance, dy / distance);
     const angle = Math.acos(Phaser.Math.Clamp(facing.dot(direction), -1, 1));
     if (angle > halfArc) return;
-    if (player.comboDrive) {
-      const targetId = enemy.sequence ?? enemy.definition.id;
-      if (player.comboTargetId !== targetId) player.comboHits += 1;
-      player.comboTargetId = targetId;
-    }
+    const targetId = enemy.sequence ?? enemy.definition.id;
+    const combo = previewComboHit(player, targetId);
     const multiplier = enemy.definition.machine ? (player.machineDamageMultiplier || 1) : 1;
-    const amount = calculateMeleeDamage(player, enemy) * multiplier;
+    const amount = calculateMeleeDamage(player, enemy, combo.multiplier) * multiplier;
     const result = enemy.takeDamage(amount, 1, {
       knockback: {
         x: direction.x,
@@ -41,11 +36,15 @@ export function resolveMeleeAttack(player, enemies) {
       },
     });
     if (!result.hit) return;
+    player.comboHits = combo.comboHits;
+    player.comboTargetId = combo.comboTargetId;
+    if (combo.triggered) player.scene.showStatus?.("連斬驅動 · 第三擊傷害 +35%");
     if (player.bleedDamage > 0) {
       enemy.bleedRemaining = 3000;
       enemy.bleedTickRemaining = 1000;
+      enemy.bleedDamage = player.bleedDamage;
     }
-    if (enemy.definition.machine && player.machineResonanceStacks > 0) enemy.machineMarkedRemaining = 3000;
+    if (applyMachineResonanceHit(player, enemy)) player.scene.showStatus?.("機械共鳴 · 攻擊冷卻縮短");
     if (result.killed && player.lifestealAmount > 0 && player.lifestealTriggers < 10) {
       player.health = Math.min(player.maxHealth, player.health + player.lifestealAmount);
       player.lifestealTriggers += 1;
@@ -65,7 +64,7 @@ export function updateBleed(enemies, delta) {
     enemy.bleedTickRemaining = Math.max(0, (enemy.bleedTickRemaining || 1000) - delta);
     if (enemy.bleedRemaining > 0 && enemy.bleedTickRemaining === 0) {
       enemy.bleedTickRemaining = 1000;
-      const result = enemy.takeDamage(3);
+      const result = enemy.takeDamage(getBleedTickDamage(enemy));
       if (result.hit) enemy.scene.showDamageNumber?.(enemy.x, enemy.y - 25, result.damage, "#e17b70");
     }
   });

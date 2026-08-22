@@ -107,7 +107,7 @@ export const BUFFS = {
     rarity: "傳奇",
     color: 0xc68bd7,
     maxStacks: 2,
-    description: "命中帶機械標記的敵人時，攻擊冷卻 -15%",
+    description: "首次命中標記機械敵人；後續命中每層使攻擊冷卻 -15%",
     apply(player) {
       player.machineResonanceStacks += 1;
     },

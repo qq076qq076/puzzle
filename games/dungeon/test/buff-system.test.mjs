@@ -51,3 +51,39 @@ test("the complete buff list enforces stack limits", () => {
   for (let index = 0; index < BUFFS.sharp_edge.maxStacks; index += 1) assert.equal(applyBuff(player, "sharp_edge"), true);
   assert.equal(applyBuff(player, "sharp_edge"), false);
 });
+
+test("every passive reward applies its documented player effect", () => {
+  const player = {
+    attackDamage: 20,
+    attackRange: 72,
+    attackArcDeg: 100,
+    attackCooldownMs: 450,
+    moveSpeed: 192,
+    maxHealth: 100,
+    health: 70,
+    damageReduction: 0,
+    knockbackMultiplier: 1,
+    bleedDamage: 0,
+    lifestealAmount: 0,
+    machineResonanceStacks: 0,
+    comboDrive: false,
+    lastStand: false,
+    buffs: [],
+    buffStacks: {},
+  };
+  Object.keys(BUFFS).forEach((buffId) => assert.equal(applyBuff(player, buffId), true, buffId));
+  assert.equal(player.attackDamage, 24);
+  assert.equal(player.attackRange, 80);
+  assert.equal(player.attackArcDeg, 115);
+  assert.equal(player.attackCooldownMs, 500);
+  assert.equal(player.moveSpeed, 207.36);
+  assert.equal(player.maxHealth, 120);
+  assert.equal(player.health, 90);
+  assert.equal(player.damageReduction, 2);
+  assert.equal(player.knockbackMultiplier, 1.25);
+  assert.equal(player.bleedDamage, 3);
+  assert.equal(player.lifestealAmount, 2);
+  assert.equal(player.machineResonanceStacks, 1);
+  assert.equal(player.comboDrive, true);
+  assert.equal(player.lastStand, true);
+});

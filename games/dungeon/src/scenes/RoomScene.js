@@ -3,7 +3,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../config.js";
 import { MONSTERS } from "../data/monsters.js";
 import { Enemy } from "../entities/Enemy.js";
 import { Player } from "../entities/Player.js";
-import { applyReward, getRewardColor, getRewardDefinition, getUsableRewardIds } from "../systems/reward-system.js";
+import { applyReward, getRewardCategoryLabel, getRewardChoices, getRewardColor, getRewardDefinition } from "../systems/reward-system.js";
 import { applyBuff } from "../systems/buff-system.js";
 import { clearProjectiles, spawnProjectile, updateProjectiles } from "../systems/projectile-system.js";
 import { getDungeonAudio } from "../systems/audio-system.js";
@@ -99,7 +99,7 @@ export class RoomScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(150);
-    this.showHint("WASD／方向鍵移動 · Space 攻擊 · Shift 閃避");
+    this.showHint("WASD／方向鍵移動 · Space 攻擊 · Shift 閃避 · Q 使用藥水");
   }
 
   applyBuild() {
@@ -204,13 +204,13 @@ export class RoomScene extends Phaser.Scene {
     const moveX = Number(this.keyboard.D.isDown || this.keyboard.RIGHT.isDown) - Number(this.keyboard.A.isDown || this.keyboard.LEFT.isDown);
     const moveY = Number(this.keyboard.S.isDown || this.keyboard.DOWN.isDown) - Number(this.keyboard.W.isDown || this.keyboard.UP.isDown);
     const touchMove = this.touchControls?.enabled ? { x: this.touchControls.moveX, y: this.touchControls.moveY } : { x: 0, y: 0 };
-    const actions = this.touchControls?.consumeActions() ?? { attack: false, dodge: false, buff: false };
+    const actions = this.touchControls?.consumeActions() ?? { attack: false, dodge: false, potion: false, buff: false };
     return {
       moveX: this.touchControls?.enabled && Math.hypot(touchMove.x, touchMove.y) > 0.08 ? touchMove.x : moveX,
       moveY: this.touchControls?.enabled && Math.hypot(touchMove.x, touchMove.y) > 0.08 ? touchMove.y : moveY,
       attack: actions.attack || Phaser.Input.Keyboard.JustDown(this.keyboard.SPACE),
       dodge: actions.dodge || Phaser.Input.Keyboard.JustDown(this.keyboard.SHIFT),
-      usePotion: Phaser.Input.Keyboard.JustDown(this.keyboard.Q),
+      usePotion: actions.potion || Phaser.Input.Keyboard.JustDown(this.keyboard.Q),
       buff: actions.buff,
     };
   }
@@ -423,7 +423,7 @@ export class RoomScene extends Phaser.Scene {
       }
     }
 
-    const actions = this.touchControls?.consumeActions() ?? { attack: false, dodge: false, buff: false };
+    const actions = this.touchControls?.consumeActions() ?? { attack: false, dodge: false, potion: false, buff: false };
     if (actions.attack || Phaser.Input.Keyboard.JustDown(this.keyboard.SPACE)) this.chooseReward(this.rewardSelectionIndex);
   }
 
@@ -441,8 +441,7 @@ export class RoomScene extends Phaser.Scene {
     this.roomStatus = "reward";
     this.player.setVelocity(0, 0);
     this.traps.forEach((trap) => trap.node.setAlpha(0.16));
-    this.rewardIds = getUsableRewardIds(this.player, this.currentRoom.rewardIds);
-    while (this.rewardIds.length < 3) this.rewardIds.push(["minor_heal", "gold_cache", "emergency_vial"][this.rewardIds.length]);
+    this.rewardIds = getRewardChoices(this.player, this.currentRoom.rewardIds);
     this.rewardSelectionIndex = 0;
     this.rewardNavigationCooldown = 0;
     this.rewardTouchAxis = 0;
@@ -465,7 +464,7 @@ export class RoomScene extends Phaser.Scene {
     if (!reward) return;
     const x = 250 + index * 230;
     const card = this.add.rectangle(x, 300, 200, 164, 0x202439, 1).setStrokeStyle(2, getRewardColor(rewardId), 1);
-    const text = this.add.text(x, 300, `${reward.name}\n\n${reward.rarity}\n${reward.description}`, {
+    const text = this.add.text(x, 300, `${getRewardCategoryLabel(rewardId)}\n\n${reward.name}\n${reward.rarity}\n${reward.description}`, {
       color: "#f5f1da",
       fontFamily: "monospace",
       fontSize: "11px",
@@ -494,6 +493,10 @@ export class RoomScene extends Phaser.Scene {
     this.runStats.gold = this.player.gold || 0;
     this.runStats.roomsCleared = Math.max(this.runStats.roomsCleared, this.roomIndex + 1);
     this.runStats.trophy = Boolean(this.player.trophy);
+    const feedback = result.type === "potion"
+      ? `${getRewardDefinition(rewardId).name} · 已放入消耗品欄`
+      : `${getRewardDefinition(rewardId).name} · ${result.converted ? "已轉換為金幣" : "已生效"}`;
+    this.showRewardToast(feedback);
     this.rewardGroup?.destroy(true);
     this.rewardGroup = null;
     this.roomStatus = "transition";
@@ -548,7 +551,7 @@ export class RoomScene extends Phaser.Scene {
     updateCombatHud(this.hud, this.player, {
       roomLabel: `FLOOR 1 · ROOM ${this.currentRoom.roomNumber}/6`,
       seed: this.runSeed,
-      status: passageOpen ? null : status || waveLabel || this.statusMessage || this.roomStatus,
+      status: passageOpen ? null : status || this.statusMessage || waveLabel || this.roomStatus,
     });
   }
 
@@ -557,6 +560,11 @@ export class RoomScene extends Phaser.Scene {
     this.time.delayedCall(1500, () => {
       if (this.statusMessage === message) this.statusMessage = null;
     });
+  }
+
+  showRewardToast(message) {
+    const toast = this.add.text(480, 430, message, this.hudStyle(13, "#f5f1da")).setOrigin(0.5).setDepth(190);
+    this.tweens.add({ targets: toast, y: 410, alpha: 0, delay: 650, duration: 520, onComplete: () => toast.destroy() });
   }
 
   openExitDoor() {

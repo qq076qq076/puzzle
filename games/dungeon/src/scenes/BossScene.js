@@ -157,13 +157,13 @@ export class BossScene extends Phaser.Scene {
     const moveX = Number(this.keyboard.D.isDown || this.keyboard.RIGHT.isDown) - Number(this.keyboard.A.isDown || this.keyboard.LEFT.isDown);
     const moveY = Number(this.keyboard.S.isDown || this.keyboard.DOWN.isDown) - Number(this.keyboard.W.isDown || this.keyboard.UP.isDown);
     const touchMove = this.touchControls?.enabled ? { x: this.touchControls.moveX, y: this.touchControls.moveY } : { x: 0, y: 0 };
-    const actions = this.touchControls?.consumeActions() ?? { attack: false, dodge: false, buff: false };
+    const actions = this.touchControls?.consumeActions() ?? { attack: false, dodge: false, potion: false, buff: false };
     return {
       moveX: this.touchControls?.enabled && Math.hypot(touchMove.x, touchMove.y) > 0.08 ? touchMove.x : moveX,
       moveY: this.touchControls?.enabled && Math.hypot(touchMove.x, touchMove.y) > 0.08 ? touchMove.y : moveY,
       attack: actions.attack || Phaser.Input.Keyboard.JustDown(this.keyboard.SPACE),
       dodge: actions.dodge || Phaser.Input.Keyboard.JustDown(this.keyboard.SHIFT),
-      usePotion: Phaser.Input.Keyboard.JustDown(this.keyboard.Q),
+      usePotion: actions.potion || Phaser.Input.Keyboard.JustDown(this.keyboard.Q),
       buff: actions.buff,
     };
   }
@@ -374,7 +374,14 @@ export class BossScene extends Phaser.Scene {
     updateCombatHud(this.hud, this.player, {
       roomLabel: "FLOOR 1 · ROOM 6/6",
       seed: this.runSeed,
-      status: status || `魔王階段 ${this.boss.phase}`,
+      status: status || this.statusMessage || `魔王階段 ${this.boss.phase}`,
+    });
+  }
+
+  showStatus(message) {
+    this.statusMessage = message;
+    this.time.delayedCall(1500, () => {
+      if (this.statusMessage === message) this.statusMessage = null;
     });
   }
 
