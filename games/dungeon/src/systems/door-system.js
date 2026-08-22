@@ -56,3 +56,19 @@ export function closeSideDoor(door) {
   door.visual.anims.playReverse(DOOR_OPEN_ANIMATION, true);
   return true;
 }
+
+export function constrainActorToClosedDoor(actor, door) {
+  if (!actor?.active || !door || door.isOpen) return false;
+
+  const actorHalfWidth = actor.body?.halfWidth || 8;
+  const blockerHalfWidth = door.blocker?.body?.halfWidth || 16;
+  const boundary = door.side === "left"
+    ? door.x + blockerHalfWidth + actorHalfWidth
+    : door.x - blockerHalfWidth - actorHalfWidth;
+  const crossed = door.side === "left" ? actor.x < boundary : actor.x > boundary;
+  if (!crossed) return false;
+
+  if (actor.body?.reset) actor.body.reset(boundary, actor.y);
+  else actor.setPosition?.(boundary, actor.y);
+  return true;
+}

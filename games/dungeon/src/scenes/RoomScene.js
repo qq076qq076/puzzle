@@ -13,7 +13,7 @@ import { generateFloor } from "../systems/room-generator.js";
 import { hasCrossedExit } from "../systems/room-transition.js";
 import { resolveMeleeAttack, updateBleed } from "../systems/combat-system.js";
 import { playEnvironmentAnimation } from "../systems/actor-animations.js";
-import { closeSideDoor, createSideDoor, openSideDoor } from "../systems/door-system.js";
+import { closeSideDoor, constrainActorToClosedDoor, createSideDoor, openSideDoor } from "../systems/door-system.js";
 import { createEnvironmentTextures } from "../systems/texture-factory.js";
 import { TouchControls } from "../systems/touch-controls.js";
 import { disableMouseInput, makeTouchOnlyButton } from "../ui/input.js";
@@ -331,6 +331,7 @@ export class RoomScene extends Phaser.Scene {
     this.updateTraps(delta);
     this.updateTelegraphs(delta);
     updateProjectiles(this, this.player, delta);
+    this.constrainActorsToDoors();
     if (this.player.health <= 0) {
       this.openDefeat();
       return;
@@ -503,7 +504,15 @@ export class RoomScene extends Phaser.Scene {
     if (input.buff) toggleBuffPanel(this, this.hud, this.player);
     if (input.usePotion) this.player.consumePotion();
     this.player.updateActor({ moveX: input.moveX, moveY: input.moveY, attack: false, dodge: input.dodge }, delta);
+    constrainActorToClosedDoor(this.player, this.entryDoor);
     if (hasCrossedExit(this.player, this.currentRoom)) this.goToNextRoom();
+  }
+
+  constrainActorsToDoors() {
+    [this.player, ...this.enemies].forEach((actor) => {
+      constrainActorToClosedDoor(actor, this.entryDoor);
+      constrainActorToClosedDoor(actor, this.exitDoor);
+    });
   }
 
   async goToNextRoom() {

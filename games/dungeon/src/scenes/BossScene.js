@@ -11,7 +11,7 @@ import { cloneRunStats, createRunStats, getRunDurationSeconds } from "../systems
 import { getDungeonAudio } from "../systems/audio-system.js";
 import { createRng, makeRunSeed } from "../systems/rng.js";
 import { playEnvironmentAnimation } from "../systems/actor-animations.js";
-import { closeSideDoor, createSideDoor } from "../systems/door-system.js";
+import { closeSideDoor, constrainActorToClosedDoor, createSideDoor } from "../systems/door-system.js";
 import { createEnvironmentTextures } from "../systems/texture-factory.js";
 import { applyBuff } from "../systems/buff-system.js";
 import { TouchControls } from "../systems/touch-controls.js";
@@ -236,6 +236,7 @@ export class BossScene extends Phaser.Scene {
     this.updateHazards(delta);
     this.updateTelegraphs(delta);
     updateProjectiles(this, this.player, delta);
+    [this.player, this.boss, ...this.enemies].forEach((actor) => constrainActorToClosedDoor(actor, this.entryDoor));
     this.updatePhaseBoundary(delta);
     if (this.player.health <= 0) this.openDefeat();
     else if (!this.boss.active) this.openVictory();
