@@ -2,6 +2,7 @@ import { BUFFS } from "../data/buffs.js";
 import { getDungeonAudio } from "../systems/audio-system.js";
 import { getBuffStack } from "../systems/buff-system.js";
 import { makeTouchOnlyButton } from "./input.js";
+import { moveMenuSelection } from "./menu-selection.js";
 
 export function createCombatHud(scene, options = {}) {
   const hud = {
@@ -89,19 +90,62 @@ export function toggleBuffPanel(scene, hud, player) {
 
 export function createPauseOverlay(scene, callbacks = {}) {
   const group = scene.add.container(0, 0).setDepth(260).setScrollFactor(0);
-  group.add(scene.add.rectangle(480, 270, 620, 300, 0x080a11, 0.96).setStrokeStyle(2, 0xdfb84f, 0.95));
-  group.add(scene.add.text(480, 175, "PAUSED", scene.hudStyle(30, "#dfb84f")).setOrigin(0.5));
-  group.add(scene.add.text(480, 222, "戰鬥計時與敵人 AI 已暫停", scene.hudStyle(12, "#aaa8b5")).setOrigin(0.5));
-  const resume = makeTouchOnlyButton(scene, 380, 330, 180, 44, "繼續遊戲", () => callbacks.onResume?.(), {
-    color: 0x303a55,
-    strokeColor: 0x9aa2c1,
-    depth: 262,
+  group.add(scene.add.rectangle(480, 270, 620, 360, 0x080a11, 0.96).setStrokeStyle(2, 0xdfb84f, 0.95));
+  group.add(scene.add.text(480, 136, "PAUSED", scene.hudStyle(30, "#dfb84f")).setOrigin(0.5));
+  group.add(scene.add.text(480, 184, "戰鬥計時與敵人 AI 已暫停", scene.hudStyle(12, "#aaa8b5")).setOrigin(0.5));
+  group.add(scene.add.text(480, 216, "↑／↓ 或 W／S 選擇 · Enter／Space 確認 · Esc 返回", scene.hudStyle(10, "#77798a")).setOrigin(0.5));
+
+  const menuItems = [
+    { label: "繼續遊戲", color: 0x303a55, strokeColor: 0x9aa2c1, action: callbacks.onResume },
+    { label: "重新開始", color: 0x4c303d, strokeColor: 0xe17b70, action: callbacks.onRestart },
+  ];
+  let selectedIndex = 0;
+  const buttons = [];
+
+  const updateSelection = () => {
+    buttons.forEach((button, index) => {
+      const item = menuItems[index];
+      const selected = index === selectedIndex;
+      button.background.setFillStyle(selected ? 0x4b526f : item.color, 1);
+      button.background.setStrokeStyle(selected ? 4 : 2, selected ? 0xf5f1da : item.strokeColor, 0.98);
+      button.text.setText(`${selected ? "▶" : " "} ${item.label}`).setColor(selected ? "#f6d36c" : "#f5f1da");
+    });
+  };
+
+  const activate = (index) => {
+    if (!menuItems[index]) return false;
+    selectedIndex = index;
+    updateSelection();
+    menuItems[index].action?.();
+    return true;
+  };
+
+  menuItems.forEach((item, index) => {
+    const button = makeTouchOnlyButton(scene, 480, 286 + index * 72, 260, 48, item.label, () => activate(index), {
+      color: item.color,
+      strokeColor: item.strokeColor,
+      depth: 262,
+    });
+    buttons.push(button);
+    group.add([button.background, button.text]);
   });
-  const restart = makeTouchOnlyButton(scene, 580, 330, 180, 44, "重新開始", () => callbacks.onRestart?.(), {
-    color: 0x4c303d,
-    strokeColor: 0xe17b70,
-    depth: 262,
-  });
-  group.add([resume.background, resume.text, restart.background, restart.text]);
-  return group;
+  updateSelection();
+
+  return {
+    container: group,
+    get selectedIndex() {
+      return selectedIndex;
+    },
+    moveSelection(direction) {
+      selectedIndex = moveMenuSelection(selectedIndex, direction, menuItems.length);
+      updateSelection();
+      return selectedIndex;
+    },
+    activateSelection() {
+      return activate(selectedIndex);
+    },
+    destroy() {
+      group.destroy(true);
+    },
+  };
 }

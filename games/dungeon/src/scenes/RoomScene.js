@@ -85,6 +85,22 @@ export class RoomScene extends Phaser.Scene {
       potion: () => {
         if (!this.paused && ["combat", "transition"].includes(this.roomStatus)) this.keyboardActions.potion = true;
       },
+      pausePrevious: () => {
+        if (!this.paused) return;
+        this.pauseOverlay?.moveSelection(-1);
+        this.audio.beep("ui");
+      },
+      pauseNext: () => {
+        if (!this.paused) return;
+        this.pauseOverlay?.moveSelection(1);
+        this.audio.beep("ui");
+      },
+      pauseConfirm: () => {
+        if (!this.paused) return;
+        this.keyboardActions.attack = false;
+        this.keyboard.SPACE.reset();
+        this.pauseOverlay?.activateSelection();
+      },
     };
     this.input.keyboard.on("keydown-ESC", this.keyHandlers.pause);
     this.input.keyboard.on("keydown-P", this.keyHandlers.pause);
@@ -93,6 +109,12 @@ export class RoomScene extends Phaser.Scene {
     this.input.keyboard.on("keydown-SPACE", this.keyHandlers.attack);
     this.input.keyboard.on("keydown-SHIFT", this.keyHandlers.dodge);
     this.input.keyboard.on("keydown-Q", this.keyHandlers.potion);
+    this.input.keyboard.on("keydown-UP", this.keyHandlers.pausePrevious);
+    this.input.keyboard.on("keydown-W", this.keyHandlers.pausePrevious);
+    this.input.keyboard.on("keydown-DOWN", this.keyHandlers.pauseNext);
+    this.input.keyboard.on("keydown-S", this.keyHandlers.pauseNext);
+    this.input.keyboard.on("keydown-ENTER", this.keyHandlers.pauseConfirm);
+    this.input.keyboard.on("keydown-SPACE", this.keyHandlers.pauseConfirm);
     this.createHud();
     this.touchControls = new TouchControls(this, {
       onPause: () => this.togglePause(),
@@ -261,7 +283,7 @@ export class RoomScene extends Phaser.Scene {
       });
       this.audio.beep("ui");
     } else {
-      this.pauseOverlay?.destroy(true);
+      this.pauseOverlay?.destroy();
       this.pauseOverlay = null;
       this.audio.beep("ui");
     }
@@ -667,6 +689,12 @@ export class RoomScene extends Phaser.Scene {
       this.input.keyboard.off("keydown-SPACE", this.keyHandlers.attack);
       this.input.keyboard.off("keydown-SHIFT", this.keyHandlers.dodge);
       this.input.keyboard.off("keydown-Q", this.keyHandlers.potion);
+      this.input.keyboard.off("keydown-UP", this.keyHandlers.pausePrevious);
+      this.input.keyboard.off("keydown-W", this.keyHandlers.pausePrevious);
+      this.input.keyboard.off("keydown-DOWN", this.keyHandlers.pauseNext);
+      this.input.keyboard.off("keydown-S", this.keyHandlers.pauseNext);
+      this.input.keyboard.off("keydown-ENTER", this.keyHandlers.pauseConfirm);
+      this.input.keyboard.off("keydown-SPACE", this.keyHandlers.pauseConfirm);
     }
     this.touchControls?.destroy();
     clearProjectiles(this);
