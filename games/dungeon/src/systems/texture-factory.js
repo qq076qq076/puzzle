@@ -49,25 +49,6 @@ export function createEnvironmentTextures(scene) {
     g.lineBetween(0, 15, 32, 15);
     g.lineBetween(0, 27, 32, 27);
   });
-  makeTexture(scene, "door-closed", 48, 96, (g) => {
-    g.fillStyle(0x241d29, 1);
-    g.fillRect(4, 2, 40, 92);
-    g.fillStyle(0xa44c51, 1);
-    g.fillRect(8, 8, 32, 80);
-    g.fillStyle(0xf1c15b, 1);
-    g.fillRect(21, 15, 6, 66);
-    g.fillStyle(0x482d3a, 1);
-    g.fillRect(14, 18, 5, 60);
-    g.fillRect(29, 18, 5, 60);
-  });
-  makeTexture(scene, "door-open", 48, 96, (g) => {
-    g.fillStyle(0x151520, 1);
-    g.fillRect(4, 2, 40, 92);
-    g.lineStyle(3, 0xdfb84f, 1);
-    g.strokeRect(7, 5, 34, 86);
-    g.fillStyle(0x070a11, 1);
-    g.fillRect(14, 10, 20, 76);
-  });
   makeTexture(scene, "portal", 64, 64, (g) => {
     g.fillStyle(0x171629, 0.9);
     g.fillCircle(32, 32, 26);

@@ -10,8 +10,10 @@ import { getDungeonAudio } from "../systems/audio-system.js";
 import { cloneRunStats, createRunStats, getRunDurationSeconds } from "../systems/run-state.js";
 import { makeRunSeed } from "../systems/rng.js";
 import { generateFloor } from "../systems/room-generator.js";
+import { hasCrossedExit } from "../systems/room-transition.js";
 import { resolveMeleeAttack, updateBleed } from "../systems/combat-system.js";
 import { playEnvironmentAnimation } from "../systems/actor-animations.js";
+import { closeSideDoor, createSideDoor, openSideDoor } from "../systems/door-system.js";
 import { createEnvironmentTextures } from "../systems/texture-factory.js";
 import { TouchControls } from "../systems/touch-controls.js";
 import { disableMouseInput, makeTouchOnlyButton } from "../ui/input.js";
@@ -34,7 +36,7 @@ export class RoomScene extends Phaser.Scene {
       trophy: Boolean(data.build?.trophy),
     };
     this.runStats = cloneRunStats(data.runStats || createRunStats(this.runSeed));
-    this.roomStatus = "room_intro";
+    this.roomStatus = "entering";
     this.currentWave = -1;
     this.pendingSpawns = 0;
     this.waveTransitionRemaining = 0;
@@ -57,7 +59,8 @@ export class RoomScene extends Phaser.Scene {
     createEnvironmentTextures(this);
     this.currentRoom = this.floor[this.roomIndex];
     this.createRoom();
-    this.player = new Player(this, this.currentRoom.entry[0], this.currentRoom.entry[1]);
+    this.player = new Player(this, this.currentRoom.entrySpawn[0], this.currentRoom.entrySpawn[1]);
+    this.player.facing.set(1, 0);
     this.applyBuild();
     this.physics.add.collider(this.player, this.walls);
     this.keyboard = this.input.keyboard.addKeys("W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,SHIFT,ENTER,R,ESC,P,M,B,Q");
@@ -82,9 +85,9 @@ export class RoomScene extends Phaser.Scene {
       onPause: () => this.togglePause(),
       onBuff: () => toggleBuffPanel(this, this.hud, this.player),
     });
-    this.introRemaining = 1050;
+    this.introRemaining = 0;
     this.introText = this.add
-      .text(GAME_WIDTH / 2, 270, `ROOM ${this.currentRoom.roomNumber}/6\n${this.currentRoom.name}\n\n準備進入…`, {
+      .text(GAME_WIDTH / 2, 270, `ROOM ${this.currentRoom.roomNumber}/6\n${this.currentRoom.name}\n\n從左側開門走入…`, {
         color: "#f5f1da",
         fontFamily: "monospace",
         fontSize: "20px",
@@ -116,17 +119,34 @@ export class RoomScene extends Phaser.Scene {
     const wallThickness = 32;
     this.addWall(GAME_WIDTH / 2, 76, GAME_WIDTH - 80, wallThickness, machine);
     this.addWall(GAME_WIDTH / 2, GAME_HEIGHT - 28, GAME_WIDTH - 80, wallThickness, machine);
-    this.addWall(40, 286, wallThickness, GAME_HEIGHT - 100, machine);
+    this.addWall(40, 170, wallThickness, 160, machine);
+    this.addWall(40, 410, wallThickness, 160, machine);
     this.addWall(920, 170, wallThickness, 160, machine);
     this.addWall(920, 410, wallThickness, 160, machine);
     this.currentRoom.obstacles.forEach(([x, y, width, height]) => this.addWall(x + width / 2, y + height / 2, width, height, machine));
 
-    this.exitPortal = this.add.sprite(this.currentRoom.exit[0], this.currentRoom.exit[1], "portal").setScale(0.58).setAlpha(0.22).setDepth(2);
+    this.entryPortal = this.add.sprite(this.currentRoom.entryDoor[0], this.currentRoom.entryDoor[1], "portal").setScale(0.58).setAlpha(0.82).setDepth(2);
+    playEnvironmentAnimation(this.entryPortal, "portal-idle");
+    this.entryPortal.setTint(machine ? 0x75b8d0 : 0xb593d8);
+    this.exitPortal = this.add.sprite(this.currentRoom.exitDoor[0], this.currentRoom.exitDoor[1], "portal").setScale(0.58).setAlpha(0.16).setDepth(2);
     playEnvironmentAnimation(this.exitPortal, "portal-idle");
     this.exitPortal.setTint(machine ? 0x75b8d0 : 0xb593d8);
-    this.doorFrame = this.add.rectangle(900, 290, 31, 106, 0x0a0b12, 0.92).setStrokeStyle(2, machine ? 0x6f7d94 : 0x5d4d59, 1).setDepth(5);
-    this.doorVisual = this.add.image(900, 290, "door-closed").setScale(3).setDepth(6);
-    this.doorBlocker = this.addWall(900, 290, 32, 88, machine);
+    this.entryDoor = createSideDoor(this, {
+      x: this.currentRoom.entryDoor[0],
+      y: this.currentRoom.entryDoor[1],
+      side: this.currentRoom.entrySide,
+      walls: this.walls,
+      machine,
+      initiallyOpen: true,
+    });
+    this.exitDoor = createSideDoor(this, {
+      x: this.currentRoom.exitDoor[0],
+      y: this.currentRoom.exitDoor[1],
+      side: this.currentRoom.exitSide,
+      walls: this.walls,
+      machine,
+      initiallyOpen: false,
+    });
     this.createTraps();
     this.currentRoom.machineDecor.forEach(([x, y]) => {
       const portal = this.add.sprite(x, y, "portal").setScale(0.38).setAlpha(0.46).setTint(0x72b9ca).setDepth(1);
@@ -200,7 +220,8 @@ export class RoomScene extends Phaser.Scene {
       this.updateHud("已暫停");
       return;
     }
-    if (this.roomStatus === "room_intro") this.updateRoomIntro(delta);
+    if (this.roomStatus === "entering") this.updateEntrance(delta);
+    else if (this.roomStatus === "room_intro") this.updateRoomIntro(delta);
     else if (this.roomStatus === "combat") this.updateCombat(delta);
     else if (this.roomStatus === "reward") this.updateRewardInput(delta);
     else if (this.roomStatus === "transition") this.updateTransitionInput(delta);
@@ -227,6 +248,24 @@ export class RoomScene extends Phaser.Scene {
       this.pauseOverlay = null;
       this.audio.beep("ui");
     }
+  }
+
+  updateEntrance(delta) {
+    const [targetX, targetY] = this.currentRoom.entry;
+    if (this.player.x < targetX) {
+      this.player.updateActor({ moveX: 1, moveY: 0, attack: false, dodge: false }, delta);
+      return;
+    }
+
+    this.player.body.reset(targetX, targetY);
+    this.player.facing.set(1, 0);
+    this.player.updateActor({ moveX: 0, moveY: 0, attack: false, dodge: false }, delta);
+    this.roomStatus = "room_intro";
+    this.introRemaining = 700;
+    closeSideDoor(this.entryDoor);
+    this.tweens.add({ targets: this.entryPortal, alpha: 0.12, duration: 320 });
+    this.introText?.setText(`ROOM ${this.currentRoom.roomNumber}/6\n${this.currentRoom.name}\n\n入口關閉 · 房間封鎖`);
+    this.audio.beep("telegraph");
   }
 
   updateRoomIntro(delta) {
@@ -468,7 +507,7 @@ export class RoomScene extends Phaser.Scene {
     if (input.buff) toggleBuffPanel(this, this.hud, this.player);
     if (input.usePotion) this.player.consumePotion();
     this.player.updateActor({ moveX: input.moveX, moveY: input.moveY, attack: false, dodge: input.dodge }, delta);
-    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, this.currentRoom.exit[0], this.currentRoom.exit[1]) <= 28) this.goToNextRoom();
+    if (hasCrossedExit(this.player, this.currentRoom)) this.goToNextRoom();
   }
 
   async goToNextRoom() {
@@ -517,12 +556,8 @@ export class RoomScene extends Phaser.Scene {
   openExitDoor() {
     if (this.exitOpen) return;
     this.exitOpen = true;
-    this.doorBlocker?.disableBody(true, true);
-    this.doorBlocker?.wallVisual?.setVisible(false);
-    this.doorFrame?.setFillStyle(0x070911, 0.72).setStrokeStyle(2, 0xdfb84f, 0.9);
-    if (this.doorVisual) this.tweens.add({ targets: this.doorVisual, scaleX: 0, alpha: 0, duration: 260 });
-    this.exitPortal?.setAlpha(1);
-    this.tweens.add({ targets: this.exitPortal, angle: 360, duration: 1000, repeat: -1 });
+    openSideDoor(this.exitDoor);
+    this.tweens.add({ targets: this.exitPortal, alpha: 1, scale: 0.68, duration: 320, yoyo: true, repeat: -1 });
     this.showStatus("怪物已清除 · 房門開啟");
   }
 

@@ -32,7 +32,7 @@ export function registerCraftPixAnimations(scene) {
       key: definition.key,
       frames: scene.anims.generateFrameNumbers(definition.texture, { start: 0, end: definition.frameCount - 1 }),
       frameRate: definition.frameRate,
-      repeat: -1,
+      repeat: definition.repeat ?? -1,
     });
   });
 }

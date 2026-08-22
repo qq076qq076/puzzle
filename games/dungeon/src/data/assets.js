@@ -107,6 +107,15 @@ function collectActorSheets() {
 
 const environmentSpritesheets = [
   sheet(
+    "door-side",
+    `${FANTASY_ROOT}/2 Dungeon Tileset/3 Animated objects/Door_S.png`,
+    14,
+    26,
+    4,
+    12,
+    0,
+  ),
+  sheet(
     "portal",
     `${MACHINE_ROOT}/2 Location/3 Animated objects/Portal1_Idle.png`,
     96,
@@ -129,13 +138,13 @@ export const PROVIDED_ASSETS = {
   images: {
     "room-floor-fantasy": `${FANTASY_ROOT}/2 Dungeon Tileset/1 Tiles/Tile_20.png`,
     "wall-fantasy": `${FANTASY_ROOT}/2 Dungeon Tileset/1 Tiles/Tile_16.png`,
-    "door-closed": `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects/Doors/4.png`,
     "reward-chest": `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects/Boxes/12.png`,
     "room-floor-machine": `${MACHINE_ROOT}/2 Location/1 Tiles/Tile_28.png`,
     "wall-machine": `${MACHINE_ROOT}/2 Location/1 Tiles/Tile_19.png`,
   },
   spritesheets: [...collectActorSheets(), ...environmentSpritesheets],
   environmentAnimations: [
+    { key: "door-side-open", texture: "door-side", frameCount: 4, frameRate: 12, repeat: 0 },
     { key: "portal-idle", texture: "portal", frameCount: 4, frameRate: 6 },
     { key: "reward-console-idle", texture: "reward-console", frameCount: 6, frameRate: 7 },
   ],

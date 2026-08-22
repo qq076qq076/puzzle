@@ -45,3 +45,16 @@ test("generated normal rooms satisfy the layout, wave, and template constraints"
     assert.equal(floor[5].rewardIds[0], "boss_trophy");
   });
 });
+
+test("a right-side exit connects to the next room's left-side entrance", () => {
+  const floor = generateFloor("connected-doors");
+  floor.forEach((room, index) => {
+    assert.equal(room.entrySide, "left");
+    assert.equal(room.exitSide, "right");
+    assert.ok(room.entrySpawn[0] < room.entryDoor[0]);
+    assert.ok(room.entryDoor[0] < room.entry[0]);
+    assert.ok(room.exit[0] < room.exitDoor[0]);
+    assert.ok(room.exitDoor[0] < room.exitTrigger[0]);
+    if (index > 0) assert.notEqual(floor[index - 1].exitSide, room.entrySide);
+  });
+});

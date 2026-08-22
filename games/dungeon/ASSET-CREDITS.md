@@ -20,8 +20,8 @@
 | 哥布林蝙蝠 | `roguelike-game-kit-pixel-art/3 Dungeon Enemies/2/` | `provided-goblin-bat*` |
 | 哥布林匕首手 | `roguelike-game-kit-pixel-art/3 Dungeon Enemies/3/` | `provided-goblin-dagger*` |
 | 哥布林守衛 | `roguelike-game-kit-pixel-art/3 Dungeon Enemies/4/` | `provided-spider-guard*` |
-| 奇幻地板、牆、門、獎勵 | `roguelike-game-kit-pixel-art/2 Dungeon Tileset/` | `room-floor-fantasy`、`wall-fantasy`、`door-closed`、`reward-chest` |
-| 鋼鐵蜘蛛 | `shoot/1 Main Character/1 Character/Walk1..3.png` | `provided-steel-spider*` |
+| 奇幻地板、牆、門、獎勵 | `roguelike-game-kit-pixel-art/2 Dungeon Tileset/` | `room-floor-fantasy`、`wall-fantasy`、`door-side`、`reward-chest` |
+| 鋼鐵蜘蛛 | `shoot/1 Main Character/1 Character/Walk1.png` | `provided-steel-spider` |
 | 魔王 | `shoot/3 Enemies/6/RunSD.png`、`RunSU.png` | `provided-boss*` |
 | 機械地板、牆 | `shoot/2 Location/1 Tiles/Tile_28.png`、`Tile_19.png` | `room-floor-machine`、`wall-machine` |
 | 傳送門、獎勵祭壇 | `shoot/2 Location/3 Animated objects/Portal1_Idle.png`、`Altar_Idle.png` | `portal`、`reward-console` |

@@ -22,8 +22,8 @@ Vite 將 `games/dungeon/assets/` 作為 public directory，`src/data/assets.js` 
 | 白甲近戰玩家 | `roguelike-game-kit-pixel-art/1 Characters/2/{D,S,U}_{Idle,Walk,Attack}.png` |
 | 巨鼠與三種哥布林 | `roguelike-game-kit-pixel-art/3 Dungeon Enemies/1..4/` |
 | 奇幻地板／牆 | `2 Dungeon Tileset/1 Tiles/Tile_20.png`、`Tile_16.png` |
-| 關閉的門／房間獎勵 | `2 Dungeon Tileset/2 Objects/Doors/4.png`、`Boxes/12.png` |
-| 鋼鐵蜘蛛 | `shoot/1 Main Character/1 Character/Walk1..3.png` |
+| 側門開關動畫／房間獎勵 | `2 Dungeon Tileset/3 Animated objects/Door_S.png`、`2 Dungeon Tileset/2 Objects/Boxes/12.png` |
+| 鋼鐵蜘蛛 | `shoot/1 Main Character/1 Character/Walk1.png`（固定同一機體並依方向旋轉） |
 | 機械魔王 | `shoot/3 Enemies/6/RunSD.png`、`RunSU.png` |
 | 機械地板／牆 | `shoot/2 Location/1 Tiles/Tile_28.png`、`Tile_19.png` |
 | 傳送門／獎勵祭壇 | `shoot/2 Location/3 Animated objects/Portal1_Idle.png`、`Altar_Idle.png` |

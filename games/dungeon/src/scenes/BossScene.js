@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config.js";
 import { MONSTERS } from "../data/monsters.js";
+import { ENTRY_DOOR_POINT, ENTRY_POINT, ENTRY_SPAWN_POINT } from "../data/rooms.js";
 import { Boss } from "../entities/Boss.js";
 import { Enemy } from "../entities/Enemy.js";
 import { Player } from "../entities/Player.js";
@@ -10,6 +11,7 @@ import { cloneRunStats, createRunStats, getRunDurationSeconds } from "../systems
 import { getDungeonAudio } from "../systems/audio-system.js";
 import { createRng, makeRunSeed } from "../systems/rng.js";
 import { playEnvironmentAnimation } from "../systems/actor-animations.js";
+import { closeSideDoor, createSideDoor } from "../systems/door-system.js";
 import { createEnvironmentTextures } from "../systems/texture-factory.js";
 import { applyBuff } from "../systems/buff-system.js";
 import { TouchControls } from "../systems/touch-controls.js";
@@ -36,8 +38,8 @@ export class BossScene extends Phaser.Scene {
     this.projectiles = [];
     this.telegraphs = [];
     this.bossPhase = 1;
-    this.battleStatus = "intro";
-    this.introRemaining = 1300;
+    this.battleStatus = "entering";
+    this.introRemaining = 0;
     this.paused = false;
     this.hazardRng = createRng(`${this.runSeed}:boss-hazards`);
   }
@@ -47,7 +49,8 @@ export class BossScene extends Phaser.Scene {
     this.audio = getDungeonAudio();
     createEnvironmentTextures(this);
     this.createArena();
-    this.player = new Player(this, GAME_WIDTH / 2, GAME_HEIGHT - 112);
+    this.player = new Player(this, ENTRY_SPAWN_POINT[0], ENTRY_SPAWN_POINT[1]);
+    this.player.facing.set(1, 0);
     this.applyBuild();
     this.physics.add.collider(this.player, this.walls);
     this.boss = new Boss(this, GAME_WIDTH / 2, 168);
@@ -71,7 +74,7 @@ export class BossScene extends Phaser.Scene {
       onPause: () => this.togglePause(),
       onBuff: () => toggleBuffPanel(this, this.hud, this.player),
     });
-    this.introText = this.add.text(480, 285, "第六房\n骨面機械王座\n\n出口封鎖", {
+    this.introText = this.add.text(480, 285, "第六房\n骨面機械王座\n\n從左側開門走入…", {
       color: "#f5f1da",
       fontFamily: "monospace",
       fontSize: "22px",
@@ -96,7 +99,8 @@ export class BossScene extends Phaser.Scene {
     this.walls = this.physics.add.staticGroup();
     this.addWall(480, 76, 848, 32);
     this.addWall(480, 500, 848, 32);
-    this.addWall(40, 288, 32, 408);
+    this.addWall(40, 170, 32, 160);
+    this.addWall(40, 410, 32, 160);
     this.addWall(920, 288, 32, 408);
     [[208, 164, 48, 48], [752, 164, 48, 48], [208, 372, 48, 48], [752, 372, 48, 48]].forEach(([x, y, width, height]) => this.addWall(x + width / 2, y + height / 2, width, height));
     this.dangerRing = this.add.circle(480, 290, 214, 0xb94d45, 0.04).setStrokeStyle(2, 0xe17b70, 0.26).setDepth(-1);
@@ -105,6 +109,16 @@ export class BossScene extends Phaser.Scene {
     this.portalRight = this.add.sprite(782, 290, "portal").setScale(0.62).setTint(0x72b9ca).setAlpha(0.22).setDepth(2);
     playEnvironmentAnimation(this.portalLeft, "portal-idle");
     playEnvironmentAnimation(this.portalRight, "portal-idle");
+    this.entryPortal = this.add.sprite(ENTRY_DOOR_POINT[0], ENTRY_DOOR_POINT[1], "portal").setScale(0.58).setTint(0x75b8d0).setAlpha(0.9).setDepth(2);
+    playEnvironmentAnimation(this.entryPortal, "portal-idle");
+    this.entryDoor = createSideDoor(this, {
+      x: ENTRY_DOOR_POINT[0],
+      y: ENTRY_DOOR_POINT[1],
+      side: "left",
+      walls: this.walls,
+      machine: true,
+      initiallyOpen: true,
+    });
     this.add.text(480, 94, "BOSS ROOM · 骨面機械王座", this.hudStyle(12, "#b9a9d4")).setOrigin(0.5).setDepth(2);
   }
 
@@ -159,7 +173,8 @@ export class BossScene extends Phaser.Scene {
       this.updateHud("已暫停");
       return;
     }
-    if (this.battleStatus === "intro") this.updateIntro(delta);
+    if (this.battleStatus === "entering") this.updateEntrance(delta);
+    else if (this.battleStatus === "intro") this.updateIntro(delta);
     else if (this.battleStatus === "combat") this.updateCombat(delta);
     else this.updateEndInput();
     this.updateHud();
@@ -170,7 +185,7 @@ export class BossScene extends Phaser.Scene {
   }
 
   togglePause() {
-    if (!["intro", "combat"].includes(this.battleStatus)) return;
+    if (!["entering", "intro", "combat"].includes(this.battleStatus)) return;
     this.paused = !this.paused;
     if (this.paused) {
       this.pauseOverlay = createPauseOverlay(this, { onResume: () => this.togglePause(), onRestart: () => this.restartRun() });
@@ -178,6 +193,23 @@ export class BossScene extends Phaser.Scene {
       this.pauseOverlay?.destroy(true);
       this.pauseOverlay = null;
     }
+  }
+
+  updateEntrance(delta) {
+    if (this.player.x < ENTRY_POINT[0]) {
+      this.player.updateActor({ moveX: 1, moveY: 0, attack: false, dodge: false }, delta);
+      return;
+    }
+
+    this.player.body.reset(ENTRY_POINT[0], ENTRY_POINT[1]);
+    this.player.facing.set(1, 0);
+    this.player.updateActor({ moveX: 0, moveY: 0, attack: false, dodge: false }, delta);
+    this.battleStatus = "intro";
+    this.introRemaining = 850;
+    closeSideDoor(this.entryDoor);
+    this.tweens.add({ targets: this.entryPortal, alpha: 0.12, duration: 320 });
+    this.introText?.setText("第六房\n骨面機械王座\n\n入口關閉 · 決戰開始");
+    this.audio.beep("boss");
   }
 
   updateIntro(delta) {

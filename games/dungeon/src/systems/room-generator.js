@@ -1,10 +1,32 @@
 import { BUFF_POOL_BY_ROOM } from "../data/buffs.js";
 import { MONSTERS, NORMAL_MONSTER_POOLS } from "../data/monsters.js";
-import { ENTRY_POINT, EXIT_POINT, ROOM_BOUNDS, ROOM_TEMPLATES } from "../data/rooms.js";
+import {
+  ENTRY_DOOR_POINT,
+  ENTRY_POINT,
+  ENTRY_SPAWN_POINT,
+  EXIT_DOOR_POINT,
+  EXIT_POINT,
+  EXIT_TRIGGER_POINT,
+  ROOM_BOUNDS,
+  ROOM_TEMPLATES,
+} from "../data/rooms.js";
 import { createRng } from "./rng.js";
 
 export const THREAT_BUDGETS = [6, 9, 13, 17, 23];
 export const WAVE_COUNTS = [1, 2, 2, 3, 3];
+
+function roomConnections() {
+  return {
+    entrySide: "left",
+    entry: [...ENTRY_POINT],
+    entrySpawn: [...ENTRY_SPAWN_POINT],
+    entryDoor: [...ENTRY_DOOR_POINT],
+    exitSide: "right",
+    exit: [...EXIT_POINT],
+    exitDoor: [...EXIT_DOOR_POINT],
+    exitTrigger: [...EXIT_TRIGGER_POINT],
+  };
+}
 
 function pickUnique(rng, values, count) {
   const remaining = [...values];
@@ -42,8 +64,7 @@ export function generateRoom(runSeed, roomIndex, previousTemplateId = null) {
       trapPoints: [[350, 290], [610, 290]],
       machineDecor: [[150, 150], [810, 150], [150, 430], [810, 430]],
       spawnPoints: [[232, 142], [728, 142], [232, 438], [728, 438]],
-      entry: [480, 438],
-      exit: [480, 102],
+      ...roomConnections(),
       validation: { valid: true, path: true, safeSpawns: true, area: true },
     };
   }
@@ -68,8 +89,7 @@ export function generateRoom(runSeed, roomIndex, previousTemplateId = null) {
     trapPoints: template.trapPoints,
     machineDecor: template.machineDecor || [],
     spawnPoints: template.spawnPoints,
-    entry: ENTRY_POINT,
-    exit: EXIT_POINT,
+    ...roomConnections(),
   };
   room.validation = validateRoom(room);
   if (!room.validation.valid) return generateFallbackRoom(runSeed, roomIndex, rng, previousTemplateId);
@@ -104,8 +124,7 @@ function generateFallbackRoom(runSeed, roomIndex, rng, previousTemplateId = null
     trapPoints: template.trapPoints,
     machineDecor: template.machineDecor || [],
     spawnPoints: template.spawnPoints,
-    entry: ENTRY_POINT,
-    exit: EXIT_POINT,
+    ...roomConnections(),
   };
   room.validation = validateRoom(room);
   return room;
