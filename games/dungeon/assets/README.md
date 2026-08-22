@@ -1,24 +1,31 @@
-# dungeon 素材放置說明
+# dungeon 素材配置
 
-`src/data/assets.js` 已改為使用使用者提供的兩個 CraftPix 素材來源：
+兩套 CraftPix 素材已解壓並納入專案：
 
-- [Free Top-Down Roguelike Game Kit Pixel Art](https://craftpix.net/freebies/free-top-down-roguelike-game-kit-pixel-art/)：玩家、巨鼠、哥布林、門與奇幻地城內容。
-- [Free Roguelike Shoot 'em up Pixel Art Game Kit](https://craftpix.net/freebies/free-roguelike-shoot-em-up-pixel-art-game-kit/)：鋼鐵蜘蛛、機械場景與機械 Boss 內容。
+- [Free Top-Down Roguelike Game Kit Pixel Art](https://craftpix.net/freebies/free-top-down-roguelike-game-kit-pixel-art/)：玩家、一般怪物、奇幻地板、牆、門與房間獎勵物件。
+- [Free Roguelike Shoot 'em up Pixel Art Game Kit](https://craftpix.net/freebies/free-roguelike-shoot-em-up-pixel-art-game-kit/)：鋼鐵蜘蛛、魔王、機械地板、牆、傳送門與祭壇。
 
-CraftPix 的免費下載端點目前需要帳號登入，因此 repository 不放未取得的原始壓縮檔，也不把預覽 GIF 當成遊戲素材。取得素材後，請將 PNG 或匯出的 spritesheet 依照 manifest 使用的檔名放入：
+## 原始素材目錄
 
 ```text
 assets/
-├── fantasy/
-│   ├── player.png
-│   ├── rat.png
-│   ├── goblin-bat.png
-│   ├── goblin-dagger.png
-│   └── goblin-guard.png
-└── machine/
-    ├── steel-spider.png
-    ├── boss.png
-    └── floor.png
+├── roguelike-game-kit-pixel-art/
+└── shoot/
 ```
 
-Vite 將 `games/dungeon/assets/` 作為 public directory。預設不請求尚未取得的檔案；取得並放入 PNG 後，以 `VITE_CRAFTPIX_ASSETS=true npm run build` 或 `VITE_CRAFTPIX_ASSETS=true npm run dev` 啟用。未啟用時會直接使用 `src/systems/texture-factory.js` 的 nearest-neighbor 程序化像素備援。
+Vite 將 `games/dungeon/assets/` 作為 public directory，`src/data/assets.js` 直接記錄實際 PNG 路徑；不需要環境變數即可在開發與正式建置中使用。
+
+## Runtime 採用項目
+
+| 遊戲用途 | 素材檔案 |
+| --- | --- |
+| 白甲近戰玩家 | `roguelike-game-kit-pixel-art/1 Characters/2/{D,S,U}_{Idle,Walk,Attack}.png` |
+| 巨鼠與三種哥布林 | `roguelike-game-kit-pixel-art/3 Dungeon Enemies/1..4/` |
+| 奇幻地板／牆 | `2 Dungeon Tileset/1 Tiles/Tile_20.png`、`Tile_16.png` |
+| 關閉的門／房間獎勵 | `2 Dungeon Tileset/2 Objects/Doors/4.png`、`Boxes/12.png` |
+| 鋼鐵蜘蛛 | `shoot/1 Main Character/1 Character/Walk1..3.png` |
+| 機械魔王 | `shoot/3 Enemies/6/RunSD.png`、`RunSU.png` |
+| 機械地板／牆 | `shoot/2 Location/1 Tiles/Tile_28.png`、`Tile_19.png` |
+| 傳送門／獎勵祭壇 | `shoot/2 Location/3 Animated objects/Portal1_Idle.png`、`Altar_Idle.png` |
+
+原始包內的 PSD、示範檔與未採用圖片會保留作為來源，但遊戲的 preload manifest 只請求上表列出的 PNG。`test/assets.test.mjs` 會檢查所有 runtime 檔案存在，並驗證 spritesheet 的格數與尺寸。
