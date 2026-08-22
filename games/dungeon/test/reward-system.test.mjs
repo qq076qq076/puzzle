@@ -5,7 +5,7 @@ import { applyReward, getRewardCategoryLabel, getRewardChoices, getUsableRewardI
 function makePlayer() {
   return {
     attackDamage: 20,
-    attackRange: 72,
+    attackRange: 88,
     attackArcDeg: 100,
     attackCooldownMs: 450,
     moveSpeed: 192,

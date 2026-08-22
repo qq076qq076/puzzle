@@ -158,6 +158,15 @@ const environmentSpritesheets = [
     18,
     0,
   ),
+  sheet(
+    "player-attack-effect",
+    `${MACHINE_ROOT}/1 Main Character/3 Effects/1_1.png`,
+    96,
+    96,
+    6,
+    30,
+    0,
+  ),
 ];
 
 export const PROVIDED_ASSETS = {
@@ -180,6 +189,7 @@ export const PROVIDED_ASSETS = {
     { key: "trap-rise", texture: "trap", frameCount: 6, frameRate: 12, repeat: 0 },
     { key: "spawn-marker-start", texture: "spawn-marker", frameCount: 6, frameRate: 10, repeat: 0 },
     { key: "hit-spark-burst", texture: "hit-spark", frameCount: 4, frameRate: 18, repeat: 0 },
+    { key: "player-attack-sweep", texture: "player-attack-effect", frameCount: 6, frameRate: 30, repeat: 0 },
   ],
   credits: {
     sources: CRAFTPIX_SOURCES,

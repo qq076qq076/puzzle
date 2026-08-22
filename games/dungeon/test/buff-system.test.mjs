@@ -9,7 +9,7 @@ test("buff application updates player build and records the id", () => {
     moveSpeed: 190,
     maxHealth: 100,
     health: 70,
-    attackRange: 72,
+    attackRange: 88,
     attackArcDeg: 100,
     damageReduction: 0,
     bleedDamage: 0,
@@ -45,7 +45,7 @@ test("the complete buff list enforces stack limits", () => {
     "last_stand",
   ];
   assert.deepEqual(Object.keys(BUFFS), expected);
-  const player = { attackDamage: 20, attackRange: 72, attackArcDeg: 100, attackCooldownMs: 450, moveSpeed: 192, buffs: [], buffStacks: {} };
+  const player = { attackDamage: 20, attackRange: 88, attackArcDeg: 100, attackCooldownMs: 450, moveSpeed: 192, buffs: [], buffStacks: {} };
   assert.equal(applyBuff(player, "combo_drive"), true);
   assert.equal(applyBuff(player, "combo_drive"), false);
   for (let index = 0; index < BUFFS.sharp_edge.maxStacks; index += 1) assert.equal(applyBuff(player, "sharp_edge"), true);
@@ -55,7 +55,7 @@ test("the complete buff list enforces stack limits", () => {
 test("every passive reward applies its documented player effect", () => {
   const player = {
     attackDamage: 20,
-    attackRange: 72,
+    attackRange: 88,
     attackArcDeg: 100,
     attackCooldownMs: 450,
     moveSpeed: 192,
@@ -73,7 +73,7 @@ test("every passive reward applies its documented player effect", () => {
   };
   Object.keys(BUFFS).forEach((buffId) => assert.equal(applyBuff(player, buffId), true, buffId));
   assert.equal(player.attackDamage, 24);
-  assert.equal(player.attackRange, 80);
+  assert.equal(player.attackRange, 96);
   assert.equal(player.attackArcDeg, 115);
   assert.equal(player.attackCooldownMs, 500);
   assert.equal(player.moveSpeed, 207.36);

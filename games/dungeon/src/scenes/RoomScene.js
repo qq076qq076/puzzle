@@ -11,6 +11,7 @@ import { cloneRunStats, createRunStats, getRunDurationSeconds } from "../systems
 import { makeRunSeed } from "../systems/rng.js";
 import { generateFloor } from "../systems/room-generator.js";
 import { hasCrossedExit } from "../systems/room-transition.js";
+import { ROOM_CLEAR_REWARD_DELAY_MS, tickRoomClearDelay } from "../systems/room-clear-delay.js";
 import { resolveMeleeAttack, updateBleed } from "../systems/combat-system.js";
 import { playEnvironmentAnimation } from "../systems/actor-animations.js";
 import { closeSideDoor, constrainActorToClosedDoor, createSideDoor, openSideDoor } from "../systems/door-system.js";
@@ -39,6 +40,7 @@ export class RoomScene extends Phaser.Scene {
     this.currentWave = -1;
     this.pendingSpawns = 0;
     this.waveTransitionRemaining = 0;
+    this.roomClearRemaining = 0;
     this.enemies = [];
     this.projectiles = [];
     this.telegraphs = [];
@@ -237,6 +239,7 @@ export class RoomScene extends Phaser.Scene {
     if (this.roomStatus === "entering") this.updateEntrance(delta);
     else if (this.roomStatus === "room_intro") this.updateRoomIntro(delta);
     else if (this.roomStatus === "combat") this.updateCombat(delta);
+    else if (this.roomStatus === "cleared") this.updateRoomCleared(delta);
     else if (this.roomStatus === "reward") this.updateRewardInput(delta);
     else if (this.roomStatus === "transition") this.updateTransitionInput(delta);
     else if (this.roomStatus === "defeat") this.updateDefeatInput();
@@ -304,7 +307,7 @@ export class RoomScene extends Phaser.Scene {
     this.currentWave += 1;
     const wave = this.currentRoom.waves[this.currentWave];
     if (!wave) {
-      this.openReward();
+      this.beginRoomClear();
       return;
     }
     this.waveTransitionRemaining = 0;
@@ -358,8 +361,37 @@ export class RoomScene extends Phaser.Scene {
       this.waveTransitionRemaining = 800;
       this.showStatus(`第 ${this.currentWave + 1} 波已清除 · 下一波準備中`);
     } else {
-      this.openReward();
+      this.beginRoomClear();
     }
+  }
+
+  beginRoomClear() {
+    if (this.roomStatus !== "combat") return;
+    this.roomStatus = "cleared";
+    this.roomClearRemaining = ROOM_CLEAR_REWARD_DELAY_MS;
+    this.openExitDoor();
+    clearProjectiles(this);
+    this.telegraphs.forEach((telegraph) => telegraph.node.destroy());
+    this.telegraphs = [];
+    this.traps.forEach((trap) => {
+      trap.active = false;
+      trap.wasActive = false;
+      trap.damaged = false;
+      trap.node.stop().setFrame(0).setAlpha(0.16);
+    });
+    this.showStatus("房間清除 · 獎勵準備中");
+    this.audio.beep("reward");
+  }
+
+  updateRoomCleared(delta) {
+    const input = this.readInput();
+    if (input.buff) toggleBuffPanel(this, this.hud, this.player);
+    if (input.usePotion) this.player.consumePotion();
+    this.player.updateActor({ moveX: input.moveX, moveY: input.moveY, attack: false, dodge: input.dodge }, delta);
+    constrainActorToClosedDoor(this.player, this.entryDoor);
+    const delay = tickRoomClearDelay(this.roomClearRemaining, delta);
+    this.roomClearRemaining = delay.remaining;
+    if (delay.ready) this.openReward();
   }
 
   updateTraps(delta) {
@@ -454,7 +486,7 @@ export class RoomScene extends Phaser.Scene {
   }
 
   openReward() {
-    if (this.roomStatus !== "combat") return;
+    if (this.roomStatus !== "cleared") return;
     this.openExitDoor();
     this.roomStatus = "reward";
     this.player.setVelocity(0, 0);
@@ -564,12 +596,13 @@ export class RoomScene extends Phaser.Scene {
 
   updateHud(status = null) {
     const waveLabel = this.roomStatus === "combat" ? `第 ${Math.max(1, this.currentWave + 1)}/${this.currentRoom.waves.length} 波` : null;
+    const clearLabel = this.roomStatus === "cleared" ? "房間清除 · 獎勵準備中" : null;
     const passageOpen = this.roomStatus === "transition" || this.roomStatus === "loading";
     this.hud.status.setVisible(!passageOpen);
     updateCombatHud(this.hud, this.player, {
       roomLabel: `FLOOR 1 · ROOM ${this.currentRoom.roomNumber}/6`,
       seed: this.runSeed,
-      status: passageOpen ? null : status || this.statusMessage || waveLabel || this.roomStatus,
+      status: passageOpen ? null : status || this.statusMessage || clearLabel || waveLabel || this.roomStatus,
     });
   }
 

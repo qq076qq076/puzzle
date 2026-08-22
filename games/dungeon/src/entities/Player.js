@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { playActorAnimation } from "../systems/actor-animations.js";
+import { playActorAnimation, playEnvironmentAnimation } from "../systems/actor-animations.js";
 import { useEmergencyPotion } from "../systems/consumable-system.js";
 import { startKnockback, updateKnockback } from "../systems/knockback.js";
 
@@ -20,7 +20,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.maxHealth = 100;
     this.health = 100;
     this.attackDamage = 20;
-    this.attackRange = 72;
+    this.attackRange = 88;
     this.attackArcDeg = 100;
     this.moveSpeed = 192;
     this.attackCooldownMs = 450;
@@ -54,6 +54,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.buffStacks = {};
     this.facing = new Phaser.Math.Vector2(1, 0);
     this.attackFacing = this.facing.clone();
+    this.attackEffects = new Set();
     this.shadow = scene.add.image(x, y + 10, "provided-shadow").setScale(2).setAlpha(0.62).setDepth(5);
     playActorAnimation(this, "player", "idle", this.facing);
   }
@@ -109,8 +110,27 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.attackStarted = true;
     this.attackHitResolved = false;
     this.attackFacing.copy(this.facing);
+    this.showAttackEffect();
     this.scene.audio?.beep("attack");
     return true;
+  }
+
+  showAttackEffect() {
+    const angle = Math.atan2(this.attackFacing.y, this.attackFacing.x);
+    const effect = this.scene.add
+      .sprite(this.x + this.attackFacing.x * 14, this.y + this.attackFacing.y * 14, "player-attack-effect", 0)
+      .setOrigin(0.08, 0.5)
+      .setScale(1.2)
+      .setRotation(angle)
+      .setTint(0xf6d36c)
+      .setDepth(20 + this.y / 10000);
+    const destroyEffect = () => {
+      this.attackEffects.delete(effect);
+      if (effect.active) effect.destroy();
+    };
+    this.attackEffects.add(effect);
+    effect.once("animationcomplete-player-attack-sweep", destroyEffect);
+    if (!playEnvironmentAnimation(effect, "player-attack-sweep")) destroyEffect();
   }
 
   tryDodge(direction) {
@@ -173,6 +193,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   destroy(fromScene) {
+    this.attackEffects?.forEach((effect) => effect.destroy());
+    this.attackEffects?.clear();
     this.shadow?.destroy();
     super.destroy(fromScene);
   }
