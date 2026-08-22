@@ -64,6 +64,7 @@ export class RoomScene extends Phaser.Scene {
     this.applyBuild();
     this.physics.add.collider(this.player, this.walls);
     this.keyboard = this.input.keyboard.addKeys("W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,SHIFT,ENTER,R,ESC,P,M,B,Q");
+    this.keyboardActions = { attack: false, dodge: false, potion: false };
     this.keyHandlers = {
       pause: () => this.togglePause(),
       sound: () => {
@@ -71,15 +72,25 @@ export class RoomScene extends Phaser.Scene {
         this.hud?.soundButton.text.setText(this.audio.enabled ? "SOUND" : "MUTE");
       },
       buffs: () => toggleBuffPanel(this, this.hud, this.player),
-      rewardAttack: () => {
+      attack: () => {
+        if (this.paused) return;
         if (this.roomStatus === "reward") this.chooseReward(this.rewardSelectionIndex);
+        else if (this.roomStatus === "combat") this.keyboardActions.attack = true;
+      },
+      dodge: () => {
+        if (!this.paused && ["combat", "transition"].includes(this.roomStatus)) this.keyboardActions.dodge = true;
+      },
+      potion: () => {
+        if (!this.paused && ["combat", "transition"].includes(this.roomStatus)) this.keyboardActions.potion = true;
       },
     };
     this.input.keyboard.on("keydown-ESC", this.keyHandlers.pause);
     this.input.keyboard.on("keydown-P", this.keyHandlers.pause);
     this.input.keyboard.on("keydown-M", this.keyHandlers.sound);
     this.input.keyboard.on("keydown-B", this.keyHandlers.buffs);
-    this.input.keyboard.on("keydown-SPACE", this.keyHandlers.rewardAttack);
+    this.input.keyboard.on("keydown-SPACE", this.keyHandlers.attack);
+    this.input.keyboard.on("keydown-SHIFT", this.keyHandlers.dodge);
+    this.input.keyboard.on("keydown-Q", this.keyHandlers.potion);
     this.createHud();
     this.touchControls = new TouchControls(this, {
       onPause: () => this.togglePause(),
@@ -204,12 +215,14 @@ export class RoomScene extends Phaser.Scene {
     const moveY = Number(this.keyboard.S.isDown || this.keyboard.DOWN.isDown) - Number(this.keyboard.W.isDown || this.keyboard.UP.isDown);
     const touchMove = this.touchControls?.enabled ? { x: this.touchControls.moveX, y: this.touchControls.moveY } : { x: 0, y: 0 };
     const actions = this.touchControls?.consumeActions() ?? { attack: false, dodge: false, potion: false, buff: false };
+    const buffered = this.keyboardActions || { attack: false, dodge: false, potion: false };
+    this.keyboardActions = { attack: false, dodge: false, potion: false };
     return {
       moveX: this.touchControls?.enabled && Math.hypot(touchMove.x, touchMove.y) > 0.08 ? touchMove.x : moveX,
       moveY: this.touchControls?.enabled && Math.hypot(touchMove.x, touchMove.y) > 0.08 ? touchMove.y : moveY,
-      attack: actions.attack || Phaser.Input.Keyboard.JustDown(this.keyboard.SPACE),
-      dodge: actions.dodge || Phaser.Input.Keyboard.JustDown(this.keyboard.SHIFT),
-      usePotion: actions.potion || Phaser.Input.Keyboard.JustDown(this.keyboard.Q),
+      attack: actions.attack || buffered.attack || Phaser.Input.Keyboard.JustDown(this.keyboard.SPACE),
+      dodge: actions.dodge || buffered.dodge || Phaser.Input.Keyboard.JustDown(this.keyboard.SHIFT),
+      usePotion: actions.potion || buffered.potion || Phaser.Input.Keyboard.JustDown(this.keyboard.Q),
       buff: actions.buff,
     };
   }
@@ -618,7 +631,9 @@ export class RoomScene extends Phaser.Scene {
       this.input.keyboard.off("keydown-P", this.keyHandlers.pause);
       this.input.keyboard.off("keydown-M", this.keyHandlers.sound);
       this.input.keyboard.off("keydown-B", this.keyHandlers.buffs);
-      this.input.keyboard.off("keydown-SPACE", this.keyHandlers.rewardAttack);
+      this.input.keyboard.off("keydown-SPACE", this.keyHandlers.attack);
+      this.input.keyboard.off("keydown-SHIFT", this.keyHandlers.dodge);
+      this.input.keyboard.off("keydown-Q", this.keyHandlers.potion);
     }
     this.touchControls?.destroy();
     clearProjectiles(this);
