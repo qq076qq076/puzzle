@@ -9,6 +9,7 @@ import { spawnProjectile, updateProjectiles, clearProjectiles } from "../systems
 import { cloneRunStats, createRunStats, getRunDurationSeconds } from "../systems/run-state.js";
 import { getDungeonAudio } from "../systems/audio-system.js";
 import { createRng, makeRunSeed } from "../systems/rng.js";
+import { playEnvironmentAnimation } from "../systems/actor-animations.js";
 import { createEnvironmentTextures } from "../systems/texture-factory.js";
 import { applyBuff } from "../systems/buff-system.js";
 import { TouchControls } from "../systems/touch-controls.js";
@@ -89,8 +90,8 @@ export class BossScene extends Phaser.Scene {
   }
 
   createArena() {
-    const floorKey = this.textures.exists("provided-machine-floor") ? "provided-machine-floor" : "room-floor-machine";
-    this.add.tileSprite(0, 0, GAME_WIDTH, GAME_HEIGHT, floorKey).setOrigin(0).setTint(0x9aa6bd).setDepth(-10);
+    this.add.tileSprite(0, 0, GAME_WIDTH, GAME_HEIGHT, "room-floor-machine").setOrigin(0).setDepth(-10);
+    this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x111526, 0.24).setOrigin(0).setDepth(-9);
     this.walls = this.physics.add.staticGroup();
     this.addWall(480, 76, 848, 32);
     this.addWall(480, 500, 848, 32);
@@ -99,15 +100,18 @@ export class BossScene extends Phaser.Scene {
     [[208, 164, 48, 48], [752, 164, 48, 48], [208, 372, 48, 48], [752, 372, 48, 48]].forEach(([x, y, width, height]) => this.addWall(x + width / 2, y + height / 2, width, height));
     this.dangerRing = this.add.circle(480, 290, 214, 0xb94d45, 0.04).setStrokeStyle(2, 0xe17b70, 0.26).setDepth(-1);
     this.safeRing = this.add.circle(480, 290, 178, 0x7b5ca4, 0.04).setStrokeStyle(2, 0xc68bd7, 0.25).setDepth(-1).setVisible(false);
-    this.portalLeft = this.add.image(178, 290, "portal").setScale(0.9).setTint(0x72b9ca).setAlpha(0.22).setDepth(2);
-    this.portalRight = this.add.image(782, 290, "portal").setScale(0.9).setTint(0x72b9ca).setAlpha(0.22).setDepth(2);
+    this.portalLeft = this.add.sprite(178, 290, "portal").setScale(0.62).setTint(0x72b9ca).setAlpha(0.22).setDepth(2);
+    this.portalRight = this.add.sprite(782, 290, "portal").setScale(0.62).setTint(0x72b9ca).setAlpha(0.22).setDepth(2);
+    playEnvironmentAnimation(this.portalLeft, "portal-idle");
+    playEnvironmentAnimation(this.portalRight, "portal-idle");
     this.add.text(480, 94, "BOSS ROOM · 骨面機械王座", this.hudStyle(12, "#b9a9d4")).setOrigin(0.5).setDepth(2);
   }
 
   addWall(x, y, width, height) {
     const wall = this.walls.create(x, y, "wall-machine");
+    wall.setVisible(false);
     wall.setDisplaySize(width, height).refreshBody();
-    wall.setDepth(-1);
+    wall.wallVisual = this.add.tileSprite(x, y, width, height, "wall-machine").setTint(0x72758d).setDepth(-1);
     return wall;
   }
 
@@ -350,7 +354,8 @@ export class BossScene extends Phaser.Scene {
     const seconds = getRunDurationSeconds(this.runStats);
     const summary = `完成房間：6/6\n遊玩時間：${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}\n受到傷害：${this.runStats.damageTaken}\n取得 Buff：${this.player.buffs.length} 個\nSeed：${this.runSeed}`;
     this.add.rectangle(480, 280, 720, 410, 0x0b0d16, 0.97).setStrokeStyle(3, 0xdfb84f, 0.95).setDepth(150);
-    this.add.image(480, 140, "reward-console").setScale(0.9).setTint(0xdfb84f).setDepth(151);
+    const victoryAltar = this.add.sprite(480, 140, "reward-console").setScale(1.35).setTint(0xdfb84f).setDepth(151);
+    playEnvironmentAnimation(victoryAltar, "reward-console-idle");
     this.add.text(480, 72, "VICTORY", { color: "#dfb84f", fontFamily: "monospace", fontSize: "36px", fontStyle: "bold" }).setOrigin(0.5).setDepth(151);
     this.add.text(480, 224, "第一地層已通關\n骨面核心已取得", { color: "#f5f1da", fontFamily: "monospace", fontSize: "16px", align: "center", lineSpacing: 8 }).setOrigin(0.5).setDepth(151);
     this.add.text(480, 300, summary, { color: "#aaa8b5", fontFamily: "monospace", fontSize: "11px", align: "center", lineSpacing: 6 }).setOrigin(0.5).setDepth(151);

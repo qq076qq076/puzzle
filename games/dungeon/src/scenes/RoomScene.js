@@ -11,6 +11,7 @@ import { cloneRunStats, createRunStats, getRunDurationSeconds } from "../systems
 import { makeRunSeed } from "../systems/rng.js";
 import { generateFloor } from "../systems/room-generator.js";
 import { resolveMeleeAttack, updateBleed } from "../systems/combat-system.js";
+import { playEnvironmentAnimation } from "../systems/actor-animations.js";
 import { createEnvironmentTextures } from "../systems/texture-factory.js";
 import { TouchControls } from "../systems/touch-controls.js";
 import { disableMouseInput, makeTouchOnlyButton } from "../ui/input.js";
@@ -67,11 +68,15 @@ export class RoomScene extends Phaser.Scene {
         this.hud?.soundButton.text.setText(this.audio.enabled ? "SOUND" : "MUTE");
       },
       buffs: () => toggleBuffPanel(this, this.hud, this.player),
+      rewardAttack: () => {
+        if (this.roomStatus === "reward") this.chooseReward(this.rewardSelectionIndex);
+      },
     };
     this.input.keyboard.on("keydown-ESC", this.keyHandlers.pause);
     this.input.keyboard.on("keydown-P", this.keyHandlers.pause);
     this.input.keyboard.on("keydown-M", this.keyHandlers.sound);
     this.input.keyboard.on("keydown-B", this.keyHandlers.buffs);
+    this.input.keyboard.on("keydown-SPACE", this.keyHandlers.rewardAttack);
     this.createHud();
     this.touchControls = new TouchControls(this, {
       onPause: () => this.togglePause(),
@@ -103,8 +108,10 @@ export class RoomScene extends Phaser.Scene {
 
   createRoom() {
     const machine = this.currentRoom.theme === "machine";
-    const floorKey = machine && this.textures.exists("provided-machine-floor") ? "provided-machine-floor" : machine ? "room-floor-machine" : "room-floor-fantasy";
-    this.add.tileSprite(0, 0, GAME_WIDTH, GAME_HEIGHT, floorKey).setOrigin(0).setTint(machine ? 0x9aa6bd : 0xffffff).setDepth(-10);
+    const floorKey = machine ? "room-floor-machine" : "room-floor-fantasy";
+    this.floorVisual = this.add.tileSprite(0, 0, GAME_WIDTH, GAME_HEIGHT, floorKey).setOrigin(0).setDepth(-10);
+    if (!machine) this.floorVisual.setTileScale(2, 2);
+    this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, machine ? 0x111526 : 0x141321, machine ? 0.2 : 0.12).setOrigin(0).setDepth(-9);
     this.walls = this.physics.add.staticGroup();
     const wallThickness = 32;
     this.addWall(GAME_WIDTH / 2, 76, GAME_WIDTH - 80, wallThickness, machine);
@@ -114,21 +121,28 @@ export class RoomScene extends Phaser.Scene {
     this.addWall(920, 410, wallThickness, 160, machine);
     this.currentRoom.obstacles.forEach(([x, y, width, height]) => this.addWall(x + width / 2, y + height / 2, width, height, machine));
 
-    this.exitPortal = this.add.image(this.currentRoom.exit[0], this.currentRoom.exit[1], "portal").setScale(0.78).setAlpha(0.3).setDepth(2);
+    this.exitPortal = this.add.sprite(this.currentRoom.exit[0], this.currentRoom.exit[1], "portal").setScale(0.58).setAlpha(0.22).setDepth(2);
+    playEnvironmentAnimation(this.exitPortal, "portal-idle");
     this.exitPortal.setTint(machine ? 0x75b8d0 : 0xb593d8);
-    this.doorVisual = this.add.image(900, 290, "door-closed").setScale(0.9).setDepth(6);
+    this.doorFrame = this.add.rectangle(900, 290, 31, 106, 0x0a0b12, 0.92).setStrokeStyle(2, machine ? 0x6f7d94 : 0x5d4d59, 1).setDepth(5);
+    this.doorVisual = this.add.image(900, 290, "door-closed").setScale(3).setDepth(6);
     this.doorBlocker = this.addWall(900, 290, 32, 88, machine);
     this.createTraps();
     this.currentRoom.machineDecor.forEach(([x, y]) => {
-      this.add.image(x, y, "portal").setScale(0.42).setAlpha(0.36).setTint(0x72b9ca).setDepth(1);
+      const portal = this.add.sprite(x, y, "portal").setScale(0.38).setAlpha(0.46).setTint(0x72b9ca).setDepth(1);
+      playEnvironmentAnimation(portal, "portal-idle");
     });
     this.add.text(GAME_WIDTH / 2, 94, machine ? "機械污染區" : "古老地城", this.hudStyle(11, machine ? "#8fd1e8" : "#cdb28e")).setOrigin(0.5).setDepth(2);
   }
 
   addWall(x, y, width, height, machine = false) {
-    const wall = this.walls.create(x, y, machine ? "wall-machine" : "wall-fantasy");
+    const texture = machine ? "wall-machine" : "wall-fantasy";
+    const wall = this.walls.create(x, y, texture);
+    wall.setVisible(false);
     wall.setDisplaySize(width, height).refreshBody();
-    wall.setDepth(-1);
+    wall.wallVisual = this.add.tileSprite(x, y, width, height, texture).setDepth(-1);
+    if (!machine) wall.wallVisual.setTileScale(2, 2);
+    else wall.wallVisual.setTint(0x72758d);
     return wall;
   }
 
@@ -386,7 +400,10 @@ export class RoomScene extends Phaser.Scene {
     this.rewardCards = [];
     this.rewardGroup = this.add.container(0, 0).setDepth(180);
     this.rewardGroup.add(this.add.rectangle(480, 282, 820, 385, 0x0b0d16, 0.97).setStrokeStyle(3, this.currentRoom.theme === "machine" ? 0x8fd1e8 : 0xdfb84f, 0.95));
-    this.rewardGroup.add(this.add.image(480, 138, this.currentRoom.theme === "machine" ? "reward-console" : "reward-chest").setScale(0.8));
+    const rewardVisual = this.add.sprite(480, 138, this.currentRoom.theme === "machine" ? "reward-console" : "reward-chest");
+    rewardVisual.setScale(this.currentRoom.theme === "machine" ? 1.25 : 3.5);
+    if (this.currentRoom.theme === "machine") playEnvironmentAnimation(rewardVisual, "reward-console-idle");
+    this.rewardGroup.add(rewardVisual);
     this.rewardGroup.add(this.add.text(480, 84, "房間清除", this.hudStyle(26, "#f5f1da")).setOrigin(0.5));
     this.rewardGroup.add(this.add.text(480, 112, "←／→ 選擇獎勵 · Space／攻擊確認", this.hudStyle(12, "#aaa8b5")).setOrigin(0.5));
     this.rewardIds.slice(0, 3).forEach((rewardId, index) => this.createRewardCard(rewardId, index));
@@ -495,7 +512,9 @@ export class RoomScene extends Phaser.Scene {
     if (this.exitOpen) return;
     this.exitOpen = true;
     this.doorBlocker?.disableBody(true, true);
-    this.doorVisual?.setTexture("door-open");
+    this.doorBlocker?.wallVisual?.setVisible(false);
+    this.doorFrame?.setFillStyle(0x070911, 0.72).setStrokeStyle(2, 0xdfb84f, 0.9);
+    if (this.doorVisual) this.tweens.add({ targets: this.doorVisual, scaleX: 0, alpha: 0, duration: 260 });
     this.exitPortal?.setAlpha(1);
     this.tweens.add({ targets: this.exitPortal, angle: 360, duration: 1000, repeat: -1 });
     this.showStatus("怪物已清除 · 房門開啟");
@@ -540,6 +559,7 @@ export class RoomScene extends Phaser.Scene {
       this.input.keyboard.off("keydown-P", this.keyHandlers.pause);
       this.input.keyboard.off("keydown-M", this.keyHandlers.sound);
       this.input.keyboard.off("keydown-B", this.keyHandlers.buffs);
+      this.input.keyboard.off("keydown-SPACE", this.keyHandlers.rewardAttack);
     }
     this.touchControls?.destroy();
     clearProjectiles(this);

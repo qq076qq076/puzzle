@@ -43,7 +43,6 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
   updateAI(player, delta) {
     if (!this.active || !player.active || player.health <= 0) return;
     this.attackCooldownRemaining = Math.max(0, this.attackCooldownRemaining - delta);
-    this.attackWindupRemaining = Math.max(0, this.attackWindupRemaining - delta);
     this.recoverRemaining = Math.max(0, this.recoverRemaining - delta);
     this.phaseTransitionRemaining = Math.max(0, this.phaseTransitionRemaining - delta);
     this.staggerRemaining = Math.max(0, this.staggerRemaining - delta);
@@ -71,6 +70,7 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
       return;
     }
     if (this.attackWindupRemaining > 0) {
+      this.attackWindupRemaining = Math.max(0, this.attackWindupRemaining - delta);
       this.state = "telegraph";
       this.setVelocity(0, 0);
       if (this.attackWindupRemaining === 0) this.performAttack(player);
