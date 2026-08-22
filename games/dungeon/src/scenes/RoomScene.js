@@ -13,7 +13,7 @@ import { generateFloor } from "../systems/room-generator.js";
 import { resolveMeleeAttack, updateBleed } from "../systems/combat-system.js";
 import { createEnvironmentTextures } from "../systems/texture-factory.js";
 import { TouchControls } from "../systems/touch-controls.js";
-import { disableMouseInput, isTouchPointer, makeTouchOnlyButton } from "../ui/input.js";
+import { disableMouseInput, makeTouchOnlyButton } from "../ui/input.js";
 import { createCombatHud, createPauseOverlay, toggleBuffPanel, updateCombatHud } from "../ui/hud.js";
 
 export class RoomScene extends Phaser.Scene {
@@ -43,6 +43,11 @@ export class RoomScene extends Phaser.Scene {
     this.traps = [];
     this.spawnMarkers = [];
     this.paused = false;
+    this.exitOpen = false;
+    this.rewardSelectionIndex = 0;
+    this.rewardNavigationCooldown = 0;
+    this.rewardTouchAxis = 0;
+    this.rewardCards = [];
   }
 
   create() {
@@ -54,7 +59,7 @@ export class RoomScene extends Phaser.Scene {
     this.player = new Player(this, this.currentRoom.entry[0], this.currentRoom.entry[1]);
     this.applyBuild();
     this.physics.add.collider(this.player, this.walls);
-    this.keyboard = this.input.keyboard.addKeys("W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,SHIFT,ONE,TWO,THREE,ENTER,R,ESC,P,M,B,Q");
+    this.keyboard = this.input.keyboard.addKeys("W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,SHIFT,ENTER,R,ESC,P,M,B,Q");
     this.keyHandlers = {
       pause: () => this.togglePause(),
       sound: () => {
@@ -84,7 +89,7 @@ export class RoomScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(150);
-    this.showHint("WASD／方向鍵移動 · Space 攻擊 · Shift 閃避 · Q 使用藥瓶 · B 查看 Buff");
+    this.showHint("WASD／方向鍵移動 · Space 攻擊 · Shift 閃避 · 清場後走過右側的門");
   }
 
   applyBuild() {
@@ -111,7 +116,7 @@ export class RoomScene extends Phaser.Scene {
 
     this.exitPortal = this.add.image(this.currentRoom.exit[0], this.currentRoom.exit[1], "portal").setScale(0.78).setAlpha(0.3).setDepth(2);
     this.exitPortal.setTint(machine ? 0x75b8d0 : 0xb593d8);
-    this.doorVisual = this.add.image(920, 290, "door-closed").setScale(0.9).setDepth(6);
+    this.doorVisual = this.add.image(900, 290, "door-closed").setScale(0.9).setDepth(6);
     this.doorBlocker = this.addWall(900, 290, 32, 88, machine);
     this.createTraps();
     this.currentRoom.machineDecor.forEach(([x, y]) => {
@@ -183,8 +188,8 @@ export class RoomScene extends Phaser.Scene {
     }
     if (this.roomStatus === "room_intro") this.updateRoomIntro(delta);
     else if (this.roomStatus === "combat") this.updateCombat(delta);
-    else if (this.roomStatus === "reward") this.updateRewardInput();
-    else if (this.roomStatus === "transition") this.updateTransitionInput();
+    else if (this.roomStatus === "reward") this.updateRewardInput(delta);
+    else if (this.roomStatus === "transition") this.updateTransitionInput(delta);
     else if (this.roomStatus === "defeat") this.updateDefeatInput();
     this.updateHud();
   }
@@ -340,25 +345,52 @@ export class RoomScene extends Phaser.Scene {
     this.audio.beep("damage");
   }
 
-  updateRewardInput() {
-    if (Phaser.Input.Keyboard.JustDown(this.keyboard.ONE)) this.chooseReward(0);
-    if (Phaser.Input.Keyboard.JustDown(this.keyboard.TWO)) this.chooseReward(1);
-    if (Phaser.Input.Keyboard.JustDown(this.keyboard.THREE)) this.chooseReward(2);
+  updateRewardInput(delta) {
+    this.rewardNavigationCooldown = Math.max(0, this.rewardNavigationCooldown - delta);
+    if (Phaser.Input.Keyboard.JustDown(this.keyboard.LEFT) || Phaser.Input.Keyboard.JustDown(this.keyboard.A)) this.moveRewardSelection(-1);
+    if (Phaser.Input.Keyboard.JustDown(this.keyboard.RIGHT) || Phaser.Input.Keyboard.JustDown(this.keyboard.D)) this.moveRewardSelection(1);
+
+    const touchAxis = this.touchControls?.enabled ? this.touchControls.moveX : 0;
+    if (Math.abs(touchAxis) < 0.25) this.rewardTouchAxis = 0;
+    if (this.rewardNavigationCooldown <= 0 && Math.abs(touchAxis) >= 0.6) {
+      const direction = touchAxis > 0 ? 1 : -1;
+      if (this.rewardTouchAxis !== direction) {
+        this.moveRewardSelection(direction);
+        this.rewardTouchAxis = direction;
+      }
+    }
+
+    const actions = this.touchControls?.consumeActions() ?? { attack: false, dodge: false, buff: false };
+    if (actions.attack || Phaser.Input.Keyboard.JustDown(this.keyboard.SPACE)) this.chooseReward(this.rewardSelectionIndex);
+  }
+
+  moveRewardSelection(direction) {
+    if (this.roomStatus !== "reward" || !this.rewardIds?.length) return;
+    this.rewardSelectionIndex = (this.rewardSelectionIndex + direction + this.rewardIds.length) % this.rewardIds.length;
+    this.rewardNavigationCooldown = 220;
+    this.updateRewardSelection();
+    this.audio.beep("ui");
   }
 
   openReward() {
     if (this.roomStatus !== "combat") return;
+    this.openExitDoor();
     this.roomStatus = "reward";
     this.player.setVelocity(0, 0);
     this.traps.forEach((trap) => trap.node.setAlpha(0.16));
     this.rewardIds = getUsableRewardIds(this.player, this.currentRoom.rewardIds);
     while (this.rewardIds.length < 3) this.rewardIds.push(["minor_heal", "gold_cache", "emergency_vial"][this.rewardIds.length]);
+    this.rewardSelectionIndex = 0;
+    this.rewardNavigationCooldown = 0;
+    this.rewardTouchAxis = 0;
+    this.rewardCards = [];
     this.rewardGroup = this.add.container(0, 0).setDepth(180);
     this.rewardGroup.add(this.add.rectangle(480, 282, 820, 385, 0x0b0d16, 0.97).setStrokeStyle(3, this.currentRoom.theme === "machine" ? 0x8fd1e8 : 0xdfb84f, 0.95));
     this.rewardGroup.add(this.add.image(480, 138, this.currentRoom.theme === "machine" ? "reward-console" : "reward-chest").setScale(0.8));
     this.rewardGroup.add(this.add.text(480, 84, "房間清除", this.hudStyle(26, "#f5f1da")).setOrigin(0.5));
-    this.rewardGroup.add(this.add.text(480, 112, "選擇一項獎勵（1／2／3）", this.hudStyle(12, "#aaa8b5")).setOrigin(0.5));
+    this.rewardGroup.add(this.add.text(480, 112, "←／→ 選擇獎勵 · Space／攻擊確認", this.hudStyle(12, "#aaa8b5")).setOrigin(0.5));
     this.rewardIds.slice(0, 3).forEach((rewardId, index) => this.createRewardCard(rewardId, index));
+    this.updateRewardSelection();
     this.audio.beep("reward");
   }
 
@@ -366,7 +398,7 @@ export class RoomScene extends Phaser.Scene {
     const reward = getRewardDefinition(rewardId);
     if (!reward) return;
     const x = 250 + index * 230;
-    const card = this.add.rectangle(x, 300, 200, 164, 0x202439, 1).setStrokeStyle(2, getRewardColor(rewardId), 1).setInteractive(new Phaser.Geom.Rectangle(-100, -82, 200, 164), Phaser.Geom.Rectangle.Contains);
+    const card = this.add.rectangle(x, 300, 200, 164, 0x202439, 1).setStrokeStyle(2, getRewardColor(rewardId), 1);
     const text = this.add.text(x, 300, `${index + 1}\n${reward.name}\n\n${reward.rarity}\n${reward.description}`, {
       color: "#f5f1da",
       fontFamily: "monospace",
@@ -375,10 +407,16 @@ export class RoomScene extends Phaser.Scene {
       wordWrap: { width: 172 },
       lineSpacing: 4,
     }).setOrigin(0.5);
-    card.on("pointerdown", (pointer) => {
-      if (isTouchPointer(pointer)) this.chooseReward(index);
-    });
+    this.rewardCards.push({ card, text, rewardId });
     this.rewardGroup.add([card, text]);
+  }
+
+  updateRewardSelection() {
+    this.rewardCards.forEach(({ card, rewardId }, index) => {
+      const selected = index === this.rewardSelectionIndex;
+      card.setFillStyle(selected ? 0x303550 : 0x202439, 1);
+      card.setStrokeStyle(selected ? 4 : 2, selected ? 0xf5f1da : getRewardColor(rewardId), 1);
+    });
   }
 
   chooseReward(index) {
@@ -392,35 +430,28 @@ export class RoomScene extends Phaser.Scene {
     this.runStats.trophy = Boolean(this.player.trophy);
     this.rewardGroup?.destroy(true);
     this.rewardGroup = null;
-    this.doorBlocker?.disableBody(true, true);
-    this.doorVisual?.setTexture("door-open");
-    this.exitPortal?.setAlpha(1);
-    this.tweens.add({ targets: this.exitPortal, angle: 360, duration: 1000, repeat: -1 });
     this.roomStatus = "transition";
-    this.transitionText = this.add.text(480, 270, `${result.converted ? "Buff 已達上限，轉化為 10 金幣" : describeReward(rewardId)}\n\n走向傳送門，按 Enter／Space 進入下一間`, {
+    this.transitionText = this.add.text(480, 270, `${result.converted ? "Buff 已達上限，轉化為 10 金幣" : describeReward(rewardId)}\n\n走過右側的開門進入下一間`, {
       color: "#f5f1da",
       fontFamily: "monospace",
       fontSize: "15px",
       align: "center",
       lineSpacing: 8,
     }).setOrigin(0.5).setDepth(140);
-    this.nextButton = makeTouchOnlyButton(this, 480, 390, 220, 44, "進入下一間", () => this.goToNextRoom(), {
-      color: 0x303a55,
-      strokeColor: 0xdfb84f,
-      depth: 142,
-    });
   }
 
-  updateTransitionInput() {
-    if (Phaser.Input.Keyboard.JustDown(this.keyboard.ENTER) || Phaser.Input.Keyboard.JustDown(this.keyboard.SPACE)) this.goToNextRoom();
-    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, this.currentRoom.exit[0], this.currentRoom.exit[1]) <= 58) this.goToNextRoom();
+  updateTransitionInput(delta) {
+    const input = this.readInput();
+    if (input.buff) toggleBuffPanel(this, this.hud, this.player);
+    if (input.usePotion) this.player.consumePotion();
+    this.player.updateActor({ moveX: input.moveX, moveY: input.moveY, attack: false, dodge: input.dodge }, delta);
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, this.currentRoom.exit[0], this.currentRoom.exit[1]) <= 28) this.goToNextRoom();
   }
 
   async goToNextRoom() {
     if (this.roomStatus !== "transition") return;
     this.roomStatus = "loading";
-    this.transitionText?.setText("載入下一間房…");
-    this.nextButton?.destroy();
+    this.transitionText?.setText("走過房門，載入下一間房…");
     if (this.roomIndex >= 4) {
       const { BossScene } = await import("./BossScene.js");
       if (!this.scene.get("Boss")) this.scene.add("Boss", BossScene, false);
@@ -458,6 +489,16 @@ export class RoomScene extends Phaser.Scene {
     this.time.delayedCall(1500, () => {
       if (this.statusMessage === message) this.statusMessage = null;
     });
+  }
+
+  openExitDoor() {
+    if (this.exitOpen) return;
+    this.exitOpen = true;
+    this.doorBlocker?.disableBody(true, true);
+    this.doorVisual?.setTexture("door-open");
+    this.exitPortal?.setAlpha(1);
+    this.tweens.add({ targets: this.exitPortal, angle: 360, duration: 1000, repeat: -1 });
+    this.showStatus("怪物已清除 · 房門開啟");
   }
 
   updateDefeatInput() {

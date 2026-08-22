@@ -6,7 +6,9 @@ export const ROOM_BOUNDS = {
 };
 
 export const ENTRY_POINT = [92, 290];
-export const EXIT_POINT = [868, 290];
+// The trigger sits just inside the doorway so the player must physically walk
+// through the opened door instead of confirming the transition from anywhere.
+export const EXIT_POINT = [876, 290];
 
 const SAFE_SPAWNS = [
   [232, 142],
