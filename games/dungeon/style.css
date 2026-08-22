@@ -33,9 +33,15 @@ body {
 
 #game-shell {
   position: absolute;
-  inset: 0;
+  top: 50%;
+  left: 50%;
+  width: min(100vw, 960px);
+  height: min(100vh, 540px);
+  transform: translate(-50%, -50%);
   display: grid;
   place-items: center;
+  overflow: hidden;
+  contain: layout paint size;
 }
 
 #game-shell canvas {
@@ -85,5 +91,12 @@ body {
 @media (pointer: coarse) and (orientation: portrait) {
   .portrait-overlay {
     display: grid;
+  }
+}
+
+@media (pointer: coarse) {
+  #game-shell {
+    width: 100vw;
+    height: 100vh;
   }
 }
