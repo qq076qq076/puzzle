@@ -25,10 +25,15 @@ export class PreloadScene extends Phaser.Scene {
       fontSize: "12px",
     }).setOrigin(0.5);
 
-    Object.entries(PROVIDED_ASSETS.images).forEach(([key, path]) => {
-      const textureKey = key === "machineFloor" ? "provided-machine-floor" : `provided-${key.replaceAll("_", "-")}`;
-      this.load.image(textureKey, path);
-    });
+    if (PROVIDED_ASSETS.localFilesAvailable) {
+      Object.entries(PROVIDED_ASSETS.images).forEach(([key, path]) => {
+        const textureKey = key === "machineFloor" ? "provided-machine-floor" : `provided-${key.replaceAll("_", "-")}`;
+        this.load.image(textureKey, path);
+      });
+    } else {
+      this.progressFill.width = 400;
+      this.progressText.setText("尚未啟用 CraftPix PNG，使用像素備援圖形");
+    }
     this.load.on("progress", (value) => {
       this.progressFill.width = 400 * value;
       this.progressText.setText(`讀取 CraftPix 素材… ${Math.round(value * 100)}%`);

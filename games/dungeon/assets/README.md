@@ -21,4 +21,4 @@ assets/
     └── floor.png
 ```
 
-Vite 將 `games/dungeon/assets/` 作為 public directory。缺少任何檔案時，PreloadScene 會保留遊戲流程並改用 `src/systems/texture-factory.js` 的 nearest-neighbor 程序化像素備援；放入 PNG 後不需要修改玩家、怪物、房間生成或 Buff 系統。
+Vite 將 `games/dungeon/assets/` 作為 public directory。預設不請求尚未取得的檔案；取得並放入 PNG 後，以 `VITE_CRAFTPIX_ASSETS=true npm run build` 或 `VITE_CRAFTPIX_ASSETS=true npm run dev` 啟用。未啟用時會直接使用 `src/systems/texture-factory.js` 的 nearest-neighbor 程序化像素備援。

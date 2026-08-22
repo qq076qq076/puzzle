@@ -399,7 +399,7 @@ export class RoomScene extends Phaser.Scene {
     if (!reward) return;
     const x = 250 + index * 230;
     const card = this.add.rectangle(x, 300, 200, 164, 0x202439, 1).setStrokeStyle(2, getRewardColor(rewardId), 1);
-    const text = this.add.text(x, 300, `${index + 1}\n${reward.name}\n\n${reward.rarity}\n${reward.description}`, {
+    const text = this.add.text(x, 300, `${reward.name}\n\n${reward.rarity}\n${reward.description}`, {
       color: "#f5f1da",
       fontFamily: "monospace",
       fontSize: "11px",

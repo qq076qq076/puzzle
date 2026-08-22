@@ -16,6 +16,7 @@ export const CRAFTPIX_SOURCES = {
 // URLs work both in dev and in the built game. Missing files fall back to the
 // procedural pixel textures created by texture-factory.js.
 export const PROVIDED_ASSETS = {
+  localFilesAvailable: typeof import.meta.env !== "undefined" && import.meta.env.VITE_CRAFTPIX_ASSETS === "true",
   images: {
     player: "./fantasy/player.png",
     rat: "./fantasy/rat.png",
