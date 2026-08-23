@@ -2,7 +2,9 @@ import Phaser from "phaser";
 import { playActorAnimation } from "../systems/actor-animations.js";
 import { tickContactDamage, tryContactDamage } from "../systems/contact-damage.js";
 import { createEnemyDashMotion } from "../systems/enemy-attack.js";
+import { getRangedMovement, isRangedAttack } from "../systems/enemy-behavior.js";
 import { startKnockback, updateKnockback } from "../systems/knockback.js";
+import { spawnEnemyProjectilePattern } from "../systems/projectile-system.js";
 
 export class Enemy extends Phaser.Physics.Arcade.Sprite {
   constructor(scene, x, y, definition, sequence = 0) {
@@ -34,6 +36,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.machineMarkedRemaining = 0;
     this.facing = new Phaser.Math.Vector2(0, 1);
     this.visualState = "idle";
+    this.strafeDirection = String(sequence).split("").reduce((total, character) => total + character.charCodeAt(0), 0) % 2 ? -1 : 1;
     this.setScale(definition.scale ?? 3);
     this.setTint(definition.color ?? 0xffffff);
     this.setDepth(8);
@@ -128,12 +131,16 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     const distance = Math.hypot(dx, dy) || 1;
     this.facing.set(dx / distance, dy / distance);
     const attackRange = this.definition.attackRange;
-    if (distance > attackRange || this.definition.attackKind === "ranged") {
+    if (isRangedAttack(this.definition.attackKind)) {
+      this.state = "chase";
+      const movement = getRangedMovement(this.definition, dx, dy, distance, this.strafeDirection);
+      const movementScale = movement.mode === "strafe" ? 0.48 : 1;
+      this.setVelocity(movement.x * this.definition.speed * movementScale, movement.y * this.definition.speed * movementScale);
+      if (this.attackCooldownRemaining <= 0 && distance <= attackRange) this.startAttack(player);
+    } else if (distance > attackRange) {
       this.state = "chase";
       const speedMultiplier = this.definition.stealth && distance > 180 ? 1.24 : 1;
-      if (distance > attackRange) this.setVelocity((dx / distance) * this.definition.speed * speedMultiplier, (dy / distance) * this.definition.speed * speedMultiplier);
-      else this.setVelocity(0, 0);
-      if (this.attackCooldownRemaining <= 0 && distance <= attackRange) this.startAttack(player);
+      this.setVelocity((dx / distance) * this.definition.speed * speedMultiplier, (dy / distance) * this.definition.speed * speedMultiplier);
     } else {
       this.state = "chase";
       this.setVelocity(0, 0);
@@ -170,8 +177,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       playActorAnimation(this, this.assetId, "attack", this.facing, { restart: true });
       return;
     }
-    if (kind === "ranged") {
-      this.scene.spawnEnemyProjectile?.(this, player, this.definition.projectileDamage);
+    if (isRangedAttack(kind)) {
+      spawnEnemyProjectilePattern(this.scene, this, player, this.definition);
     } else {
       if (distance <= this.definition.attackRange + 30) {
         player.takeDamage(this.definition.damage, {

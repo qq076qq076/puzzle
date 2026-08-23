@@ -69,7 +69,7 @@ test("world effects are mapped to supplied CraftPix files without generated fall
 });
 
 test("player and fantasy enemies provide directional movement and attacks", () => {
-  for (const actorId of ["player", "rat", "goblin_bat", "goblin_dagger", "spider_guard"]) {
+  for (const actorId of ["player", "rat", "goblin_bat", "goblin_dagger", "plague_mage"]) {
     const actor = ACTOR_ASSETS[actorId];
     for (const state of ["idle", "walk", "attack"]) {
       assert.deepEqual(Object.keys(actor.states[state]).sort(), ["down", "side", "up"], `${actorId} ${state}`);
@@ -85,4 +85,5 @@ test("actor orientation follows each source sprite's modeled direction", () => {
   assert.equal(getActorOrientation("goblin_bat", { x: -1, y: 0 }).flipX, true);
   assert.equal(getActorOrientation("steel_spider", { x: 1, y: 0 }).rotation, -Math.PI / 2);
   assert.equal(getActorOrientation("steel_spider", { x: 0, y: -1 }).rotation, Math.PI);
+  assert.equal(getActorOrientation("robot_gunner", { x: -1, y: 0 }).flipX, true);
 });

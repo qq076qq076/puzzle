@@ -3,8 +3,8 @@ import { MONSTERS, NORMAL_MONSTER_POOLS } from "../data/monsters.js";
 import { ROOM_TEMPLATES } from "../data/rooms.js";
 import { createRng } from "./rng.js";
 
-export const THREAT_BUDGETS = [12, 18, 25, 34, 44];
-export const ENEMY_COUNTS = [4, 5, 6, 7, 8];
+export const THREAT_BUDGETS = [14, 24, 34, 54, 78];
+export const ENEMY_COUNTS = [4, 5, 6, 8, 10];
 export const WAVE_COUNTS = [1, 2, 2, 3, 3];
 
 function pickUnique(rng, values, count) {

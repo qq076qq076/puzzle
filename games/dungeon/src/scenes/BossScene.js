@@ -6,7 +6,7 @@ import { Boss } from "../entities/Boss.js";
 import { Enemy } from "../entities/Enemy.js";
 import { Player } from "../entities/Player.js";
 import { resolveMeleeAttack, updateBleed } from "../systems/combat-system.js";
-import { spawnProjectile, updateProjectiles, clearProjectiles } from "../systems/projectile-system.js";
+import { updateProjectiles, clearProjectiles } from "../systems/projectile-system.js";
 import { cloneRunStats, createRunStats, getRunDurationSeconds } from "../systems/run-state.js";
 import { getDungeonAudio } from "../systems/audio-system.js";
 import { createRng, makeRunSeed } from "../systems/rng.js";
@@ -327,10 +327,6 @@ export class BossScene extends Phaser.Scene {
       }
       return true;
     });
-  }
-
-  spawnEnemyProjectile(enemy, target, damage) {
-    spawnProjectile(this, enemy, target, { damage, speed: 220 });
   }
 
   onBossPhaseChange(phase) {

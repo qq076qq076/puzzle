@@ -45,6 +45,20 @@ function fantasyActor(textureKey, folder, options = {}) {
   return { baseTexture: textureKey, sideFaces: options.sideFaces ?? "right", states };
 }
 
+function machineEnemyActor(textureKey, folder) {
+  const down = sheet(textureKey, `${MACHINE_ROOT}/3 Enemies/${folder}/RunSD.png`, 48, 48, 6, 8);
+  const up = sheet(`${textureKey}-up`, `${MACHINE_ROOT}/3 Enemies/${folder}/RunSU.png`, 48, 48, 6, 8);
+  return {
+    baseTexture: textureKey,
+    sideFaces: "right",
+    flipVerticalByHorizontalFacing: true,
+    states: {
+      idle: { down, side: down, up },
+      walk: { down, side: down, up },
+    },
+  };
+}
+
 const steelSpiderWalk = sheet(
   "provided-steel-spider",
   `${MACHINE_ROOT}/1 Main Character/1 Character/Walk1.png`,
@@ -75,7 +89,9 @@ export const ACTOR_ASSETS = {
   rat: fantasyActor("provided-rat", "3 Dungeon Enemies/1", { sideFaces: "left" }),
   goblin_bat: fantasyActor("provided-goblin-bat", "3 Dungeon Enemies/2"),
   goblin_dagger: fantasyActor("provided-goblin-dagger", "3 Dungeon Enemies/3"),
-  spider_guard: fantasyActor("provided-spider-guard", "3 Dungeon Enemies/4"),
+  plague_mage: fantasyActor("provided-plague-mage", "3 Dungeon Enemies/4"),
+  robot_gunner: machineEnemyActor("provided-robot-gunner", "3"),
+  machine_guard: machineEnemyActor("provided-machine-guard", "5"),
   steel_spider: {
     baseTexture: "provided-steel-spider",
     rotationMode: "from-down",
@@ -175,6 +191,7 @@ export const PROVIDED_ASSETS = {
     "provided-shadow": `${FANTASY_ROOT}/1 Characters/Other/Shadow.png`,
     "potion-icon": `${FANTASY_ROOT}/4 GUI/3 Icons/Icon_32.png`,
     "enemy-projectile": `${MACHINE_ROOT}/1 Main Character/2 Weapons/Projectiles/10.png`,
+    "spell-projectile": `${FANTASY_ROOT}/3 Dungeon Enemies/Other/Fireball.png`,
     "room-floor-fantasy": `${FANTASY_ROOT}/2 Dungeon Tileset/1 Tiles/Tile_20.png`,
     "wall-fantasy": `${FANTASY_ROOT}/2 Dungeon Tileset/1 Tiles/Tile_16.png`,
     "reward-chest": `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects/Boxes/12.png`,

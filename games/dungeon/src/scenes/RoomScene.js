@@ -4,7 +4,7 @@ import { MONSTERS } from "../data/monsters.js";
 import { Enemy } from "../entities/Enemy.js";
 import { Player } from "../entities/Player.js";
 import { applyReward, getRewardCategoryLabel, getRewardChoices, getRewardColor, getRewardDefinition } from "../systems/reward-system.js";
-import { clearProjectiles, spawnProjectile, updateProjectiles } from "../systems/projectile-system.js";
+import { clearProjectiles, updateProjectiles } from "../systems/projectile-system.js";
 import { getDungeonAudio } from "../systems/audio-system.js";
 import { cloneRunStats, createRunStats, getRunDurationSeconds } from "../systems/run-state.js";
 import { applyPlayerBuild, capturePlayerBuild, normalizeRunBuild } from "../systems/player-build.js";
@@ -409,8 +409,9 @@ export class RoomScene extends Phaser.Scene {
   }
 
   showEnemyTelegraph(enemy, kind, duration) {
-    const color = kind === "ranged" ? 0x8fd1e8 : kind === "pounce" || kind === "dash" ? 0xe17b70 : 0xdfb84f;
-    const radius = kind === "ranged" ? 34 : 42;
+    const ranged = ["ranged", "spell", "burst"].includes(kind);
+    const color = kind === "spell" ? 0x9ce06f : ranged ? 0x8fd1e8 : kind === "pounce" || kind === "dash" ? 0xe17b70 : 0xdfb84f;
+    const radius = ranged ? 34 : 42;
     const node = this.add.circle(enemy.x, enemy.y, radius, color, 0.12).setStrokeStyle(2, color, 0.9).setDepth(3);
     this.telegraphs.push({ node, remaining: duration, enemy });
   }
@@ -425,10 +426,6 @@ export class RoomScene extends Phaser.Scene {
       }
       return true;
     });
-  }
-
-  spawnEnemyProjectile(enemy, target, damage) {
-    spawnProjectile(this, enemy, target, { damage, speed: 220 });
   }
 
   showHitEffect(x, y) {

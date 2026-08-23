@@ -41,7 +41,7 @@ test("room generation varies with the seed", () => {
 
 test("generated normal rooms satisfy the layout, wave, and template constraints", () => {
   assert.ok(ROOM_TEMPLATES.length >= 8);
-  assert.deepEqual(ENEMY_COUNTS, [4, 5, 6, 7, 8]);
+  assert.deepEqual(ENEMY_COUNTS, [4, 5, 6, 8, 10]);
   assert.ok(ENEMY_COUNTS.every((count, index) => index === 0 || count > ENEMY_COUNTS[index - 1]));
   Array.from({ length: 25 }, (_, index) => `layout-${index}`).forEach((seed) => {
     const floor = generateFloor(seed);

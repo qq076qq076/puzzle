@@ -1,11 +1,12 @@
 import Phaser from "phaser";
+import { getEnemyProjectilePattern } from "./projectile-patterns.js";
 
 const MAX_PROJECTILES = 32;
 
 export function spawnProjectile(scene, source, target, options = {}) {
   if (!scene.projectiles) scene.projectiles = [];
   if (scene.projectiles.length >= MAX_PROJECTILES) return false;
-  const angle = Math.atan2(target.y - source.y, target.x - source.x);
+  const angle = options.angle ?? Math.atan2(target.y - source.y, target.x - source.x);
   const speed = options.speed ?? 210;
   const projectile = {
     x: source.x,
@@ -21,8 +22,27 @@ export function spawnProjectile(scene, source, target, options = {}) {
       .setRotation(angle - Math.PI / 4)
       .setDepth(7),
   };
+  if (options.tint) projectile.node.setTint(options.tint);
   scene.projectiles.push(projectile);
   return true;
+}
+
+export function spawnEnemyProjectilePattern(scene, source, target, definition) {
+  const baseAngle = Math.atan2(target.y - source.y, target.x - source.x);
+  const options = {
+    damage: definition.projectileDamage,
+    speed: definition.projectileSpeed,
+    texture: definition.projectileTexture,
+    scale: definition.projectileScale,
+    radius: definition.projectileRadius,
+  };
+  getEnemyProjectilePattern(definition).forEach(({ angleOffset, delayMs }) => {
+    const fire = () => {
+      if (source.active && target.active) spawnProjectile(scene, source, target, { ...options, angle: baseAngle + angleOffset });
+    };
+    if (delayMs > 0) scene.time.delayedCall(delayMs, fire);
+    else fire();
+  });
 }
 
 export function updateProjectiles(scene, player, delta) {
