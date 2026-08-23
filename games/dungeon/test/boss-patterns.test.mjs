@@ -7,6 +7,7 @@ test("boss phases rotate through distinct attack sets", () => {
   assert.deepEqual(BOSS_PHASE_PATTERNS[1], ["combo", "volley", "charge"]);
   assert.ok(BOSS_PHASE_PATTERNS[2].includes("summon"));
   assert.ok(BOSS_PHASE_PATTERNS[3].includes("mine"));
+  assert.ok(BOSS_PHASE_PATTERNS[3].includes("summon"));
   assert.equal(getBossAttack(2, 1).kind, "summon");
 });
 

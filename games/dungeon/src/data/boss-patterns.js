@@ -11,7 +11,7 @@ export const BOSS_ATTACKS = Object.freeze({
 export const BOSS_PHASE_PATTERNS = Object.freeze({
   1: Object.freeze(["combo", "volley", "charge"]),
   2: Object.freeze(["volley", "summon", "charge", "combo"]),
-  3: Object.freeze(["mine", "volley", "charge", "combo"]),
+  3: Object.freeze(["mine", "volley", "summon", "charge", "combo"]),
 });
 
 export function getBossAttack(phase, patternIndex) {
