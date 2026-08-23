@@ -1,8 +1,10 @@
 export const MAP_LAYOUT = Object.freeze({
   gridSize: 28,
   corridorWidthCells: 2,
-  minCorridorLengthCells: 3,
-  maxCorridorLengthCells: 8,
+  minCorridorLengthCells: 8,
+  maxCorridorLengthCells: 14,
+  branchDepthCells: 3,
+  chestChance: 0.45,
   maxRoomYOffsetCells: 5,
   maxAttempts: 24,
 });

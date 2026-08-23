@@ -59,8 +59,9 @@ export function buildFloorLayoutCandidate(runSeed, baseRooms, attempt = 0) {
   });
 
   const corridors = rooms.slice(0, -1).map((room, corridorIndex) => {
-    const rng = createRng(`${runSeed}:floor:0:corridor:${corridorIndex}:shape:attempt:${attempt}`);
-    return buildCorridor(room, rooms[corridorIndex + 1], corridorIndex, rng, MAP_LAYOUT.corridorWidthCells);
+    const shapeRng = createRng(`${runSeed}:floor:0:corridor:${corridorIndex}:shape:attempt:${attempt}`);
+    const eventRng = createRng(`${runSeed}:floor:0:corridor:${corridorIndex}:event:attempt:${attempt}`);
+    return buildCorridor(room, rooms[corridorIndex + 1], corridorIndex, shapeRng, MAP_LAYOUT.corridorWidthCells, eventRng, MAP_LAYOUT.branchDepthCells);
   });
   return { runSeed, floorIndex: 0, rooms, corridors };
 }
@@ -95,6 +96,17 @@ export function validateFloorMap(floorMap) {
       && corridor.cells[0]?.join(",") === corridor.start.join(",")
       && corridor.cells.at(-1)?.join(",") === corridor.end.join(","),
   );
+  const connectedBranches = corridors.every((corridor) => corridor.branches?.length === 1 && corridor.branches.every((branch) =>
+    isContinuousCorridor(branch.cells)
+      && corridor.cells.some((cell) => cell.join(",") === branch.cells[0]?.join(","))
+      && corridor.cells.some((cell) => cell.join(",") === branch.cells.at(-1)?.join(",")),
+  ));
+  const corridorEventsValid = corridors.every((corridor) => {
+    const floorKeys = new Set(corridor.floorCells.map((cell) => cell.join(",")));
+    return corridor.trapCells?.length >= 2
+      && corridor.trapCells.every((cell) => floorKeys.has(cell.join(",")))
+      && (!corridor.chest || floorKeys.has(corridor.chest.cell.join(",")));
+  });
   const corridorsClearRooms = corridors.every((corridor) =>
     corridor.floorCells.every((cell) => rooms.every((room) => !pointInsideBounds(cell, room.bounds))),
   );
@@ -106,6 +118,8 @@ export function validateFloorMap(floorMap) {
     noRoomOverlap,
     connectedGraph,
     continuousCorridors,
+    connectedBranches,
+    corridorEventsValid,
     corridorsClearRooms,
     noCorridorOverlap,
     roomLayoutsValid,
@@ -136,6 +150,8 @@ function createSafeFallbackLayout(runSeed, baseRooms) {
       corridorIndex,
       createRng(`${runSeed}:floor:0:fallback:corridor:${corridorIndex}`),
       MAP_LAYOUT.corridorWidthCells,
+      createRng(`${runSeed}:floor:0:fallback:corridor:${corridorIndex}:event`),
+      MAP_LAYOUT.branchDepthCells,
     ));
   return { runSeed, floorIndex: 0, rooms, corridors };
 }

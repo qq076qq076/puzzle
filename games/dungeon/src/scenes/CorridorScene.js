@@ -1,9 +1,11 @@
 import Phaser from "phaser";
 import { Player } from "../entities/Player.js";
 import { getDungeonAudio } from "../systems/audio-system.js";
+import { playEnvironmentAnimation } from "../systems/actor-animations.js";
 import { closeSideDoor, constrainActorToClosedDoor } from "../systems/door-system.js";
 import { generateFloorMap } from "../systems/room-generator.js";
 import { hasReachedCorridorExit } from "../systems/corridor-transition.js";
+import { canClaimCorridorChest, claimCorridorChest, getCorridorTrapPhase } from "../systems/corridor-events.js";
 import { applyPlayerBuild, capturePlayerBuild, normalizeRunBuild } from "../systems/player-build.js";
 import { cloneRunStats, createRunStats } from "../systems/run-state.js";
 import { TouchControls } from "../systems/touch-controls.js";
@@ -54,7 +56,7 @@ export class CorridorScene extends Phaser.Scene {
       this.tweens.add({ targets: this.worldLayout.entryPortal, alpha: 0.14, duration: 260 });
       this.audio.beep("telegraph");
     });
-    this.showHint("安全走廊 · Shift 閃避 · Q 使用藥水");
+    this.showHint("岔路可能有寶箱 · 注意地面陷阱 · Shift 閃避");
   }
 
   createInput() {
@@ -131,6 +133,7 @@ export class CorridorScene extends Phaser.Scene {
     if (input.buff) toggleBuffPanel(this, this.hud, this.player);
     if (input.usePotion) this.player.consumePotion();
     this.player.updateActor({ moveX: input.moveX, moveY: input.moveY, attack: false, dodge: input.dodge }, delta);
+    this.updateCorridorEvents();
     constrainActorToClosedDoor(this.player, this.worldLayout.entryDoor);
     if (hasReachedCorridorExit(this.player, this.worldLayout.exitTrigger)) this.goToNextRoom();
     this.updateHud();
@@ -155,7 +158,42 @@ export class CorridorScene extends Phaser.Scene {
     updateCombatHud(this.hud, this.player, {
       roomLabel: `FLOOR 1 · CORRIDOR ${this.corridorIndex + 1}/5`,
       seed: this.runSeed,
-      status: status || "安全走廊",
+      status: status || this.statusMessage || "探索走廊",
+    });
+  }
+
+  updateCorridorEvents() {
+    this.worldLayout.traps.forEach((trap) => {
+      const phase = getCorridorTrapPhase(this.time.now, trap.phaseOffset);
+      if (phase !== trap.phase) {
+        if (phase === "active") playEnvironmentAnimation(trap.node, "trap-rise");
+        if (phase === "idle") trap.node.stop().setFrame(0);
+        trap.damaged = phase === "idle" ? false : trap.damaged;
+        trap.phase = phase;
+      }
+      if (phase === "warning") trap.node.stop().setFrame(2).setAlpha(0.68);
+      else trap.node.setAlpha(phase === "active" ? 1 : 0.28);
+      if (phase === "active" && !trap.damaged && Math.hypot(this.player.x - trap.x, this.player.y - trap.y) <= 28) {
+        trap.damaged = true;
+        this.player.takeDamage(10);
+        this.showStatus("走廊陷阱命中");
+      }
+    });
+    const chest = this.worldLayout.chest;
+    if (canClaimCorridorChest(this.player, chest)) {
+      const result = claimCorridorChest(this.player, chest);
+      if (result.claimed) {
+        chest.node.setTint(0x777777).setAlpha(0.42);
+        this.showStatus(result.message);
+        this.audio.beep("reward");
+      }
+    }
+  }
+
+  showStatus(message) {
+    this.statusMessage = message;
+    this.time.delayedCall(1800, () => {
+      if (this.statusMessage === message) this.statusMessage = null;
     });
   }
 

@@ -83,9 +83,21 @@ test("floor map contains six rooms connected by five deterministic corridors", (
     assert.equal(corridor.from, first.rooms[index].id);
     assert.equal(corridor.to, first.rooms[index + 1].id);
     assert.ok(corridor.width >= 2);
-    assert.ok(corridor.cells.length >= 4);
+    assert.ok(corridor.cells.length >= 9);
     assert.ok(corridor.floorCells.length >= corridor.cells.length);
+    assert.equal(corridor.branches.length, 1);
+    assert.ok(corridor.trapCells.length >= 2);
   });
+});
+
+test("corridors contain deterministic branches, traps, and optional chests", () => {
+  const maps = Array.from({ length: 20 }, (_, index) => generateFloorMap(`events-${index}`));
+  const corridors = maps.flatMap((map) => map.corridors);
+  assert.ok(corridors.every((corridor) => corridor.branches[0].templateId === "loop"));
+  assert.ok(corridors.every((corridor) => corridor.trapCells.length >= 2));
+  assert.ok(corridors.some((corridor) => corridor.chest));
+  assert.ok(corridors.some((corridor) => !corridor.chest));
+  assert.deepEqual(generateFloorMap("event-repeat"), generateFloorMap("event-repeat"));
 });
 
 test("floor map layout changes with seed while remaining valid", () => {

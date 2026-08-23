@@ -82,6 +82,16 @@ export function buildCorridorWorld(scene, corridor) {
 
   const entryDoor = createSideDoor(scene, { x: entryX, y: entryCenterY, side: "left", walls, machine, initiallyOpen: true });
   const exitDoor = createSideDoor(scene, { x: exitX, y: exitCenterY, side: "right", walls, machine, initiallyOpen: true });
+  const traps = corridor.trapCells.map((cell, index) => {
+    const [x, y] = layout.toPixel(cell);
+    const node = scene.add.sprite(x, y, "trap", 0).setScale(Math.max(1.7, layout.cellSize / 18)).setAlpha(0.28).setDepth(1);
+    return { x, y, node, phaseOffset: index * 530, phase: "idle", damaged: false };
+  });
+  const chest = corridor.chest ? (() => {
+    const [x, y] = layout.toPixel(corridor.chest.cell);
+    const node = scene.add.image(x, y, "reward-chest").setScale(Math.max(2.4, layout.cellSize / 13)).setDepth(3);
+    return { x, y, node, reward: { ...corridor.chest.reward }, active: true };
+  })() : null;
   return {
     layout,
     walls,
@@ -89,6 +99,8 @@ export function buildCorridorWorld(scene, corridor) {
     exitDoor,
     entryPortal,
     exitPortal,
+    traps,
+    chest,
     spawn: [entryCenterX + layout.cellSize * 0.5, entryCenterY],
     exitTrigger: [exitCenterX + layout.cellSize * 0.82, exitCenterY],
   };
