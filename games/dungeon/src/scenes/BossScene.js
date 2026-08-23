@@ -1,12 +1,13 @@
 import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config.js";
 import { MONSTERS } from "../data/monsters.js";
+import { getBossVolleyOffsets } from "../data/boss-patterns.js";
 import { ENTRY_DOOR_POINT, ENTRY_POINT, ENTRY_SPAWN_POINT } from "../data/rooms.js";
 import { Boss } from "../entities/Boss.js";
 import { Enemy } from "../entities/Enemy.js";
 import { Player } from "../entities/Player.js";
 import { resolveMeleeAttack, updateBleed } from "../systems/combat-system.js";
-import { updateProjectiles, clearProjectiles } from "../systems/projectile-system.js";
+import { spawnProjectile, updateProjectiles, clearProjectiles } from "../systems/projectile-system.js";
 import { cloneRunStats, createRunStats, getRunDurationSeconds } from "../systems/run-state.js";
 import { getDungeonAudio } from "../systems/audio-system.js";
 import { createRng, makeRunSeed } from "../systems/rng.js";
@@ -262,8 +263,8 @@ export class BossScene extends Phaser.Scene {
   }
 
   showBossTelegraph(x, y, kind, duration) {
-    const radius = kind === "mine" ? 48 : kind === "charge" ? 96 : 78;
-    const color = kind === "mine" ? 0xe17b70 : kind === "charge" ? 0xdfb84f : 0xb94d45;
+    const radius = kind === "mine" ? 48 : kind === "charge" ? 96 : kind === "volley" ? 68 : 78;
+    const color = kind === "mine" ? 0xe17b70 : kind === "charge" ? 0xdfb84f : kind === "volley" ? 0x8fd1e8 : 0xb94d45;
     const node = this.add.circle(x, y, radius, color, 0.12).setStrokeStyle(3, color, 0.96).setDepth(5);
     this.telegraphs.push({ node, remaining: duration, source: this.boss });
   }
@@ -280,13 +281,13 @@ export class BossScene extends Phaser.Scene {
     });
   }
 
-  spawnBossMinion() {
+  spawnBossMinion(monsterId = "robot_gunner") {
     const activeMinions = this.enemies.filter((enemy) => enemy.active).length;
     if (activeMinions >= 4) return;
     const angle = this.hazardRng.next() * Math.PI * 2;
     const x = Phaser.Math.Clamp(this.boss.x + Math.cos(angle) * 130, 90, GAME_WIDTH - 90);
     const y = Phaser.Math.Clamp(this.boss.y + Math.sin(angle) * 130, 120, GAME_HEIGHT - 80);
-    const enemy = new Enemy(this, x, y, MONSTERS.steel_spider, `boss-${this.enemies.length}`);
+    const enemy = new Enemy(this, x, y, MONSTERS[monsterId] || MONSTERS.robot_gunner, `boss-${this.enemies.length}`);
     enemy.spawnProtectionRemaining = 500;
     this.enemyGroup.add(enemy);
     this.physics.add.collider(enemy, this.walls);
@@ -302,6 +303,20 @@ export class BossScene extends Phaser.Scene {
     const y = Phaser.Math.Clamp(290 + Math.sin(angle) * distance, 130, GAME_HEIGHT - 95);
     const node = this.add.sprite(x, y, "trap", 0).setScale(options.ring ? 3 : 2.7).setAlpha(0.34).setDepth(3);
     this.hazards.push({ x, y, warningMs: 700, activeMs: 900, node, activated: false, damaged: false });
+  }
+
+  spawnBossVolley(target, phase) {
+    const baseAngle = Math.atan2(target.y - this.boss.y, target.x - this.boss.x);
+    getBossVolleyOffsets(phase).forEach((angleOffset) => {
+      spawnProjectile(this, this.boss, target, {
+        angle: baseAngle + angleOffset,
+        damage: 11 + phase * 2,
+        speed: 215 + phase * 12,
+        texture: "enemy-projectile",
+        scale: 1.9,
+        radius: 8,
+      });
+    });
   }
 
   updateHazards(delta) {

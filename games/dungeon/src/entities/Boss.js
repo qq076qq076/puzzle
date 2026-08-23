@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { BOSS_PHASE_TRANSITION_MS, getBossAttack } from "../data/boss-patterns.js";
 import { playActorAnimation } from "../systems/actor-animations.js";
 import { tickContactDamage, tryContactDamage } from "../systems/contact-damage.js";
 import { startKnockback, updateKnockback } from "../systems/knockback.js";
@@ -80,7 +81,7 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
       }
       if (this.chargeRemaining === 0) {
         this.setVelocity(0, 0);
-        this.recoverRemaining = 420;
+        this.recoverRemaining = this.activeAttack?.recoverMs ?? 1150;
       }
       this.updateVisuals();
       return;
@@ -115,26 +116,25 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     const nextPhase = ratio <= 0.35 ? 3 : ratio <= 0.7 ? 2 : 1;
     if (nextPhase !== this.phase) {
       this.phase = nextPhase;
-      this.phaseTransitionRemaining = 1000;
-      this.attackCooldownRemaining = 1200;
+      this.phaseTransitionRemaining = BOSS_PHASE_TRANSITION_MS;
+      this.attackCooldownRemaining = BOSS_PHASE_TRANSITION_MS + 500;
+      this.attackWindupRemaining = 0;
+      this.chargeRemaining = 0;
+      this.setVelocity(0, 0);
       this.scene.onBossPhaseChange?.(this.phase);
     }
   }
 
   startPattern() {
-    const patterns = this.phase === 1
-      ? ["combo", "charge", "combo"]
-      : this.phase === 2
-        ? ["combo", "summon", "charge"]
-        : ["combo", "mine", "charge", "combo"];
-    const kind = patterns[this.patternIndex % patterns.length];
+    const attack = getBossAttack(this.phase, this.patternIndex);
     this.patternIndex += 1;
-    this.attackCooldownRemaining = this.phase === 3 ? 720 : 1000;
-    this.attackWindupRemaining = kind === "mine" ? 560 : kind === "charge" ? 440 : 360;
-    this.attackKind = kind;
-    this.comboStep = kind === "combo" ? 0 : this.comboStep;
-    this.scene.showBossTelegraph?.(this.x, this.y, kind, this.attackWindupRemaining);
-    this.scene.audio?.beep(kind === "mine" ? "boss" : "telegraph");
+    this.activeAttack = attack;
+    this.attackCooldownRemaining = attack.cooldownMs;
+    this.attackWindupRemaining = attack.windupMs;
+    this.attackKind = attack.kind;
+    this.comboStep = attack.kind === "combo" ? 0 : this.comboStep;
+    this.scene.showBossTelegraph?.(this.x, this.y, attack.kind, this.attackWindupRemaining);
+    this.scene.audio?.beep(["mine", "volley"].includes(attack.kind) ? "boss" : "telegraph");
   }
 
   performAttack(player) {
@@ -145,12 +145,12 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
           knockback: { x: player.x - this.x, y: player.y - this.y, distance: 16, durationMs: 110 },
         });
       }
-      if (this.comboStep < 3) {
-        this.attackWindupRemaining = this.phase === 3 ? 190 : 240;
+      if (this.comboStep < this.activeAttack.comboHits) {
+        this.attackWindupRemaining = this.activeAttack.repeatWindupMs;
         this.scene.showBossTelegraph?.(this.x, this.y, "combo", this.attackWindupRemaining);
       } else {
         this.comboStep = 0;
-        this.recoverRemaining = 400;
+        this.recoverRemaining = this.activeAttack.recoverMs;
       }
       return;
     }
@@ -159,21 +159,27 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
       const direction = new Phaser.Math.Vector2(target.x - this.x, target.y - this.y).normalize();
       this.facing.copy(direction);
       this.setVelocity(direction.x * 430, direction.y * 430);
-      this.chargeRemaining = this.phase === 3 ? 380 : 300;
+      this.chargeRemaining = 300 + this.phase * 35;
       this.chargeHit = false;
       this.state = "charge";
       return;
     }
     if (this.attackKind === "summon") {
-      this.scene.spawnBossMinion?.();
-      this.scene.spawnBossMinion?.();
-      this.recoverRemaining = 520;
+      this.scene.spawnBossMinion?.("robot_gunner");
+      this.scene.spawnBossMinion?.(this.phase >= 3 ? "machine_guard" : "plague_mage");
+      this.recoverRemaining = this.activeAttack.recoverMs;
       return;
     }
     if (this.attackKind === "mine") {
       this.scene.spawnBossHazard?.({ ring: true });
       this.scene.spawnBossHazard?.({ ring: true });
-      this.recoverRemaining = 520;
+      this.scene.spawnBossHazard?.({ ring: true });
+      this.recoverRemaining = this.activeAttack.recoverMs;
+      return;
+    }
+    if (this.attackKind === "volley") {
+      this.scene.spawnBossVolley?.(player, this.phase);
+      this.recoverRemaining = this.activeAttack.recoverMs;
     }
   }
 
