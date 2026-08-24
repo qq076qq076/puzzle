@@ -14,6 +14,15 @@ export const CRAFTPIX_SOURCES = {
 const FANTASY_ROOT = "./roguelike-game-kit-pixel-art";
 const MACHINE_ROOT = "./shoot";
 const PLAYER_ROOT = "./player/PNG/Swordsman_lvl1/Without_shadow";
+const MAGIC_ROOT = "./water-and-fire-magic-sprite-vector-pack/Fire Ball/PNG";
+const FIREBALL_FRAME_KEYS = Object.freeze(Array.from(
+  { length: 8 },
+  (_, index) => index === 0 ? "spell-projectile" : `spell-projectile-${String(index + 1).padStart(2, "0")}`,
+));
+const fireballImages = Object.fromEntries(FIREBALL_FRAME_KEYS.map((key, index) => [
+  key,
+  `${MAGIC_ROOT}/Fire Ball_Frame_${String(index + 1).padStart(2, "0")}.png`,
+]));
 
 function sheet(key, path, frameWidth, frameHeight, frameCount, frameRate, repeat = -1, options = {}) {
   return { key, path, frameWidth, frameHeight, frameCount, frameRate, repeat, ...options };
@@ -255,7 +264,7 @@ export const PROVIDED_ASSETS = {
     "reward-icon-heal": `${FANTASY_ROOT}/4 GUI/3 Icons/Icon_50.png`,
     "enemy-projectile": `${MACHINE_ROOT}/1 Main Character/2 Weapons/Projectiles/10.png`,
     "laser-projectile": `${MACHINE_ROOT}/1 Main Character/2 Weapons/Projectiles/15.png`,
-    "spell-projectile": `${FANTASY_ROOT}/3 Dungeon Enemies/Other/Fireball.png`,
+    ...fireballImages,
     "room-floor-fantasy": `${FANTASY_ROOT}/2 Dungeon Tileset/1 Tiles/Tile_20.png`,
     "wall-fantasy": `${FANTASY_ROOT}/2 Dungeon Tileset/1 Tiles/Tile_16.png`,
     "reward-chest": `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects/Boxes/12.png`,
@@ -273,10 +282,11 @@ export const PROVIDED_ASSETS = {
     { key: "trap-rise", texture: "trap", frameCount: 6, frameRate: 12, repeat: 0 },
     { key: "spawn-marker-start", texture: "spawn-marker", frameCount: 6, frameRate: 10, repeat: 0 },
     { key: "hit-spark-burst", texture: "hit-spark", frameCount: 4, frameRate: 18, repeat: 0 },
+    { key: "spell-projectile-flight", frames: FIREBALL_FRAME_KEYS, frameRate: 18, repeat: -1 },
   ],
   credits: {
     sources: CRAFTPIX_SOURCES,
     licenseUrl: "https://craftpix.net/file-licenses/",
-    runtimePolicy: "Runtime game art uses the supplied CraftPix dungeon, machine, and dedicated player packs; generated fallback textures are disabled.",
+    runtimePolicy: "Runtime game art uses the supplied CraftPix dungeon, machine, player, and magic packs; generated fallback textures are disabled.",
   },
 };

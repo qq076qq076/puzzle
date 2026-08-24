@@ -64,6 +64,14 @@ test("world effects are mapped to supplied CraftPix files without generated fall
   assert.match(spritesheets.get("hit-spark"), /D_Blood\.png$/);
   assert.match(PROVIDED_ASSETS.images["enemy-projectile"], /Projectiles\/10\.png$/);
   assert.match(PROVIDED_ASSETS.images["laser-projectile"], /Projectiles\/15\.png$/);
+  for (let index = 1; index <= 8; index += 1) {
+    const frame = String(index).padStart(2, "0");
+    const key = index === 1 ? "spell-projectile" : `spell-projectile-${frame}`;
+    assert.match(PROVIDED_ASSETS.images[key], new RegExp(`water-and-fire-magic-sprite-vector-pack/Fire Ball/PNG/Fire Ball_Frame_${frame}\\.png$`));
+  }
+  const fireballAnimation = PROVIDED_ASSETS.environmentAnimations.find(({ key }) => key === "spell-projectile-flight");
+  assert.equal(fireballAnimation.frames.length, 8);
+  assert.equal(fireballAnimation.repeat, -1);
   assert.equal(spritesheets.has("player-attack-effect"), false);
   assert.equal(spritesheets.has("player-weapon-swing"), false);
   for (let index = 1; index <= 4; index += 1) {

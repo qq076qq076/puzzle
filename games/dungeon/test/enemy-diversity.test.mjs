@@ -16,6 +16,8 @@ test("monster durability rises as movement speed falls", () => {
 test("mage and robot use distinct telegraphed ranged patterns", () => {
   assert.equal(isRangedAttack(MONSTERS.plague_mage.attackKind), true);
   assert.equal(MONSTERS.plague_mage.projectileTexture, "spell-projectile");
+  assert.equal(MONSTERS.plague_mage.projectileAnimation, "spell-projectile-flight");
+  assert.equal(MONSTERS.plague_mage.projectileScale, 0.09);
   assert.equal(getEnemyProjectilePattern(MONSTERS.plague_mage).length, 1);
   assert.equal(isRangedAttack(MONSTERS.robot_gunner.attackKind), true);
   assert.equal(getEnemyProjectilePattern(MONSTERS.robot_gunner).length, 3);

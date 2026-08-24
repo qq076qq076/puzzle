@@ -30,7 +30,18 @@ export function registerCraftPixAnimations(scene) {
   });
 
   PROVIDED_ASSETS.environmentAnimations.forEach((definition) => {
-    if (scene.anims.exists(definition.key) || !hasNumberedFrames(scene, definition.texture)) return;
+    if (scene.anims.exists(definition.key)) return;
+    if (definition.frames) {
+      if (definition.frames.some((textureKey) => !scene.textures.exists(textureKey))) return;
+      scene.anims.create({
+        key: definition.key,
+        frames: definition.frames.map((textureKey) => ({ key: textureKey })),
+        frameRate: definition.frameRate,
+        repeat: definition.repeat ?? -1,
+      });
+      return;
+    }
+    if (!hasNumberedFrames(scene, definition.texture)) return;
     scene.anims.create({
       key: definition.key,
       frames: scene.anims.generateFrameNumbers(definition.texture, {

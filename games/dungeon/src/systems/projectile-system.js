@@ -18,12 +18,14 @@ export function spawnProjectile(scene, source, target, options = {}) {
     damage: options.damage ?? 12,
     radius: options.radius ?? 8,
     visual: options.visual ?? "bullet",
+    animation: options.animation,
     node: scene.add
-      .image(source.x + Math.cos(angle) * spawnOffset, source.y + Math.sin(angle) * spawnOffset, options.texture ?? "enemy-projectile")
+      .sprite(source.x + Math.cos(angle) * spawnOffset, source.y + Math.sin(angle) * spawnOffset, options.texture ?? "enemy-projectile")
       .setScale(options.scale ?? 1.7)
       .setRotation(angle + (options.rotationOffset ?? -Math.PI / 4))
       .setDepth(7),
   };
+  if (projectile.animation && scene.anims.exists(projectile.animation)) projectile.node.play(projectile.animation);
   if (options.tint) projectile.node.setTint(options.tint);
   if (["fireball", "laser"].includes(projectile.visual)) projectile.node.setBlendMode(Phaser.BlendModes.ADD);
   scene.projectiles.push(projectile);
@@ -39,6 +41,7 @@ export function spawnEnemyProjectilePattern(scene, source, target, definition) {
     scale: definition.projectileScale,
     radius: definition.projectileRadius,
     visual: definition.projectileVisual,
+    animation: definition.projectileAnimation,
     rotationOffset: definition.projectileRotationOffset,
     tint: definition.projectileTint,
   };
