@@ -130,6 +130,21 @@
     cell.setAttribute("aria-label", "第 " + (row + 1) + " 行，第 " + (column + 1) + " 列，" + (player ? playerName(player) + orderLabel : "空位"));
   }
 
+  function updateLastMoveMarker() {
+    boardElement.querySelectorAll(".gomoku-cell.is-last-move").forEach(function (cell) {
+      cell.classList.remove("is-last-move");
+    });
+
+    const lastMove = moveHistory[moveHistory.length - 1];
+    if (!lastMove || board[lastMove.row][lastMove.column] !== lastMove.player) {
+      return;
+    }
+    const lastCell = getCell(lastMove.row, lastMove.column);
+    if (lastCell) {
+      lastCell.classList.add("is-last-move");
+    }
+  }
+
   function updateTurnDisplay() {
     const name = playerName(currentPlayer);
     const computerTurn = gameMode === "computer" && currentPlayer === aiColor;
@@ -256,6 +271,7 @@
     moveCount += 1;
     moveHistory.push({ row: row, column: column, player: player });
     updateCell(getCell(row, column), player, moveCount);
+    updateLastMoveMarker();
     moveCountElement.textContent = String(moveCount) + " 手";
 
     if (analysis.forbidden) {
@@ -344,6 +360,7 @@
       cell.classList.remove("is-winning");
       updateCell(cell, EMPTY);
     });
+    updateLastMoveMarker();
     updateTurnDisplay();
     if (gameMode === "computer" && currentPlayer === aiColor) {
       scheduleComputerTurn();
@@ -381,6 +398,7 @@
     boardElement.querySelectorAll(".gomoku-cell").forEach(function (cell) {
       cell.classList.remove("is-winning");
     });
+    updateLastMoveMarker();
     gomokuPanel.classList.remove("is-finished");
     updateTurnDisplay();
   }
@@ -435,6 +453,7 @@
       cell.classList.remove("is-winning");
       updateCell(cell, value, moveOrderMap[Number(cell.dataset.row)][Number(cell.dataset.column)]);
     });
+    updateLastMoveMarker();
     gomokuPanel.classList.toggle("is-finished", gameOver && (saved.statusClass || "").indexOf("is-winner-") === 0);
     updateTurnDisplay();
     if (gameOver) {
