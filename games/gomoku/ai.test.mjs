@@ -28,6 +28,12 @@ function choose(window, board, player, difficulty = "hard") {
   });
 }
 
+function assertStrategicMove(window, board, player, row, column) {
+  for (const difficulty of ["medium", "hard"]) {
+    assertMove(choose(window, board, player, difficulty), row, column);
+  }
+}
+
 function crossForkBoard(player) {
   const board = emptyBoard();
   [[7, 5], [7, 6], [7, 8], [5, 7], [6, 7], [8, 7]].forEach(([row, column]) => {
@@ -42,34 +48,34 @@ function assertMove(move, row, column) {
   assert.equal(move.column, column);
 }
 
-test("困難難度會落在自己的立即勝著", () => {
+test("普通與困難難度都會落在自己的立即勝著", () => {
   const window = createAI();
   const board = emptyBoard();
   [3, 4, 5, 6].forEach((column) => { board[7][column] = 1; });
 
-  assertMove(choose(window, board, 1), 7, 7);
+  assertStrategicMove(window, board, 1, 7, 7);
 });
 
-test("困難難度會封鎖對手的立即勝著", () => {
+test("普通與困難難度都會封鎖對手的立即勝著", () => {
   const window = createAI();
   const board = emptyBoard();
   [3, 4, 5, 6].forEach((column) => { board[5][column] = 2; });
 
-  assertMove(choose(window, board, 1), 5, 7);
+  assertStrategicMove(window, board, 1, 5, 7);
 });
 
-test("困難難度會找出自己的雙重威脅", () => {
+test("普通與困難難度都會找出自己的雙重威脅", () => {
   const window = createAI();
   const board = crossForkBoard(2);
 
-  assertMove(choose(window, board, 2), 7, 7);
+  assertStrategicMove(window, board, 2, 7, 7);
 });
 
-test("困難難度會在對手形成叉攻前封鎖", () => {
+test("普通與困難難度都會在對手形成叉攻前封鎖", () => {
   const window = createAI();
   const board = crossForkBoard(2);
 
-  assertMove(choose(window, board, 1), 7, 7);
+  assertStrategicMove(window, board, 1, 7, 7);
 });
 
 test("搜尋不會修改原始棋盤，且三種難度都回傳合法著法", () => {
