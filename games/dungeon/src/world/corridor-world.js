@@ -3,6 +3,7 @@ import { playEnvironmentAnimation } from "../systems/actor-animations.js";
 import { createSideDoor } from "../systems/door-system.js";
 import { getSideVector } from "../data/rooms.js";
 import { createBreakableBottle } from "../systems/destructible-system.js";
+import { getCorridorDoorGeometry, getCorridorDoorway } from "../systems/corridor-geometry.js";
 
 function uniqueCells(cells) {
   return [...new Map(cells.map((cell) => [cell.join(","), cell])).values()];
@@ -20,15 +21,8 @@ function getWallCells(floorCells, corridor) {
       }
     }
   });
-  const removeOpening = (cell, side, atStart) => {
-    const [dx, dy] = getSideVector(side);
-    const aperture = side === "left" || side === "right"
-      ? [[cell[0], cell[1]], [cell[0], cell[1] + 1]]
-      : [[cell[0], cell[1]], [cell[0] + (atStart ? 1 : -1), cell[1]]];
-    aperture.forEach(([x, y]) => walls.delete(`${x + dx},${y + dy}`));
-  };
-  removeOpening(corridor.start, corridor.entrySide || "left", true);
-  removeOpening(corridor.end, corridor.exitSide || "right", false);
+  getCorridorDoorway(corridor, true).outside.forEach((cell) => walls.delete(cell.join(",")));
+  getCorridorDoorway(corridor, false).outside.forEach((cell) => walls.delete(cell.join(",")));
   return [...walls.values()];
 }
 
@@ -47,11 +41,6 @@ function createLayout(corridor) {
   const offsetY = 310 - ((minY + maxY) / 2) * cellSize;
   const toPixel = ([x, y]) => [x * cellSize + offsetX, y * cellSize + offsetY];
   return { floorCells, wallCells: getWallCells(floorCells, corridor), cellSize, toPixel };
-}
-
-function endpointCenter(layout, cell) {
-  const [x, y] = layout.toPixel(cell);
-  return [x, y + layout.cellSize / 2];
 }
 
 function offsetBySide(point, side, distance) {
@@ -81,12 +70,10 @@ export function buildCorridorWorld(scene, corridor) {
     if (machine) visual.setTint(0x72758d);
   });
 
-  const [entryCenterX, entryCenterY] = endpointCenter(layout, corridor.start);
-  const [exitCenterX, exitCenterY] = endpointCenter(layout, corridor.end);
-  const entrySide = corridor.entrySide || "left";
-  const exitSide = corridor.exitSide || "right";
-  const entryDoorPoint = offsetBySide([entryCenterX, entryCenterY], entrySide, layout.cellSize / 2);
-  const exitDoorPoint = offsetBySide([exitCenterX, exitCenterY], exitSide, layout.cellSize / 2);
+  const entryGeometry = getCorridorDoorGeometry(layout, corridor, true);
+  const exitGeometry = getCorridorDoorGeometry(layout, corridor, false);
+  const { side: entrySide, center: entryCenter, doorPoint: entryDoorPoint } = entryGeometry;
+  const { side: exitSide, center: exitCenter, doorPoint: exitDoorPoint } = exitGeometry;
   const entryPortalPoint = offsetBySide(entryDoorPoint, entrySide, 14);
   const exitPortalPoint = offsetBySide(exitDoorPoint, exitSide, 14);
   const entryPortal = scene.add.sprite(entryPortalPoint[0], entryPortalPoint[1], "portal").setScale(0.5).setAlpha(0.75).setDepth(2);
@@ -122,7 +109,7 @@ export function buildCorridorWorld(scene, corridor) {
     traps,
     chest,
     bottles,
-    spawn: offsetBySide([entryCenterX, entryCenterY], entrySide, -layout.cellSize * 0.5),
-    exitTrigger: offsetBySide([exitCenterX, exitCenterY], exitSide, layout.cellSize * 0.82),
+    spawn: offsetBySide(entryCenter, entrySide, -layout.cellSize * 0.12),
+    exitTrigger: offsetBySide(exitDoorPoint, exitSide, layout.cellSize * 0.48),
   };
 }

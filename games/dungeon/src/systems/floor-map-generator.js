@@ -1,6 +1,7 @@
 import { BOSS_ROOM_FOOTPRINT, DEFAULT_ROOM_FOOTPRINT, MAP_LAYOUT, ROOM_FOOTPRINTS } from "../data/map-layout.js";
 import { getOppositeSide } from "../data/rooms.js";
 import { buildCorridor, isContinuousCorridor } from "./corridor-generator.js";
+import { isCorridorDoorToDoorWalkable } from "./corridor-geometry.js";
 import { createRng } from "./rng.js";
 import { generateRoom } from "./room-factory.js";
 
@@ -101,6 +102,7 @@ export function validateFloorMap(floorMap) {
       && corridor.cells[0]?.join(",") === corridor.start.join(",")
       && corridor.cells.at(-1)?.join(",") === corridor.end.join(","),
   );
+  const walkableCorridors = corridors.every(isCorridorDoorToDoorWalkable);
   const connectedBranches = corridors.every((corridor) => corridor.branches?.length === 1 && corridor.branches.every((branch) =>
     isContinuousCorridor(branch.cells)
       && corridor.cells.some((cell) => cell.join(",") === branch.cells[0]?.join(","))
@@ -124,6 +126,7 @@ export function validateFloorMap(floorMap) {
     noRoomOverlap,
     connectedGraph,
     continuousCorridors,
+    walkableCorridors,
     connectedBranches,
     corridorEventsValid,
     corridorsClearRooms,
