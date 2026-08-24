@@ -22,6 +22,7 @@ import { createCombatHud, createPauseOverlay, toggleBuffPanel, updateCombatHud }
 import { bindPauseKeyboard, createPauseKeyboardHandlers, unbindPauseKeyboard } from "../ui/pause-keyboard.js";
 import { constrainActorToBounds } from "../systems/knockback.js";
 import { createBreakableBottle, resolveBottleHits, updateBottlePickups } from "../systems/destructible-system.js";
+import { getBoundarySeamRects, getBoundaryWallRects } from "../systems/room-boundary-layout.js";
 
 export class RoomScene extends Phaser.Scene {
   constructor() {
@@ -175,27 +176,15 @@ export class RoomScene extends Phaser.Scene {
 
   createBoundaryWalls(machine) {
     const openings = new Set([this.currentRoom.entrySide, this.currentRoom.exitSide]);
-    const wallThickness = 32;
-    const addHorizontal = (y, side) => {
-      if (!openings.has(side)) {
-        this.addWall(GAME_WIDTH / 2, y, GAME_WIDTH - 80, wallThickness, machine);
-        return;
-      }
-      this.addWall(236, y, 392, wallThickness, machine);
-      this.addWall(724, y, 392, wallThickness, machine);
-    };
-    const addVertical = (x, side) => {
-      if (!openings.has(side)) {
-        this.addWall(x, 290, wallThickness, 396, machine);
-        return;
-      }
-      this.addWall(x, 169, wallThickness, 154, machine);
-      this.addWall(x, 411, wallThickness, 154, machine);
-    };
-    addHorizontal(76, "up");
-    addHorizontal(GAME_HEIGHT - 28, "down");
-    addVertical(40, "left");
-    addVertical(920, "right");
+    getBoundaryWallRects(openings).forEach(([x, y, width, height]) => this.addWall(x, y, width, height, machine));
+    getBoundarySeamRects(openings).forEach(([x, y, width, height]) => this.addWallPatch(x, y, width, height, machine));
+  }
+
+  addWallPatch(x, y, width, height, machine = false) {
+    const texture = machine ? "wall-machine" : "wall-fantasy";
+    const patch = this.add.tileSprite(x, y, width, height, texture).setDepth(0);
+    if (!machine) patch.setTileScale(2, 2);
+    else patch.setTint(0x72758d);
   }
 
   getSideLabel(side) {

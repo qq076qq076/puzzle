@@ -20,6 +20,7 @@ import { createCombatHud, createPauseOverlay, toggleBuffPanel, updateCombatHud }
 import { bindPauseKeyboard, createPauseKeyboardHandlers, unbindPauseKeyboard } from "../ui/pause-keyboard.js";
 import { constrainActorToBounds } from "../systems/knockback.js";
 import { generateFloorMap } from "../systems/room-generator.js";
+import { getBoundarySeamRects, getBoundaryWallRects } from "../systems/room-boundary-layout.js";
 
 export class BossScene extends Phaser.Scene {
   constructor() {
@@ -138,26 +139,12 @@ export class BossScene extends Phaser.Scene {
   }
 
   createBossBoundaryWalls(entrySide) {
-    const addHorizontal = (y, side) => {
-      if (entrySide !== side) {
-        this.addWall(480, y, 848, 32);
-        return;
-      }
-      this.addWall(224, y, 336, 32);
-      this.addWall(736, y, 336, 32);
-    };
-    const addVertical = (x, side) => {
-      if (entrySide !== side) {
-        this.addWall(x, 288, 32, 408);
-        return;
-      }
-      this.addWall(x, 170, 32, 160);
-      this.addWall(x, 410, 32, 160);
-    };
-    addHorizontal(76, "up");
-    addHorizontal(500, "down");
-    addVertical(40, "left");
-    addVertical(920, "right");
+    getBoundaryWallRects([entrySide]).forEach(([x, y, width, height]) => this.addWall(x, y, width, height));
+    getBoundarySeamRects([entrySide]).forEach(([x, y, width, height]) => this.addWallPatch(x, y, width, height));
+  }
+
+  addWallPatch(x, y, width, height) {
+    this.add.tileSprite(x, y, width, height, "wall-machine").setTint(0x72758d).setDepth(0);
   }
 
   createHud() {
