@@ -2,6 +2,7 @@ export const BUFFS = {
   sharp_edge: {
     id: "sharp_edge",
     name: "鋒利刃",
+    icon: "reward-icon-sword",
     rarity: "普通",
     color: 0x8ebc72,
     maxStacks: 5,
@@ -13,6 +14,7 @@ export const BUFFS = {
   wide_arc: {
     id: "wide_arc",
     name: "寬刃",
+    icon: "reward-icon-sword",
     rarity: "普通",
     color: 0x8ebc72,
     maxStacks: 2,
@@ -25,6 +27,7 @@ export const BUFFS = {
   heavy_handle: {
     id: "heavy_handle",
     name: "重握柄",
+    icon: "reward-icon-power",
     rarity: "普通",
     color: 0x8ebc72,
     maxStacks: 2,
@@ -37,6 +40,7 @@ export const BUFFS = {
   swift_step: {
     id: "swift_step",
     name: "疾步",
+    icon: "reward-icon-speed",
     rarity: "普通",
     color: 0x8ebc72,
     maxStacks: 3,
@@ -48,6 +52,7 @@ export const BUFFS = {
   iron_skin: {
     id: "iron_skin",
     name: "鐵皮",
+    icon: "reward-icon-shield",
     rarity: "普通",
     color: 0x8ebc72,
     maxStacks: 3,
@@ -59,6 +64,7 @@ export const BUFFS = {
   vital_core: {
     id: "vital_core",
     name: "活力核心",
+    icon: "reward-icon-heart",
     rarity: "稀有",
     color: 0x79a8d5,
     maxStacks: 3,
@@ -71,6 +77,7 @@ export const BUFFS = {
   bleeding_edge: {
     id: "bleeding_edge",
     name: "流血刃",
+    icon: "reward-icon-skull",
     rarity: "稀有",
     color: 0x79a8d5,
     maxStacks: 2,
@@ -82,6 +89,7 @@ export const BUFFS = {
   vampiric_mark: {
     id: "vampiric_mark",
     name: "吸血印記",
+    icon: "reward-icon-heart",
     rarity: "稀有",
     color: 0x79a8d5,
     maxStacks: 2,
@@ -93,6 +101,7 @@ export const BUFFS = {
   combo_drive: {
     id: "combo_drive",
     name: "連斬驅動",
+    icon: "reward-icon-refresh",
     rarity: "稀有",
     color: 0x79a8d5,
     maxStacks: 1,
@@ -104,6 +113,7 @@ export const BUFFS = {
   machine_resonance: {
     id: "machine_resonance",
     name: "機械共鳴",
+    icon: "reward-icon-gear",
     rarity: "傳奇",
     color: 0xc68bd7,
     maxStacks: 2,
@@ -115,6 +125,7 @@ export const BUFFS = {
   last_stand: {
     id: "last_stand",
     name: "背水一擊",
+    icon: "reward-icon-crown",
     rarity: "傳奇",
     color: 0xc68bd7,
     maxStacks: 1,

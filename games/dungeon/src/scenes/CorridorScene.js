@@ -90,8 +90,6 @@ export class CorridorScene extends Phaser.Scene {
 
   createHud() {
     this.hud = createCombatHud(this, {
-      roomLabel: `FLOOR 1 · CORRIDOR ${this.corridorIndex + 1}/5`,
-      seed: this.runSeed,
       onPause: () => this.togglePause(),
       onBuff: () => toggleBuffPanel(this, this.hud, this.player),
     });
@@ -125,7 +123,6 @@ export class CorridorScene extends Phaser.Scene {
   update(_time, delta) {
     if (window.__dungeonPortraitBlocked || !this.player) return;
     if (this.paused) {
-      this.updateHud("已暫停");
       return;
     }
     if (this.corridorStatus !== "active") return;
@@ -156,8 +153,6 @@ export class CorridorScene extends Phaser.Scene {
 
   updateHud(status = null) {
     updateCombatHud(this.hud, this.player, {
-      roomLabel: `FLOOR 1 · CORRIDOR ${this.corridorIndex + 1}/5`,
-      seed: this.runSeed,
       status: status || this.statusMessage || "探索走廊",
     });
   }

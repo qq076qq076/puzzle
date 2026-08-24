@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { PROVIDED_ASSETS } from "../src/data/assets.js";
+import { BUFFS } from "../src/data/buffs.js";
+import { REWARDS } from "../src/data/rewards.js";
 import { applyReward, getRewardCategoryLabel, getRewardChoices, getUsableRewardIds, isRewardAvailable } from "../src/systems/reward-system.js";
 
 function makePlayer() {
@@ -64,4 +67,12 @@ test("boss trophy is a fixed completion reward", () => {
   const result = applyReward(player, "boss_trophy");
   assert.equal(result.type, "trophy");
   assert.equal(player.trophy, true);
+});
+
+test("every selectable reward has a supplied CraftPix icon", () => {
+  for (const reward of [...Object.values(BUFFS), ...Object.values(REWARDS)]) {
+    assert.ok(reward.icon, `${reward.id} must define an icon`);
+    assert.ok(PROVIDED_ASSETS.images[reward.icon], `${reward.id} icon must exist in the asset manifest`);
+    assert.match(PROVIDED_ASSETS.images[reward.icon], /^\.\/(roguelike-game-kit-pixel-art|shoot)\//);
+  }
 });

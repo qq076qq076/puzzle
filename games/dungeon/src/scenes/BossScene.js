@@ -138,8 +138,6 @@ export class BossScene extends Phaser.Scene {
 
   createHud() {
     this.hud = createCombatHud(this, {
-      roomLabel: "FLOOR 1 · ROOM 6/6",
-      seed: this.runSeed,
       onPause: () => this.togglePause(),
       onBuff: () => toggleBuffPanel(this, this.hud, this.player),
     });
@@ -178,7 +176,6 @@ export class BossScene extends Phaser.Scene {
     if (window.__dungeonPortraitBlocked) return;
     this.handleGlobalInput();
     if (this.paused) {
-      this.updateHud("已暫停");
       return;
     }
     if (this.battleStatus === "entering") this.updateEntrance(delta);
@@ -393,8 +390,6 @@ export class BossScene extends Phaser.Scene {
     const ratio = Phaser.Math.Clamp(this.boss.health / this.boss.maxHealth, 0, 1);
     this.bossBarFill.setDisplaySize(Math.max(1, 592 * ratio), 14);
     updateCombatHud(this.hud, this.player, {
-      roomLabel: "FLOOR 1 · ROOM 6/6",
-      seed: this.runSeed,
       status: status || this.statusMessage || `魔王階段 ${this.boss.phase}`,
     });
   }
@@ -419,7 +414,7 @@ export class BossScene extends Phaser.Scene {
     this.touchControls?.destroy();
     clearProjectiles(this);
     const seconds = getRunDurationSeconds(this.runStats);
-    const summary = `完成房間：6/6\n遊玩時間：${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}\n受到傷害：${this.runStats.damageTaken}\n取得 Buff：${this.player.buffs.length} 個\nSeed：${this.runSeed}`;
+    const summary = `完成房間：6/6\n遊玩時間：${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}\n受到傷害：${this.runStats.damageTaken}\n取得 Buff：${this.player.buffs.length} 個`;
     this.add.rectangle(480, 280, 720, 410, 0x0b0d16, 0.97).setStrokeStyle(3, 0xdfb84f, 0.95).setDepth(150);
     const victoryAltar = this.add.sprite(480, 140, "reward-console").setScale(1.35).setTint(0xdfb84f).setDepth(151);
     playEnvironmentAnimation(victoryAltar, "reward-console-idle");
@@ -437,7 +432,7 @@ export class BossScene extends Phaser.Scene {
     clearProjectiles(this);
     this.audio.beep("defeat");
     const seconds = getRunDurationSeconds(this.runStats);
-    const summary = `完成房間：5/6\n遊玩時間：${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}\n受到傷害：${this.runStats.damageTaken}\nSeed：${this.runSeed}`;
+    const summary = `完成房間：5/6\n遊玩時間：${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}\n受到傷害：${this.runStats.damageTaken}`;
     this.add.rectangle(480, 280, 700, 360, 0x0b0d16, 0.97).setStrokeStyle(3, 0xb94d45, 0.95).setDepth(150);
     this.add.text(480, 155, "YOU DIED", { color: "#e17b70", fontFamily: "monospace", fontSize: "32px", fontStyle: "bold" }).setOrigin(0.5).setDepth(151);
     this.add.text(480, 250, summary, { color: "#f5f1da", fontFamily: "monospace", fontSize: "13px", align: "center", lineSpacing: 8 }).setOrigin(0.5).setDepth(151);

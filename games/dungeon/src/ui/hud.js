@@ -6,12 +6,9 @@ import { moveMenuSelection } from "./menu-selection.js";
 
 export function createCombatHud(scene, options = {}) {
   const hud = {
-    avatar: scene.add.image(30, 54, "provided-player").setScale(1.35).setScrollFactor(0).setDepth(110),
-    room: scene.add.text(58, 20, options.roomLabel || "FLOOR 1 · ROOM 1/6", scene.hudStyle(14, "#dfb84f")).setScrollFactor(0).setDepth(110),
-    health: scene.add.text(58, 48, "HP 100/100", scene.hudStyle(12, "#f5f1da")).setScrollFactor(0).setDepth(110),
-    status: scene.add.text(58, 70, "房間準備中", scene.hudStyle(10, "#aaa8b5")).setScrollFactor(0).setDepth(110),
-    seed: scene.add.text(480, 20, `SEED ${options.seed || "—"}`, scene.hudStyle(10, "#77798a")).setOrigin(0.5, 0).setScrollFactor(0).setDepth(110),
-    dodge: scene.add.text(936, 64, "DODGE READY", scene.hudStyle(10, "#82a8d8")).setOrigin(1, 0).setScrollFactor(0).setDepth(110),
+    avatar: scene.add.image(30, 42, "provided-player").setScale(1.35).setScrollFactor(0).setDepth(110),
+    health: scene.add.text(58, 24, "HP 100/100", scene.hudStyle(12, "#f5f1da")).setScrollFactor(0).setDepth(110),
+    status: scene.add.text(58, 48, "房間準備中", scene.hudStyle(10, "#aaa8b5")).setScrollFactor(0).setDepth(110),
     buffs: scene.add.text(24, 496, "BUFFS —", scene.hudStyle(10, "#b9a9d4")).setScrollFactor(0).setDepth(110),
     gold: scene.add.text(590, 496, "GOLD 0", scene.hudStyle(10, "#dfb84f")).setOrigin(0, 1).setScrollFactor(0).setDepth(110),
     potionIcon: scene.add.image(734, 486, "potion-icon").setScale(2).setScrollFactor(0).setDepth(110),
@@ -46,16 +43,11 @@ export function createCombatHud(scene, options = {}) {
 export function updateCombatHud(hud, player, options = {}) {
   if (!hud || !player) return;
   hud.health.setText(`HP ${Math.ceil(player.health)}/${player.maxHealth}`);
-  const dodgeReady = player.dodgeCooldownRemaining <= 0;
-  hud.dodge.setText(dodgeReady ? "DODGE READY" : `DODGE ${(player.dodgeCooldownRemaining / 1000).toFixed(1)}s`);
-  hud.dodge.setColor(dodgeReady ? "#82a8d8" : "#77798a");
   const buffNames = player.buffs.map((id) => `${BUFFS[id]?.name ?? id}×${getBuffStack(player, id)}`).filter((value, index, all) => all.indexOf(value) === index);
   hud.buffs.setText(buffNames.length ? `BUFFS ${buffNames.join(" · ")}` : "BUFFS —");
   hud.gold.setText(`GOLD ${player.gold || 0}`);
   hud.potion.setText(`POTION ${player.consumables || 0} [Q]`);
   if (options.status) hud.status.setText(options.status);
-  if (options.roomLabel) hud.room.setText(options.roomLabel);
-  if (options.seed) hud.seed.setText(`SEED ${options.seed}`);
 }
 
 export function toggleBuffPanel(scene, hud, player) {
@@ -92,8 +84,7 @@ export function createPauseOverlay(scene, callbacks = {}) {
   const group = scene.add.container(0, 0).setDepth(260).setScrollFactor(0);
   group.add(scene.add.rectangle(480, 270, 620, 360, 0x080a11, 0.96).setStrokeStyle(2, 0xdfb84f, 0.95));
   group.add(scene.add.text(480, 136, "PAUSED", scene.hudStyle(30, "#dfb84f")).setOrigin(0.5));
-  group.add(scene.add.text(480, 184, "戰鬥計時與敵人 AI 已暫停", scene.hudStyle(12, "#aaa8b5")).setOrigin(0.5));
-  group.add(scene.add.text(480, 216, "↑／↓ 或 W／S 選擇 · Enter／Space 確認 · Esc 返回", scene.hudStyle(10, "#77798a")).setOrigin(0.5));
+  group.add(scene.add.text(480, 194, "↑／↓ 或 W／S 選擇 · Enter／Space 確認 · Esc 返回", scene.hudStyle(10, "#77798a")).setOrigin(0.5));
 
   const menuItems = [
     { label: "繼續遊戲", color: 0x303a55, strokeColor: 0x9aa2c1, action: callbacks.onResume },

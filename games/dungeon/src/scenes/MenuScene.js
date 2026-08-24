@@ -14,7 +14,7 @@ export class MenuScene extends Phaser.Scene {
     this.audio = getDungeonAudio();
     this.cameras.main.setBackgroundColor("#090b13");
     this.runSeed = loadLastSeed() || makeRunSeed();
-    this.keyboard = this.input.keyboard.addKeys("ENTER,N,M");
+    this.keyboard = this.input.keyboard.addKeys("SPACE,N,M");
     this.createBackdrop();
     this.createMenuText();
     this.startButton = makeTouchOnlyButton(this, 480, 358, 280, 56, "開始第一地層", () => this.startRun(), {
@@ -27,8 +27,8 @@ export class MenuScene extends Phaser.Scene {
       strokeColor: 0x69718d,
       fontSize: "11px",
     });
-    this.showHint("Enter／N 開始新 Run · M 切換音效");
-    this.input.keyboard.on("keydown-ENTER", () => this.startRun());
+    this.showHint("Space 開始第一地層 · N 新隨機 Run · M 切換音效");
+    this.input.keyboard.on("keydown-SPACE", () => this.startRun());
     this.input.keyboard.on("keydown-N", () => this.startNewRun());
     this.input.keyboard.on("keydown-M", () => this.toggleSound());
   }
@@ -60,12 +60,7 @@ export class MenuScene extends Phaser.Scene {
       fontSize: "16px",
       fontStyle: "bold",
     }).setOrigin(0.5);
-    this.seedText = this.add.text(480, 284, `RUN SEED  ${this.runSeed}`, {
-      color: "#aaa8b5",
-      fontFamily: "monospace",
-      fontSize: "12px",
-    }).setOrigin(0.5);
-    this.add.text(480, 310, "五間隨機普通房 · Buff 構築 · 三階段魔王", {
+    this.add.text(480, 294, "五間隨機普通房 · Buff 構築 · 三階段魔王", {
       color: "#77798a",
       fontFamily: "monospace",
       fontSize: "11px",
@@ -84,7 +79,6 @@ export class MenuScene extends Phaser.Scene {
   startNewRun() {
     this.runSeed = makeRunSeed();
     saveLastSeed(this.runSeed);
-    this.seedText.setText(`RUN SEED  ${this.runSeed}`);
     this.startRun();
   }
 

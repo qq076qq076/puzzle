@@ -3,7 +3,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../config.js";
 import { MONSTERS } from "../data/monsters.js";
 import { Enemy } from "../entities/Enemy.js";
 import { Player } from "../entities/Player.js";
-import { applyReward, getRewardCategoryLabel, getRewardChoices, getRewardColor, getRewardDefinition } from "../systems/reward-system.js";
+import { applyReward, getRewardChoices, getRewardColor, getRewardDefinition } from "../systems/reward-system.js";
 import { clearProjectiles, updateProjectiles } from "../systems/projectile-system.js";
 import { getDungeonAudio } from "../systems/audio-system.js";
 import { cloneRunStats, createRunStats, getRunDurationSeconds } from "../systems/run-state.js";
@@ -189,8 +189,6 @@ export class RoomScene extends Phaser.Scene {
 
   createHud() {
     this.hud = createCombatHud(this, {
-      roomLabel: `FLOOR 1 · ROOM ${this.currentRoom.roomNumber}/6`,
-      seed: this.runSeed,
       onPause: () => this.togglePause(),
       onBuff: () => toggleBuffPanel(this, this.hud, this.player),
     });
@@ -226,7 +224,6 @@ export class RoomScene extends Phaser.Scene {
     if (window.__dungeonPortraitBlocked) return;
     this.handleGlobalInput();
     if (this.paused) {
-      this.updateHud("已暫停");
       return;
     }
     if (this.roomStatus === "entering") this.updateEntrance(delta);
@@ -488,12 +485,7 @@ export class RoomScene extends Phaser.Scene {
     this.rewardCards = [];
     this.rewardGroup = this.add.container(0, 0).setDepth(180);
     this.rewardGroup.add(this.add.rectangle(480, 282, 820, 385, 0x0b0d16, 0.97).setStrokeStyle(3, this.currentRoom.theme === "machine" ? 0x8fd1e8 : 0xdfb84f, 0.95));
-    const rewardVisual = this.add.sprite(480, 138, this.currentRoom.theme === "machine" ? "reward-console" : "reward-chest");
-    rewardVisual.setScale(this.currentRoom.theme === "machine" ? 1.25 : 3.5);
-    if (this.currentRoom.theme === "machine") playEnvironmentAnimation(rewardVisual, "reward-console-idle");
-    this.rewardGroup.add(rewardVisual);
-    this.rewardGroup.add(this.add.text(480, 84, "選擇獎勵", this.hudStyle(26, "#f5f1da")).setOrigin(0.5));
-    this.rewardGroup.add(this.add.text(480, 112, "←／→ 選擇獎勵 · Space／攻擊確認", this.hudStyle(12, "#aaa8b5")).setOrigin(0.5));
+    this.rewardGroup.add(this.add.text(480, 126, "選擇獎勵", this.hudStyle(26, "#f5f1da")).setOrigin(0.5));
     this.rewardIds.slice(0, 3).forEach((rewardId, index) => this.createRewardCard(rewardId, index));
     this.updateRewardSelection();
     this.audio.beep("reward");
@@ -503,24 +495,36 @@ export class RoomScene extends Phaser.Scene {
     const reward = getRewardDefinition(rewardId);
     if (!reward) return;
     const x = 250 + index * 230;
-    const card = this.add.rectangle(x, 300, 200, 164, 0x202439, 1).setStrokeStyle(2, getRewardColor(rewardId), 1);
-    const text = this.add.text(x, 300, `${getRewardCategoryLabel(rewardId)}\n\n${reward.name}\n${reward.rarity}\n${reward.description}`, {
+    const color = getRewardColor(rewardId);
+    const card = this.add.rectangle(x, 310, 210, 244, 0x202439, 1).setStrokeStyle(2, color, 1);
+    const iconBack = this.add.circle(x, 226, 28, color, 0.22).setStrokeStyle(2, color, 0.9);
+    const icon = this.add.image(x, 226, reward.icon).setScale(4);
+    const name = this.add.text(x, 286, reward.name, {
       color: "#f5f1da",
       fontFamily: "monospace",
-      fontSize: "11px",
+      fontSize: "16px",
+      fontStyle: "bold",
       align: "center",
-      wordWrap: { width: 172 },
-      lineSpacing: 4,
     }).setOrigin(0.5);
-    this.rewardCards.push({ card, text, rewardId });
-    this.rewardGroup.add([card, text]);
+    const effect = this.add.text(x, 350, reward.description, {
+      color: "#c8cad5",
+      fontFamily: "monospace",
+      fontSize: "12px",
+      align: "center",
+      wordWrap: { width: 174 },
+      lineSpacing: 5,
+    }).setOrigin(0.5);
+    this.rewardCards.push({ card, iconBack, icon, name, effect, rewardId });
+    this.rewardGroup.add([card, iconBack, icon, name, effect]);
   }
 
   updateRewardSelection() {
-    this.rewardCards.forEach(({ card, rewardId }, index) => {
+    this.rewardCards.forEach(({ card, iconBack, icon, rewardId }, index) => {
       const selected = index === this.rewardSelectionIndex;
       card.setFillStyle(selected ? 0x303550 : 0x202439, 1);
       card.setStrokeStyle(selected ? 4 : 2, selected ? 0xf5f1da : getRewardColor(rewardId), 1);
+      iconBack.setAlpha(selected ? 1 : 0.72);
+      icon.setScale(selected ? 4.5 : 4);
     });
   }
 
@@ -579,8 +583,6 @@ export class RoomScene extends Phaser.Scene {
     const passageOpen = this.roomStatus === "transition" || this.roomStatus === "loading";
     this.hud.status.setVisible(!passageOpen);
     updateCombatHud(this.hud, this.player, {
-      roomLabel: `FLOOR 1 · ROOM ${this.currentRoom.roomNumber}/6`,
-      seed: this.runSeed,
       status: passageOpen ? null : status || this.statusMessage || clearLabel || waveLabel || this.roomStatus,
     });
   }
@@ -616,7 +618,7 @@ export class RoomScene extends Phaser.Scene {
     clearProjectiles(this);
     this.audio.beep("defeat");
     const seconds = getRunDurationSeconds(this.runStats);
-    const summary = `已清除房間：${this.runStats.roomsCleared}/5\n遊玩時間：${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}\n受到傷害：${this.runStats.damageTaken}\nSeed：${this.runSeed}`;
+    const summary = `已清除房間：${this.runStats.roomsCleared}/5\n遊玩時間：${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}\n受到傷害：${this.runStats.damageTaken}`;
     this.add.rectangle(480, 280, 700, 360, 0x0b0d16, 0.97).setStrokeStyle(3, 0xb94d45, 0.95).setDepth(150);
     this.add.text(480, 160, "YOU DIED", { color: "#e17b70", fontFamily: "monospace", fontSize: "32px", fontStyle: "bold" }).setOrigin(0.5).setDepth(151);
     this.add.text(480, 250, summary, { color: "#f5f1da", fontFamily: "monospace", fontSize: "13px", align: "center", lineSpacing: 8 }).setOrigin(0.5).setDepth(151);
