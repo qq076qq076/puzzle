@@ -6,8 +6,12 @@
   const BLACK = 1;
   const WHITE = 2;
   const AI_MOVE_INTERVAL = 360;
+  const EASTER_EGG_CRACK_CLICKS = 5;
+  const EASTER_EGG_SHATTER_CLICKS = 10;
+  const EASTER_EGG_RESTORE_DELAY = 5000;
 
   const boardElement = document.getElementById("gomoku-board");
+  const boardShellElement = document.querySelector(".gomoku-board-shell");
   const gomokuPanel = document.querySelector(".gomoku-panel");
   const statusElement = document.getElementById("gomoku-status");
   const playerLabelElement = document.getElementById("current-player-label");
@@ -34,6 +38,10 @@
   let victoryCover = null;
   let victoryTimerId = null;
   let saveController = null;
+  let easterEggCellKey = null;
+  let easterEggClickCount = 0;
+  let easterEggState = "normal";
+  let easterEggRestoreTimerId = null;
 
   function getNow() {
     return window.performance && typeof window.performance.now === "function" ? window.performance.now() : Date.now();
@@ -70,6 +78,70 @@
 
   function getCell(row, column) {
     return boardElement.querySelector('[data-row="' + row + '"][data-column="' + column + '"]');
+  }
+
+  function clearEasterEggRestoreTimer() {
+    if (easterEggRestoreTimerId !== null) {
+      window.clearTimeout(easterEggRestoreTimerId);
+      easterEggRestoreTimerId = null;
+    }
+  }
+
+  function restoreEasterEgg() {
+    clearEasterEggRestoreTimer();
+    easterEggCellKey = null;
+    easterEggClickCount = 0;
+    easterEggState = "normal";
+    boardShellElement.classList.remove("is-cracked", "is-shattered");
+    boardElement.removeAttribute("aria-busy");
+    updateTurnDisplay();
+  }
+
+  function resetEasterEggSequence() {
+    clearEasterEggRestoreTimer();
+    easterEggCellKey = null;
+    easterEggClickCount = 0;
+    easterEggState = "normal";
+    boardShellElement.classList.remove("is-cracked", "is-shattered");
+    boardElement.removeAttribute("aria-busy");
+  }
+
+  function registerEasterEggClick(row, column) {
+    if (gameOver || easterEggState === "shattered") {
+      return false;
+    }
+
+    const cellKey = row + ":" + column;
+    if (cellKey !== easterEggCellKey) {
+      const wasCracked = easterEggState === "cracked";
+      easterEggCellKey = cellKey;
+      easterEggClickCount = 0;
+      easterEggState = "normal";
+      boardShellElement.classList.remove("is-cracked");
+      if (wasCracked) {
+        updateTurnDisplay();
+      }
+    }
+
+    easterEggClickCount += 1;
+    if (easterEggClickCount === EASTER_EGG_CRACK_CLICKS) {
+      easterEggState = "cracked";
+      boardShellElement.classList.add("is-cracked");
+      statusElement.className = "gomoku-status is-easter-egg";
+      statusElement.textContent = "棋盤出現裂痕……再點五次試試。";
+    } else if (easterEggClickCount >= EASTER_EGG_SHATTER_CLICKS) {
+      easterEggState = "shattered";
+      boardShellElement.classList.remove("is-cracked");
+      boardShellElement.classList.add("is-shattered");
+      boardElement.setAttribute("aria-busy", "true");
+      statusElement.className = "gomoku-status is-easter-egg";
+      statusElement.textContent = "棋盤碎掉了，五秒後復原。";
+      clearEasterEggRestoreTimer();
+      easterEggRestoreTimerId = window.setTimeout(restoreEasterEgg, EASTER_EGG_RESTORE_DELAY);
+      return true;
+    }
+
+    return false;
   }
 
   function createMoveOrderMap() {
@@ -350,6 +422,7 @@
   function resetGame() {
     cancelComputerTurn();
     closeVictoryDialog();
+    resetEasterEggSequence();
     board = createEmptyBoard();
     currentPlayer = BLACK;
     moveCount = 0;
@@ -387,6 +460,7 @@
     }
 
     cancelComputerTurn();
+    resetEasterEggSequence();
     const lastPlayer = moveHistory[moveHistory.length - 1].player;
     removeLastMove();
     if (gameMode === "computer" && lastPlayer === aiColor && moveHistory.length > 0 && moveHistory[moveHistory.length - 1].player === humanColor) {
@@ -435,6 +509,7 @@
 
   function restoreGame(saved) {
     cancelComputerTurn();
+    resetEasterEggSequence();
     gameMode = saved.gameMode === "computer" ? "computer" : "local";
     difficulty = ["easy", "medium", "hard"].includes(saved.difficulty) ? saved.difficulty : "medium";
     humanColor = Number(saved.humanColor) === WHITE ? WHITE : BLACK;
@@ -469,7 +544,12 @@
     if (!cell) {
       return;
     }
-    handleMove(Number(cell.dataset.row), Number(cell.dataset.column));
+    const row = Number(cell.dataset.row);
+    const column = Number(cell.dataset.column);
+    if (registerEasterEggClick(row, column)) {
+      return;
+    }
+    handleMove(row, column);
   });
 
   undoButton.addEventListener("click", undoMove);

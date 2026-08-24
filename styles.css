@@ -1880,7 +1880,13 @@ h1 {
   color: var(--muted);
 }
 
+.gomoku-status.is-easter-egg {
+  color: #a24d35;
+}
+
 .gomoku-board-shell {
+  position: relative;
+  isolation: isolate;
   width: 100%;
   aspect-ratio: 1;
   padding: clamp(9px, 1.9vw, 14px);
@@ -1888,6 +1894,61 @@ h1 {
   background: #d8ad7f;
   box-shadow: 0 18px 34px rgba(95, 67, 75, 0.13), inset 0 1px 0 rgba(255, 255, 255, 0.28);
   user-select: none;
+}
+
+.gomoku-board-shell::before,
+.gomoku-board-shell::after {
+  position: absolute;
+  inset: clamp(9px, 1.9vw, 14px);
+  border-radius: 9px;
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+}
+
+.gomoku-board-shell::before {
+  z-index: 5;
+  background:
+    linear-gradient(116deg, transparent 0 47%, rgba(77, 48, 34, 0.72) 47.3% 47.9%, transparent 48.3%),
+    linear-gradient(38deg, transparent 0 52%, rgba(77, 48, 34, 0.64) 52.3% 52.9%, transparent 53.3%),
+    linear-gradient(88deg, transparent 0 49%, rgba(77, 48, 34, 0.55) 49.3% 49.8%, transparent 50.2%),
+    linear-gradient(154deg, transparent 0 54%, rgba(77, 48, 34, 0.58) 54.3% 54.8%, transparent 55.2%),
+    radial-gradient(circle at 50% 50%, transparent 0 8%, rgba(77, 48, 34, 0.62) 8.3% 8.8%, transparent 9.2%);
+  mix-blend-mode: multiply;
+  transition: opacity 180ms ease;
+}
+
+.gomoku-board-shell::after {
+  z-index: 6;
+  background:
+    linear-gradient(28deg, transparent 0 43%, rgba(255, 248, 227, 0.72) 43.3% 44%, transparent 44.5%),
+    linear-gradient(143deg, transparent 0 57%, rgba(255, 248, 227, 0.66) 57.3% 58%, transparent 58.5%),
+    radial-gradient(circle at 50% 50%, rgba(255, 248, 227, 0.78), transparent 31%);
+  transform: scale(0.78);
+}
+
+.gomoku-board-shell.is-cracked::before {
+  opacity: 1;
+}
+
+.gomoku-board-shell.is-cracked .gomoku-board {
+  filter: contrast(1.06) saturate(0.78);
+  transform: rotate(-0.35deg);
+}
+
+.gomoku-board-shell.is-shattered::before {
+  opacity: 1;
+  animation: gomoku-crack-pulse 650ms ease-out forwards;
+}
+
+.gomoku-board-shell.is-shattered::after {
+  opacity: 1;
+  animation: gomoku-shatter-flash 700ms ease-out forwards;
+}
+
+.gomoku-board-shell.is-shattered .gomoku-board {
+  pointer-events: none;
+  animation: gomoku-board-shatter 700ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 .gomoku-board {
@@ -1900,6 +1961,7 @@ h1 {
   border: 1px solid rgba(89, 58, 39, 0.24);
   border-radius: 9px;
   background: rgba(250, 226, 188, 0.62);
+  transition: filter 180ms ease, opacity 220ms ease, transform 220ms ease;
 }
 
 .gomoku-cell {
@@ -2008,6 +2070,24 @@ h1 {
     opacity: 0.35;
     transform: scale(0.78);
   }
+}
+
+@keyframes gomoku-crack-pulse {
+  0% { opacity: 0.35; transform: scale(0.98); }
+  42% { opacity: 1; transform: scale(1.01); }
+  100% { opacity: 0.88; transform: scale(1); }
+}
+
+@keyframes gomoku-shatter-flash {
+  0% { opacity: 0; transform: scale(0.78); }
+  26% { opacity: 1; transform: scale(1.02); }
+  100% { opacity: 0; transform: scale(1.18); }
+}
+
+@keyframes gomoku-board-shatter {
+  0% { opacity: 1; filter: contrast(1.06) saturate(0.78); transform: rotate(-0.35deg) scale(1); }
+  34% { opacity: 1; filter: contrast(1.16) saturate(0.54); transform: rotate(1deg) scale(0.985); }
+  100% { opacity: 0; filter: blur(4px) saturate(0.25); transform: rotate(-2deg) scale(1.075); }
 }
 
 .gomoku-move-number {
