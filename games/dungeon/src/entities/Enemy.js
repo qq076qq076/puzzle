@@ -30,6 +30,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.dashKnockbackDistance = 18;
     this.dashHit = false;
     this.hitFlashRemaining = 0;
+    this.hurtAnimationRemaining = 0;
     this.knockbackRemaining = 0;
     this.knockbackVelocityX = 0;
     this.knockbackVelocityY = 0;
@@ -61,6 +62,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.spawnProtectionRemaining = Math.max(0, this.spawnProtectionRemaining - delta);
     this.alertRemaining = Math.max(0, this.alertRemaining - delta);
     this.hitFlashRemaining = Math.max(0, this.hitFlashRemaining - delta);
+    this.hurtAnimationRemaining = Math.max(0, this.hurtAnimationRemaining - delta);
     this.bleedRemaining = Math.max(0, this.bleedRemaining - delta);
     this.machineMarkedRemaining = Math.max(0, this.machineMarkedRemaining - delta);
 
@@ -226,6 +228,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     }
     if (this.health <= 0) {
       this.state = "dead";
+      this.spawnDeathVisual();
       this.setActive(false);
       this.setVisible(false);
       this.body.enable = false;
@@ -233,14 +236,33 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.scene.onEnemyDefeated?.(this);
       return { hit: true, damage, killed: true };
     }
+    this.hurtAnimationRemaining = 140;
+    this.visualState = "hurt";
+    playActorAnimation(this, this.assetId, "hurt", this.facing, { restart: true });
     return { hit: true, damage, killed: false };
+  }
+
+  spawnDeathVisual() {
+    const deathVisual = this.scene.add.sprite(this.x, this.y, this.definition.texture)
+      .setScale(Math.abs(this.scaleX), Math.abs(this.scaleY))
+      .setTint(this.definition.color ?? 0xffffff)
+      .setDepth(8 + this.y / 10000);
+    if (!playActorAnimation(deathVisual, this.assetId, "death", this.facing, { restart: true })) {
+      deathVisual.destroy();
+      return;
+    }
+    deathVisual.once("animationcomplete", () => deathVisual.destroy());
+    this.scene.time.delayedCall(900, () => deathVisual.active && deathVisual.destroy());
   }
 
   updateVisuals() {
     if (this.definition.stealth && this.state === "chase") this.setAlpha(0.62);
     if (this.hitFlashRemaining > 0) this.setAlpha(1);
     if (this.hitFlashRemaining <= 0 && this.spawnProtectionRemaining <= 0 && this.alertRemaining <= 0 && !(this.definition.stealth && this.state === "chase")) this.setAlpha(1);
-    if (this.state === "attack") {
+    if (this.hurtAnimationRemaining > 0) {
+      this.visualState = "hurt";
+      playActorAnimation(this, this.assetId, "hurt", this.facing);
+    } else if (this.state === "attack") {
       this.visualState = "attack";
       playActorAnimation(this, this.assetId, "attack", this.facing);
     } else if (this.state !== "telegraph") {

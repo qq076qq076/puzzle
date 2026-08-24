@@ -62,6 +62,8 @@ function fantasyActor(textureKey, folder, options = {}) {
     idle: { suffix: "Idle", frameCount: 4, frameRate: 6, repeat: -1 },
     walk: { suffix: "Walk", frameCount: 6, frameRate: 11, repeat: -1 },
     attack: { suffix: "Attack", frameCount: 4, frameRate: 22, repeat: 0 },
+    hurt: { suffix: "Hurt", frameCount: 2, frameRate: 16, repeat: 0 },
+    death: { suffix: "Death", frameCount: 8, frameRate: 12, repeat: 0 },
   };
   const states = {};
   Object.entries(stateFile).forEach(([state, animation]) => {

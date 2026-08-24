@@ -91,17 +91,25 @@ test("player melee feedback relies on the supplied attack animation without a dr
   assert.match(source, /playActorAnimation\(this, "player", "attack"/);
 });
 
-test("player and fantasy enemies provide directional movement and attacks", () => {
+test("player and fantasy enemies provide their supplied directional actions", () => {
   assert.deepEqual(Object.keys(ACTOR_ASSETS.player.states.idle).sort(), ["down", "left", "right", "up"]);
   assert.match(ACTOR_ASSETS.player.states.idle.down.path, /player\/PNG\/Swordsman_lvl1\/Without_shadow\/Swordsman_lvl1_Idle_without_shadow\.png$/);
   assert.match(ACTOR_ASSETS.player.states.walk.down.path, /Swordsman_lvl1_Walk_without_shadow\.png$/);
   assert.match(ACTOR_ASSETS.player.states.attack.down.path, /Swordsman_lvl1_attack_without_shadow\.png$/);
   for (const actorId of ["rat", "goblin_bat", "goblin_dagger", "plague_mage"]) {
     const actor = ACTOR_ASSETS[actorId];
-    for (const state of ["idle", "walk", "attack"]) {
+    for (const state of ["idle", "walk", "attack", "hurt", "death"]) {
       assert.deepEqual(Object.keys(actor.states[state]).sort(), ["down", "side", "up"], `${actorId} ${state}`);
     }
+    assert.equal(actor.states.hurt.down.frameCount, 2, `${actorId} hurt frames`);
+    assert.equal(actor.states.death.down.frameCount, 8, `${actorId} death frames`);
   }
+});
+
+test("fantasy enemies play supplied hurt and death animations during combat", async () => {
+  const source = await readFile(path.join(sourceRoot, "entities/Enemy.js"), "utf8");
+  assert.match(source, /playActorAnimation\(this, this\.assetId, "hurt"/);
+  assert.match(source, /playActorAnimation\(deathVisual, this\.assetId, "death"/);
 });
 
 test("actor orientation follows each source sprite's modeled direction", () => {
