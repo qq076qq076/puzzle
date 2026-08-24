@@ -1,4 +1,4 @@
-export class LoadingScene extends Phaser.Scene {
+class LoadingScene extends Phaser.Scene {
   constructor() {
     super({ key: "LoadingScene" });
   }
@@ -31,3 +31,5 @@ export class LoadingScene extends Phaser.Scene {
     this.label?.setPosition((Number(size?.width) || this.scale.width) / 2, (Number(size?.height) || this.scale.height) / 2);
   }
 }
+
+window.GuoguanLoadingScene = LoadingScene;

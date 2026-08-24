@@ -1,3 +1,4 @@
+(() => {
 const INTERNAL = Object.freeze({
   completionThreshold: 12,
   damageStages: [0, 2, 5, 8, 11],
@@ -12,7 +13,7 @@ const INTERNAL = Object.freeze({
   }
 });
 
-export class Level01Scene extends Phaser.Scene {
+class Level01Scene extends Phaser.Scene {
   constructor() {
     super({ key: "Level01Scene" });
     this.progress = 0;
@@ -450,3 +451,6 @@ export class Level01Scene extends Phaser.Scene {
     }
   }
 }
+
+window.GuoguanLevel01Scene = Level01Scene;
+})();
