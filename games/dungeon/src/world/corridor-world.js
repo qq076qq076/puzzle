@@ -1,6 +1,7 @@
 import { GAME_HEIGHT, GAME_WIDTH } from "../config.js";
 import { playEnvironmentAnimation } from "../systems/actor-animations.js";
 import { createSideDoor } from "../systems/door-system.js";
+import { getSideVector } from "../data/rooms.js";
 
 function uniqueCells(cells) {
   return [...new Map(cells.map((cell) => [cell.join(","), cell])).values()];
@@ -18,10 +19,15 @@ function getWallCells(floorCells, corridor) {
       }
     }
   });
-  for (const yOffset of [0, 1]) {
-    walls.delete(`${corridor.start[0] - 1},${corridor.start[1] + yOffset}`);
-    walls.delete(`${corridor.end[0] + 1},${corridor.end[1] + yOffset}`);
-  }
+  const removeOpening = (cell, side, atStart) => {
+    const [dx, dy] = getSideVector(side);
+    const aperture = side === "left" || side === "right"
+      ? [[cell[0], cell[1]], [cell[0], cell[1] + 1]]
+      : [[cell[0], cell[1]], [cell[0] + (atStart ? 1 : -1), cell[1]]];
+    aperture.forEach(([x, y]) => walls.delete(`${x + dx},${y + dy}`));
+  };
+  removeOpening(corridor.start, corridor.entrySide || "left", true);
+  removeOpening(corridor.end, corridor.exitSide || "right", false);
   return [...walls.values()];
 }
 
@@ -45,6 +51,11 @@ function createLayout(corridor) {
 function endpointCenter(layout, cell) {
   const [x, y] = layout.toPixel(cell);
   return [x, y + layout.cellSize / 2];
+}
+
+function offsetBySide(point, side, distance) {
+  const [dx, dy] = getSideVector(side);
+  return [point[0] + dx * distance, point[1] + dy * distance];
 }
 
 export function buildCorridorWorld(scene, corridor) {
@@ -71,17 +82,21 @@ export function buildCorridorWorld(scene, corridor) {
 
   const [entryCenterX, entryCenterY] = endpointCenter(layout, corridor.start);
   const [exitCenterX, exitCenterY] = endpointCenter(layout, corridor.end);
-  const entryX = entryCenterX - layout.cellSize / 2;
-  const exitX = exitCenterX + layout.cellSize / 2;
-  const entryPortal = scene.add.sprite(entryX - 14, entryCenterY, "portal").setScale(0.5).setAlpha(0.75).setDepth(2);
-  const exitPortal = scene.add.sprite(exitX + 14, exitCenterY, "portal").setScale(0.5).setAlpha(0.9).setDepth(2);
+  const entrySide = corridor.entrySide || "left";
+  const exitSide = corridor.exitSide || "right";
+  const entryDoorPoint = offsetBySide([entryCenterX, entryCenterY], entrySide, layout.cellSize / 2);
+  const exitDoorPoint = offsetBySide([exitCenterX, exitCenterY], exitSide, layout.cellSize / 2);
+  const entryPortalPoint = offsetBySide(entryDoorPoint, entrySide, 14);
+  const exitPortalPoint = offsetBySide(exitDoorPoint, exitSide, 14);
+  const entryPortal = scene.add.sprite(entryPortalPoint[0], entryPortalPoint[1], "portal").setScale(0.5).setAlpha(0.75).setDepth(2);
+  const exitPortal = scene.add.sprite(exitPortalPoint[0], exitPortalPoint[1], "portal").setScale(0.5).setAlpha(0.9).setDepth(2);
   playEnvironmentAnimation(entryPortal, "portal-idle");
   playEnvironmentAnimation(exitPortal, "portal-idle");
   entryPortal.setTint(machine ? 0x75b8d0 : 0xb593d8);
   exitPortal.setTint(machine ? 0x75b8d0 : 0xb593d8);
 
-  const entryDoor = createSideDoor(scene, { x: entryX, y: entryCenterY, side: "left", walls, machine, initiallyOpen: true });
-  const exitDoor = createSideDoor(scene, { x: exitX, y: exitCenterY, side: "right", walls, machine, initiallyOpen: true });
+  const entryDoor = createSideDoor(scene, { x: entryDoorPoint[0], y: entryDoorPoint[1], side: entrySide, walls, machine, initiallyOpen: true });
+  const exitDoor = createSideDoor(scene, { x: exitDoorPoint[0], y: exitDoorPoint[1], side: exitSide, walls, machine, initiallyOpen: true });
   const traps = corridor.trapCells.map((cell, index) => {
     const [x, y] = layout.toPixel(cell);
     const node = scene.add.sprite(x, y, "trap", 0).setScale(Math.max(1.7, layout.cellSize / 18)).setAlpha(0.28).setDepth(1);
@@ -101,7 +116,7 @@ export function buildCorridorWorld(scene, corridor) {
     exitPortal,
     traps,
     chest,
-    spawn: [entryCenterX + layout.cellSize * 0.5, entryCenterY],
-    exitTrigger: [exitCenterX + layout.cellSize * 0.82, exitCenterY],
+    spawn: offsetBySide([entryCenterX, entryCenterY], entrySide, -layout.cellSize * 0.5),
+    exitTrigger: offsetBySide([exitCenterX, exitCenterY], exitSide, layout.cellSize * 0.82),
   };
 }

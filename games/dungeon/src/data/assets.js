@@ -141,6 +141,24 @@ const environmentSpritesheets = [
     0,
   ),
   sheet(
+    "door-up",
+    `${FANTASY_ROOT}/2 Dungeon Tileset/3 Animated objects/Door_U.png`,
+    20,
+    20,
+    4,
+    12,
+    0,
+  ),
+  sheet(
+    "door-down",
+    `${FANTASY_ROOT}/2 Dungeon Tileset/3 Animated objects/Door_D.png`,
+    20,
+    20,
+    4,
+    12,
+    0,
+  ),
+  sheet(
     "portal",
     `${MACHINE_ROOT}/2 Location/3 Animated objects/Portal1_Idle.png`,
     96,
@@ -225,6 +243,8 @@ export const PROVIDED_ASSETS = {
   environmentAnimations: [
     { key: "player-weapon-swing-animation", texture: "player-weapon-swing", frameCount: 9, start: 1, end: 6, frameRate: 34, repeat: 0 },
     { key: "door-side-open", texture: "door-side", frameCount: 4, frameRate: 12, repeat: 0 },
+    { key: "door-up-open", texture: "door-up", frameCount: 4, frameRate: 12, repeat: 0 },
+    { key: "door-down-open", texture: "door-down", frameCount: 4, frameRate: 12, repeat: 0 },
     { key: "portal-idle", texture: "portal", frameCount: 4, frameRate: 6 },
     { key: "reward-console-idle", texture: "reward-console", frameCount: 6, frameRate: 7 },
     { key: "trap-rise", texture: "trap", frameCount: 6, frameRate: 12, repeat: 0 },

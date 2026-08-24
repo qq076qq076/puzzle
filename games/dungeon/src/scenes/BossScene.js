@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config.js";
 import { MONSTERS } from "../data/monsters.js";
 import { getBossVolleyOffsets } from "../data/boss-patterns.js";
-import { ENTRY_DOOR_POINT, ENTRY_POINT, ENTRY_SPAWN_POINT, ROOM_BOUNDS } from "../data/rooms.js";
+import { ROOM_BOUNDS, getSideVector } from "../data/rooms.js";
 import { Boss } from "../entities/Boss.js";
 import { Enemy } from "../entities/Enemy.js";
 import { Player } from "../entities/Player.js";
@@ -19,6 +19,7 @@ import { disableMouseInput, isTouchPointer, makeTouchOnlyButton } from "../ui/in
 import { createCombatHud, createPauseOverlay, toggleBuffPanel, updateCombatHud } from "../ui/hud.js";
 import { bindPauseKeyboard, createPauseKeyboardHandlers, unbindPauseKeyboard } from "../ui/pause-keyboard.js";
 import { constrainActorToBounds } from "../systems/knockback.js";
+import { generateFloorMap } from "../systems/room-generator.js";
 
 export class BossScene extends Phaser.Scene {
   constructor() {
@@ -27,6 +28,7 @@ export class BossScene extends Phaser.Scene {
 
   init(data = {}) {
     this.runSeed = data.runSeed ?? makeRunSeed();
+    this.bossRoom = generateFloorMap(this.runSeed).rooms[5];
     this.build = normalizeRunBuild(data.build);
     this.runStats = cloneRunStats(data.runStats || createRunStats(this.runSeed));
     this.enemies = [];
@@ -44,10 +46,11 @@ export class BossScene extends Phaser.Scene {
     disableMouseInput(this);
     this.audio = getDungeonAudio();
     this.createArena();
-    this.player = new Player(this, ENTRY_SPAWN_POINT[0], ENTRY_SPAWN_POINT[1]);
+    this.player = new Player(this, this.bossRoom.entrySpawn[0], this.bossRoom.entrySpawn[1]);
     this.enemyGroup = this.physics.add.group({ allowGravity: false });
     this.physics.add.collider(this.enemyGroup, this.enemyGroup);
-    this.player.facing.set(1, 0);
+    const [entryOutX, entryOutY] = getSideVector(this.bossRoom.entrySide);
+    this.player.facing.set(-entryOutX, -entryOutY);
     this.applyBuild();
     this.physics.add.collider(this.player, this.walls);
     this.boss = new Boss(this, GAME_WIDTH / 2, 168);
@@ -86,7 +89,8 @@ export class BossScene extends Phaser.Scene {
       onPause: () => this.togglePause(),
       onBuff: () => toggleBuffPanel(this, this.hud, this.player),
     });
-    this.introText = this.add.text(480, 285, "第六房\n骨面機械王座\n\n從左側開門走入…", {
+    const entrySideLabel = { left: "左側", right: "右側", up: "上側", down: "下側" }[this.bossRoom.entrySide];
+    this.introText = this.add.text(480, 285, `第六房\n骨面機械王座\n\n從${entrySideLabel}開門走入…`, {
       color: "#f5f1da",
       fontFamily: "monospace",
       fontSize: "22px",
@@ -104,11 +108,7 @@ export class BossScene extends Phaser.Scene {
   createArena() {
     this.add.tileSprite(0, 0, GAME_WIDTH, GAME_HEIGHT, "room-floor-machine").setOrigin(0).setTint(0xb9c8e4).setDepth(-10);
     this.walls = this.physics.add.staticGroup();
-    this.addWall(480, 76, 848, 32);
-    this.addWall(480, 500, 848, 32);
-    this.addWall(40, 170, 32, 160);
-    this.addWall(40, 410, 32, 160);
-    this.addWall(920, 288, 32, 408);
+    this.createBossBoundaryWalls(this.bossRoom.entrySide);
     [[208, 164, 48, 48], [752, 164, 48, 48], [208, 372, 48, 48], [752, 372, 48, 48]].forEach(([x, y, width, height]) => this.addWall(x + width / 2, y + height / 2, width, height));
     this.dangerRing = this.add.circle(480, 290, 214, 0xb94d45, 0.04).setStrokeStyle(2, 0xe17b70, 0.26).setDepth(-1);
     this.safeRing = this.add.circle(480, 290, 178, 0x7b5ca4, 0.04).setStrokeStyle(2, 0xc68bd7, 0.25).setDepth(-1).setVisible(false);
@@ -116,12 +116,12 @@ export class BossScene extends Phaser.Scene {
     this.portalRight = this.add.sprite(782, 290, "portal").setScale(0.62).setTint(0x72b9ca).setAlpha(0.22).setDepth(2);
     playEnvironmentAnimation(this.portalLeft, "portal-idle");
     playEnvironmentAnimation(this.portalRight, "portal-idle");
-    this.entryPortal = this.add.sprite(ENTRY_DOOR_POINT[0], ENTRY_DOOR_POINT[1], "portal").setScale(0.58).setTint(0x75b8d0).setAlpha(0.9).setDepth(2);
+    this.entryPortal = this.add.sprite(this.bossRoom.entryDoor[0], this.bossRoom.entryDoor[1], "portal").setScale(0.58).setTint(0x75b8d0).setAlpha(0.9).setDepth(2);
     playEnvironmentAnimation(this.entryPortal, "portal-idle");
     this.entryDoor = createSideDoor(this, {
-      x: ENTRY_DOOR_POINT[0],
-      y: ENTRY_DOOR_POINT[1],
-      side: "left",
+      x: this.bossRoom.entryDoor[0],
+      y: this.bossRoom.entryDoor[1],
+      side: this.bossRoom.entrySide,
       walls: this.walls,
       machine: true,
       initiallyOpen: true,
@@ -135,6 +135,29 @@ export class BossScene extends Phaser.Scene {
     wall.setDisplaySize(width, height).refreshBody();
     wall.wallVisual = this.add.tileSprite(x, y, width, height, "wall-machine").setTint(0x72758d).setDepth(-1);
     return wall;
+  }
+
+  createBossBoundaryWalls(entrySide) {
+    const addHorizontal = (y, side) => {
+      if (entrySide !== side) {
+        this.addWall(480, y, 848, 32);
+        return;
+      }
+      this.addWall(224, y, 336, 32);
+      this.addWall(736, y, 336, 32);
+    };
+    const addVertical = (x, side) => {
+      if (entrySide !== side) {
+        this.addWall(x, 288, 32, 408);
+        return;
+      }
+      this.addWall(x, 170, 32, 160);
+      this.addWall(x, 410, 32, 160);
+    };
+    addHorizontal(76, "up");
+    addHorizontal(500, "down");
+    addVertical(40, "left");
+    addVertical(920, "right");
   }
 
   createHud() {
@@ -202,13 +225,21 @@ export class BossScene extends Phaser.Scene {
   }
 
   updateEntrance(delta) {
-    if (this.player.x < ENTRY_POINT[0]) {
-      this.player.updateActor({ moveX: 1, moveY: 0, attack: false, dodge: false }, delta);
+    const [targetX, targetY] = this.bossRoom.entry;
+    const [outwardX, outwardY] = getSideVector(this.bossRoom.entrySide);
+    const moveX = -outwardX;
+    const moveY = -outwardY;
+    const reached = this.bossRoom.entrySide === "left" ? this.player.x >= targetX
+      : this.bossRoom.entrySide === "right" ? this.player.x <= targetX
+        : this.bossRoom.entrySide === "up" ? this.player.y >= targetY
+          : this.player.y <= targetY;
+    if (!reached) {
+      this.player.updateActor({ moveX, moveY, attack: false, dodge: false }, delta);
       return;
     }
 
-    this.player.body.reset(ENTRY_POINT[0], ENTRY_POINT[1]);
-    this.player.facing.set(1, 0);
+    this.player.body.reset(targetX, targetY);
+    this.player.facing.set(moveX, moveY);
     this.player.updateActor({ moveX: 0, moveY: 0, attack: false, dodge: false }, delta);
     this.battleStatus = "intro";
     this.introRemaining = 850;

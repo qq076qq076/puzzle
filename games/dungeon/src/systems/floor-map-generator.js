@@ -1,4 +1,5 @@
 import { BOSS_ROOM_FOOTPRINT, DEFAULT_ROOM_FOOTPRINT, MAP_LAYOUT, ROOM_FOOTPRINTS } from "../data/map-layout.js";
+import { getOppositeSide } from "../data/rooms.js";
 import { buildCorridor, isContinuousCorridor } from "./corridor-generator.js";
 import { createRng } from "./rng.js";
 import { generateRoom } from "./room-factory.js";
@@ -61,7 +62,11 @@ export function buildFloorLayoutCandidate(runSeed, baseRooms, attempt = 0) {
   const corridors = rooms.slice(0, -1).map((room, corridorIndex) => {
     const shapeRng = createRng(`${runSeed}:floor:0:corridor:${corridorIndex}:shape:attempt:${attempt}`);
     const eventRng = createRng(`${runSeed}:floor:0:corridor:${corridorIndex}:event:attempt:${attempt}`);
-    return buildCorridor(room, rooms[corridorIndex + 1], corridorIndex, shapeRng, MAP_LAYOUT.corridorWidthCells, eventRng, MAP_LAYOUT.branchDepthCells);
+    return {
+      ...buildCorridor(room, rooms[corridorIndex + 1], corridorIndex, shapeRng, MAP_LAYOUT.corridorWidthCells, eventRng, MAP_LAYOUT.branchDepthCells),
+      entrySide: getOppositeSide(room.exitSide),
+      exitSide: getOppositeSide(rooms[corridorIndex + 1].entrySide),
+    };
   });
   return { runSeed, floorIndex: 0, rooms, corridors };
 }
@@ -144,7 +149,8 @@ function createSafeFallbackLayout(runSeed, baseRooms) {
     cursorX += footprint.width + MAP_LAYOUT.minCorridorLengthCells + 1;
   });
   const corridors = rooms.slice(0, -1).map((room, corridorIndex) =>
-    buildCorridor(
+    ({
+      ...buildCorridor(
       room,
       rooms[corridorIndex + 1],
       corridorIndex,
@@ -152,7 +158,10 @@ function createSafeFallbackLayout(runSeed, baseRooms) {
       MAP_LAYOUT.corridorWidthCells,
       createRng(`${runSeed}:floor:0:fallback:corridor:${corridorIndex}:event`),
       MAP_LAYOUT.branchDepthCells,
-    ));
+      ),
+      entrySide: getOppositeSide(room.exitSide),
+      exitSide: getOppositeSide(rooms[corridorIndex + 1].entrySide),
+    }));
   return { runSeed, floorIndex: 0, rooms, corridors };
 }
 

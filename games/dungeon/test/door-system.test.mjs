@@ -10,6 +10,7 @@ function makeActor(x) {
     y: 290,
     body: {
       halfWidth: 6,
+      halfHeight: 6,
       reset(nextX, nextY) {
         actor.x = nextX;
         actor.y = nextY;
@@ -21,10 +22,11 @@ function makeActor(x) {
 
 function makeDoor(side, isOpen = false) {
   return {
-    x: side === "left" ? 40 : 920,
+    x: side === "left" ? 40 : side === "right" ? 920 : 480,
+    y: side === "up" ? 76 : side === "down" ? 512 : 290,
     side,
     isOpen,
-    blocker: { body: { halfWidth: 16 } },
+    blocker: { body: { halfWidth: 16, halfHeight: 16 } },
   };
 }
 
@@ -36,6 +38,16 @@ test("closed side doors keep actors on the room side of the blocker", () => {
   const rightActor = makeActor(940);
   assert.equal(constrainActorToClosedDoor(rightActor, makeDoor("right")), true);
   assert.equal(rightActor.x, 898);
+
+  const upActor = makeActor(480);
+  upActor.y = 60;
+  assert.equal(constrainActorToClosedDoor(upActor, makeDoor("up")), true);
+  assert.equal(upActor.y, 98);
+
+  const downActor = makeActor(480);
+  downActor.y = 530;
+  assert.equal(constrainActorToClosedDoor(downActor, makeDoor("down")), true);
+  assert.equal(downActor.y, 490);
 });
 
 test("open doors do not constrain actors crossing the doorway", () => {

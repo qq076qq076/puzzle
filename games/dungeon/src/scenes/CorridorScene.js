@@ -14,6 +14,7 @@ import { createCombatHud, createPauseOverlay, toggleBuffPanel, updateCombatHud }
 import { disableMouseInput } from "../ui/input.js";
 import { bindPauseKeyboard, createPauseKeyboardHandlers, unbindPauseKeyboard } from "../ui/pause-keyboard.js";
 import { buildCorridorWorld } from "../world/corridor-world.js";
+import { getSideVector } from "../data/rooms.js";
 
 export class CorridorScene extends Phaser.Scene {
   constructor() {
@@ -41,7 +42,8 @@ export class CorridorScene extends Phaser.Scene {
 
     this.worldLayout = buildCorridorWorld(this, this.currentCorridor);
     this.player = new Player(this, this.worldLayout.spawn[0], this.worldLayout.spawn[1]);
-    this.player.facing.set(1, 0);
+    const [entryOutX, entryOutY] = getSideVector(this.currentCorridor.entrySide);
+    this.player.facing.set(-entryOutX, -entryOutY);
     applyPlayerBuild(this.player, this.build);
     this.physics.add.collider(this.player, this.worldLayout.walls);
     this.createInput();
@@ -132,7 +134,7 @@ export class CorridorScene extends Phaser.Scene {
     this.player.updateActor({ moveX: input.moveX, moveY: input.moveY, attack: false, dodge: input.dodge }, delta);
     this.updateCorridorEvents();
     constrainActorToClosedDoor(this.player, this.worldLayout.entryDoor);
-    if (hasReachedCorridorExit(this.player, this.worldLayout.exitTrigger)) this.goToNextRoom();
+    if (hasReachedCorridorExit(this.player, this.worldLayout.exitTrigger, this.currentCorridor.exitSide)) this.goToNextRoom();
     this.updateHud();
   }
 

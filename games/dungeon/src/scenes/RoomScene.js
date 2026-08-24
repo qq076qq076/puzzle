@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config.js";
 import { MONSTERS } from "../data/monsters.js";
-import { ROOM_BOUNDS } from "../data/rooms.js";
+import { ROOM_BOUNDS, getSideVector } from "../data/rooms.js";
 import { Enemy } from "../entities/Enemy.js";
 import { Player } from "../entities/Player.js";
 import { applyReward, getRewardChoices, getRewardColor, getRewardDefinition } from "../systems/reward-system.js";
@@ -60,7 +60,8 @@ export class RoomScene extends Phaser.Scene {
     this.player = new Player(this, this.currentRoom.entrySpawn[0], this.currentRoom.entrySpawn[1]);
     this.enemyGroup = this.physics.add.group({ allowGravity: false });
     this.physics.add.collider(this.enemyGroup, this.enemyGroup);
-    this.player.facing.set(1, 0);
+    const [entryOutX, entryOutY] = getSideVector(this.currentRoom.entrySide);
+    this.player.facing.set(-entryOutX, -entryOutY);
     this.applyBuild();
     this.physics.add.collider(this.player, this.walls);
     this.keyboard = this.input.keyboard.addKeys("W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,SHIFT,ENTER,R,ESC,P,M,B,Q");
@@ -100,7 +101,7 @@ export class RoomScene extends Phaser.Scene {
     });
     this.introRemaining = 0;
     this.introText = this.add
-      .text(GAME_WIDTH / 2, 270, `ROOM ${this.currentRoom.roomNumber}/6\n${this.currentRoom.name}\n\n從左側開門走入…`, {
+      .text(GAME_WIDTH / 2, 270, `ROOM ${this.currentRoom.roomNumber}/6\n${this.currentRoom.name}\n\n從${this.getSideLabel(this.currentRoom.entrySide)}開門走入…`, {
         color: "#f5f1da",
         fontFamily: "monospace",
         fontSize: "20px",
@@ -124,13 +125,7 @@ export class RoomScene extends Phaser.Scene {
     if (!machine) this.floorVisual.setTileScale(2, 2);
     this.floorVisual.setTint(machine ? 0xb9c8e4 : 0xd3c0c9);
     this.walls = this.physics.add.staticGroup();
-    const wallThickness = 32;
-    this.addWall(GAME_WIDTH / 2, 76, GAME_WIDTH - 80, wallThickness, machine);
-    this.addWall(GAME_WIDTH / 2, GAME_HEIGHT - 28, GAME_WIDTH - 80, wallThickness, machine);
-    this.addWall(40, 170, wallThickness, 160, machine);
-    this.addWall(40, 410, wallThickness, 160, machine);
-    this.addWall(920, 170, wallThickness, 160, machine);
-    this.addWall(920, 410, wallThickness, 160, machine);
+    this.createBoundaryWalls(machine);
     this.currentRoom.obstacles.forEach(([x, y, width, height]) => this.addWall(x + width / 2, y + height / 2, width, height, machine));
 
     this.entryPortal = this.add.sprite(this.currentRoom.entryDoor[0], this.currentRoom.entryDoor[1], "portal").setScale(0.58).setAlpha(0.82).setDepth(2);
@@ -172,6 +167,35 @@ export class RoomScene extends Phaser.Scene {
     if (!machine) wall.wallVisual.setTileScale(2, 2);
     else wall.wallVisual.setTint(0x72758d);
     return wall;
+  }
+
+  createBoundaryWalls(machine) {
+    const openings = new Set([this.currentRoom.entrySide, this.currentRoom.exitSide]);
+    const wallThickness = 32;
+    const addHorizontal = (y, side) => {
+      if (!openings.has(side)) {
+        this.addWall(GAME_WIDTH / 2, y, GAME_WIDTH - 80, wallThickness, machine);
+        return;
+      }
+      this.addWall(236, y, 392, wallThickness, machine);
+      this.addWall(724, y, 392, wallThickness, machine);
+    };
+    const addVertical = (x, side) => {
+      if (!openings.has(side)) {
+        this.addWall(x, 290, wallThickness, 396, machine);
+        return;
+      }
+      this.addWall(x, 169, wallThickness, 154, machine);
+      this.addWall(x, 411, wallThickness, 154, machine);
+    };
+    addHorizontal(76, "up");
+    addHorizontal(GAME_HEIGHT - 28, "down");
+    addVertical(40, "left");
+    addVertical(920, "right");
+  }
+
+  getSideLabel(side) {
+    return { left: "左側", right: "右側", up: "上側", down: "下側" }[side] || "入口";
   }
 
   createTraps() {
@@ -261,13 +285,20 @@ export class RoomScene extends Phaser.Scene {
 
   updateEntrance(delta) {
     const [targetX, targetY] = this.currentRoom.entry;
-    if (this.player.x < targetX) {
-      this.player.updateActor({ moveX: 1, moveY: 0, attack: false, dodge: false }, delta);
+    const [outwardX, outwardY] = getSideVector(this.currentRoom.entrySide);
+    const moveX = -outwardX;
+    const moveY = -outwardY;
+    const reached = this.currentRoom.entrySide === "left" ? this.player.x >= targetX
+      : this.currentRoom.entrySide === "right" ? this.player.x <= targetX
+        : this.currentRoom.entrySide === "up" ? this.player.y >= targetY
+          : this.player.y <= targetY;
+    if (!reached) {
+      this.player.updateActor({ moveX, moveY, attack: false, dodge: false }, delta);
       return;
     }
 
     this.player.body.reset(targetX, targetY);
-    this.player.facing.set(1, 0);
+    this.player.facing.set(moveX, moveY);
     this.player.updateActor({ moveX: 0, moveY: 0, attack: false, dodge: false }, delta);
     this.roomStatus = "room_intro";
     this.introRemaining = 700;

@@ -12,6 +12,7 @@ import {
   WAVE_COUNTS,
 } from "../src/systems/room-generator.js";
 import { ROOM_TEMPLATES } from "../src/data/rooms.js";
+import { ROOM_SIDES, getOppositeSide, getSideVector } from "../src/data/rooms.js";
 
 test("same run seed reproduces the complete six-room floor", () => {
   const first = generateFloor("fixed-seed");
@@ -47,7 +48,8 @@ test("generated normal rooms satisfy the layout, wave, and template constraints"
     const floor = generateFloor(seed);
     floor.slice(0, 5).forEach((room, index, rooms) => {
       assert.equal(room.validation.valid, true);
-      assert.deepEqual(room.validation, validateRoom(room));
+      const { fallback: _fallback, ...validation } = room.validation;
+      assert.deepEqual(validation, validateRoom(room));
       assert.equal(room.enemies.length, ENEMY_COUNTS[index]);
       assert.equal(room.waves.length, WAVE_COUNTS[index]);
       assert.ok(room.enemies.reduce((sum, enemy) => sum + MONSTERS[enemy.id].threat, 0) <= THREAT_BUDGETS[index]);
@@ -58,17 +60,27 @@ test("generated normal rooms satisfy the layout, wave, and template constraints"
   });
 });
 
-test("a right-side exit connects to the next room's left-side entrance", () => {
-  const floor = generateFloor("connected-doors");
-  floor.forEach((room, index) => {
-    assert.equal(room.entrySide, "left");
-    assert.equal(room.exitSide, "right");
-    assert.ok(room.entrySpawn[0] < room.entryDoor[0]);
-    assert.ok(room.entryDoor[0] < room.entry[0]);
-    assert.ok(room.exit[0] < room.exitDoor[0]);
-    assert.ok(room.exitDoor[0] < room.exitTrigger[0]);
-    if (index > 0) assert.notEqual(floor[index - 1].exitSide, room.entrySide);
+test("rooms use paired entrances and exits across all four sides", () => {
+  const observedSides = new Set();
+  Array.from({ length: 30 }, (_, index) => generateFloor(`connected-doors-${index}`)).forEach((floor) => {
+    floor.forEach((room, index) => {
+      observedSides.add(room.entrySide);
+      observedSides.add(room.exitSide);
+      assert.notEqual(room.entrySide, room.exitSide);
+      const [entryDx, entryDy] = getSideVector(room.entrySide);
+      const [exitDx, exitDy] = getSideVector(room.exitSide);
+      assert.ok((room.entrySpawn[0] - room.entryDoor[0]) * entryDx + (room.entrySpawn[1] - room.entryDoor[1]) * entryDy > 0);
+      assert.ok((room.entry[0] - room.entryDoor[0]) * entryDx + (room.entry[1] - room.entryDoor[1]) * entryDy < 0);
+      assert.ok((room.exitTrigger[0] - room.exitDoor[0]) * exitDx + (room.exitTrigger[1] - room.exitDoor[1]) * exitDy > 0);
+      if (index > 0) assert.equal(room.entrySide, getOppositeSide(floor[index - 1].exitSide));
+    });
   });
+  assert.deepEqual([...observedSides].sort(), [...ROOM_SIDES].sort());
+});
+
+test("room templates provide multiple physical silhouettes", () => {
+  assert.ok(new Set(ROOM_TEMPLATES.map((template) => template.shape)).size >= 6);
+  assert.ok(ROOM_TEMPLATES.some((template) => template.boundaryObstacles?.length >= 4));
 });
 
 test("floor map contains six rooms connected by five deterministic corridors", () => {
