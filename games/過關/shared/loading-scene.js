@@ -24,7 +24,8 @@ class LoadingScene extends Phaser.Scene {
     });
 
     const targetScene = this.registry.get("nextLevelScene") || "Level01Scene";
-    this.time.delayedCall(520, () => this.scene.start(targetScene));
+    // Keep the loading beat long enough to feel intentional before the first level arrives.
+    this.time.delayedCall(2600, () => this.scene.start(targetScene));
   }
 
   layout(size) {

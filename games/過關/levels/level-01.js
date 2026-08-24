@@ -83,21 +83,23 @@ class Level01Scene extends Phaser.Scene {
         scaleX: 1,
         scaleY: 1,
         angle: 0,
-        duration: 820,
-        ease: "Cubic.Out",
+        duration: 1400,
+        ease: "Cubic.In",
         onUpdate: (tween) => {
           if (!this.loadingHit && tween.progress >= 0.66) this.hitLoadingLabel();
         },
         onComplete: () => {
-          this.status = "active";
-          this.button.setInteractive();
           this.tweens.add({
             targets: this.button,
-            scaleX: 1.025,
-            scaleY: 0.975,
-            duration: 130,
+            scaleX: 1.035,
+            scaleY: 0.965,
+            duration: 120,
             yoyo: true,
-            ease: "Quad.Out"
+            ease: "Sine.Out",
+            onComplete: () => {
+              this.status = "active";
+              this.button.setInteractive();
+            }
           });
         }
       });
@@ -125,16 +127,34 @@ class Level01Scene extends Phaser.Scene {
         fontStyle: "600"
       }).setOrigin(0.5).setDepth(21);
       const direction = index - (text.length - 1) / 2;
+      const side = direction < 0 ? -1 : 1;
+      const startFragmentX = fragment.x;
+      const startFragmentY = fragment.y;
+      const exitX = side < 0
+        ? -Math.max(180, this.scale.width * 0.28)
+        : this.scale.width + Math.max(180, this.scale.width * 0.28);
+      const exitY = this.centerY + Phaser.Math.Between(-this.scale.height * 0.42, this.scale.height * 0.42);
+      const wobble = Phaser.Math.Between(20, 42);
+      const phase = Phaser.Math.FloatBetween(0, Math.PI * 2);
       this.tweens.add({
         targets: fragment,
-        x: fragment.x + direction * Phaser.Math.Between(8, 18),
-        y: fragment.y + Phaser.Math.Between(-54, 54),
-        angle: Phaser.Math.Between(-42, 42),
+        x: exitX,
+        y: exitY,
+        angle: Phaser.Math.Between(-140, 140),
         alpha: 0,
         scale: Phaser.Math.FloatBetween(0.55, 1.15),
-        duration: Phaser.Math.Between(260, 430),
+        duration: Phaser.Math.Between(720, 980),
         delay: index * 8,
-        ease: "Cubic.Out",
+        ease: "Cubic.In",
+        onUpdate: (tween) => {
+          const progress = tween.progress;
+          const wobbleFalloff = 1 - progress * 0.58;
+          fragment.x = startFragmentX + (exitX - startFragmentX) * progress
+            + Math.sin(progress * Math.PI * 5 + phase) * wobble * 0.42 * wobbleFalloff;
+          fragment.y = startFragmentY + (exitY - startFragmentY) * progress
+            + Math.sin(progress * Math.PI * 7 + phase) * wobble * wobbleFalloff;
+          fragment.rotation = Math.sin(progress * Math.PI * 8 + phase) * 0.35;
+        },
         onComplete: () => fragment.destroy()
       });
     });
