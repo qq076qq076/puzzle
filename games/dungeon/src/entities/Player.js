@@ -13,7 +13,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.setScale(2);
     this.setDepth(10);
     this.setCollideWorldBounds(true);
-    this.body.setSize(12, 12).setOffset(10, 16);
+    this.body.setSize(12, 8).setOffset(26, 28);
     this.body.setDrag(900, 900);
     this.body.setMaxVelocity(230, 230);
 
@@ -55,7 +55,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.facing = new Phaser.Math.Vector2(1, 0);
     this.attackFacing = this.facing.clone();
     this.attackEffects = new Set();
-    this.shadow = scene.add.image(x, y + 10, "provided-shadow").setScale(2).setAlpha(0.62).setDepth(5);
+    this.shadowOffsetY = 22;
+    this.shadow = scene.add.image(x, y + this.shadowOffsetY, "provided-shadow").setScale(2).setAlpha(0.62).setDepth(5);
     playActorAnimation(this, "player", "idle", this.facing);
   }
 
@@ -105,7 +106,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   tryAttack() {
     if (this.attackCooldownRemaining > 0 || this.dodgeRemaining > 0 || this.health <= 0) return false;
     this.attackCooldownRemaining = this.attackCooldownMs;
-    this.attackRemaining = 142;
+    this.attackRemaining = 220;
     this.attackElapsed = 0;
     this.attackStarted = true;
     this.attackHitResolved = false;
@@ -201,7 +202,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       const moving = this.isDodging() || this.body.velocity.lengthSq() > 16;
       playActorAnimation(this, "player", moving ? "walk" : "idle", visualFacing);
     }
-    this.shadow.setPosition(this.x, this.y + 10).setVisible(this.active);
+    this.shadow.setPosition(this.x, this.y + this.shadowOffsetY).setVisible(this.active);
     this.setDepth(10 + this.y / 10000);
   }
 

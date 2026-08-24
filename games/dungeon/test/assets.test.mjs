@@ -33,7 +33,7 @@ async function readJavaScriptTree(directory) {
 
 test("all runtime CraftPix assets exist in the checked-in source packs", async () => {
   assert.equal(PROVIDED_ASSETS.localFilesAvailable, true);
-  assert.match(PROVIDED_ASSETS.images["provided-shadow"], /Shadow\.png$/);
+  assert.match(PROVIDED_ASSETS.images["provided-shadow"], /player\/PNG\/Swordsman_lvl1\/Without_shadow\/shadow_single\.png$/);
   const files = [
     ...Object.values(PROVIDED_ASSETS.images),
     ...PROVIDED_ASSETS.spritesheets.map(({ path: assetPath }) => assetPath),
@@ -50,8 +50,10 @@ test("spritesheet dimensions match the animation manifest", async () => {
   await Promise.all(PROVIDED_ASSETS.spritesheets.map(async (definition) => {
     const buffer = await readFile(resolveAsset(definition.path));
     const { width, height } = readPngDimensions(buffer);
-    assert.equal(width, definition.frameWidth * definition.frameCount, `${definition.key} frame count`);
-    assert.equal(height, definition.frameHeight, `${definition.key} frame height`);
+    const rows = definition.sheetRows ?? 1;
+    const textureFrameCount = definition.textureFrameCount ?? definition.frameCount;
+    assert.equal(width, definition.frameWidth * (textureFrameCount / rows), `${definition.key} frame columns`);
+    assert.equal(height, definition.frameHeight * rows, `${definition.key} frame rows`);
   }));
 });
 
@@ -82,7 +84,11 @@ test("player melee feedback is only a fan-shaped sweep", async () => {
 });
 
 test("player and fantasy enemies provide directional movement and attacks", () => {
-  for (const actorId of ["player", "rat", "goblin_bat", "goblin_dagger", "plague_mage"]) {
+  assert.deepEqual(Object.keys(ACTOR_ASSETS.player.states.idle).sort(), ["down", "left", "right", "up"]);
+  assert.match(ACTOR_ASSETS.player.states.idle.down.path, /player\/PNG\/Swordsman_lvl1\/Without_shadow\/Swordsman_lvl1_Idle_without_shadow\.png$/);
+  assert.match(ACTOR_ASSETS.player.states.walk.down.path, /Swordsman_lvl1_Walk_without_shadow\.png$/);
+  assert.match(ACTOR_ASSETS.player.states.attack.down.path, /Swordsman_lvl1_attack_without_shadow\.png$/);
+  for (const actorId of ["rat", "goblin_bat", "goblin_dagger", "plague_mage"]) {
     const actor = ACTOR_ASSETS[actorId];
     for (const state of ["idle", "walk", "attack"]) {
       assert.deepEqual(Object.keys(actor.states[state]).sort(), ["down", "side", "up"], `${actorId} ${state}`);
@@ -91,8 +97,8 @@ test("player and fantasy enemies provide directional movement and attacks", () =
 });
 
 test("actor orientation follows each source sprite's modeled direction", () => {
-  assert.equal(getActorOrientation("player", { x: 1, y: 0 }).flipX, true);
-  assert.equal(getActorOrientation("player", { x: -1, y: 0 }).flipX, false);
+  assert.deepEqual(getActorOrientation("player", { x: 1, y: 0 }), { direction: "right", flipX: false, rotation: 0 });
+  assert.deepEqual(getActorOrientation("player", { x: -1, y: 0 }), { direction: "left", flipX: false, rotation: 0 });
   assert.equal(getActorOrientation("rat", { x: 1, y: 0 }).flipX, true);
   assert.equal(getActorOrientation("goblin_bat", { x: 1, y: 0 }).flipX, false);
   assert.equal(getActorOrientation("goblin_bat", { x: -1, y: 0 }).flipX, true);

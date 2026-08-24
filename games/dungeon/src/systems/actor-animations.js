@@ -18,7 +18,10 @@ export function registerCraftPixAnimations(scene) {
         if (scene.anims.exists(key) || !hasNumberedFrames(scene, definition.key)) return;
         scene.anims.create({
           key,
-          frames: scene.anims.generateFrameNumbers(definition.key, { start: 0, end: definition.frameCount - 1 }),
+          frames: scene.anims.generateFrameNumbers(definition.key, {
+            start: definition.start ?? 0,
+            end: definition.end ?? definition.frameCount - 1,
+          }),
           frameRate: definition.frameRate,
           repeat: definition.repeat,
         });
@@ -49,8 +52,11 @@ export function getFacingDirection(vector) {
 
 export function getActorOrientation(actorId, facing) {
   const actor = ACTOR_ASSETS[actorId];
-  const direction = getFacingDirection(facing);
   const x = Number(facing?.x) || 0;
+  const y = Number(facing?.y) || 0;
+  const direction = actor?.directionalSides && Math.abs(x) > Math.abs(y)
+    ? (x < 0 ? "left" : "right")
+    : getFacingDirection(facing);
   if (!actor) return { direction, flipX: false, rotation: 0 };
 
   if (actor.rotationMode === "from-down") {
@@ -58,7 +64,7 @@ export function getActorOrientation(actorId, facing) {
     return { direction, flipX: false, rotation };
   }
 
-  const canFlip = direction === "side" || (actor.flipVerticalByHorizontalFacing && Math.abs(x) > 0.05);
+  const canFlip = direction === "side" || Boolean(actor.flipVerticalByHorizontalFacing && Math.abs(x) > 0.05);
   const baseFacesLeft = actor.sideFaces === "left";
   const flipX = canFlip && (baseFacesLeft ? x >= 0 : x < 0);
   return { direction, flipX, rotation: 0 };

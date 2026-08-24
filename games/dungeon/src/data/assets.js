@@ -13,9 +13,37 @@ export const CRAFTPIX_SOURCES = {
 
 const FANTASY_ROOT = "./roguelike-game-kit-pixel-art";
 const MACHINE_ROOT = "./shoot";
+const PLAYER_ROOT = "./player/PNG/Swordsman_lvl1/Without_shadow";
 
-function sheet(key, path, frameWidth, frameHeight, frameCount, frameRate, repeat = -1) {
-  return { key, path, frameWidth, frameHeight, frameCount, frameRate, repeat };
+function sheet(key, path, frameWidth, frameHeight, frameCount, frameRate, repeat = -1, options = {}) {
+  return { key, path, frameWidth, frameHeight, frameCount, frameRate, repeat, ...options };
+}
+
+function swordsmanPlayer() {
+  const directions = { right: 0, down: 1, left: 2, up: 3 };
+  const states = {
+    idle: { key: "provided-player", file: "Swordsman_lvl1_Idle_without_shadow.png", frames: 12, frameRate: 8, repeat: -1 },
+    walk: { key: "provided-player-walk", file: "Swordsman_lvl1_Walk_without_shadow.png", frames: 6, frameRate: 11, repeat: -1 },
+    attack: { key: "provided-player-attack", file: "Swordsman_lvl1_attack_without_shadow.png", frames: 8, frameRate: 36, repeat: 0 },
+  };
+  const actorStates = {};
+  Object.entries(states).forEach(([state, animation]) => {
+    actorStates[state] = {};
+    Object.entries(directions).forEach(([direction, row]) => {
+      const start = row * animation.frames;
+      actorStates[state][direction] = sheet(
+        animation.key,
+        `${PLAYER_ROOT}/${animation.file}`,
+        64,
+        64,
+        animation.frames,
+        animation.frameRate,
+        animation.repeat,
+        { start, end: start + animation.frames - 1, textureFrameCount: animation.frames * 4, sheetRows: 4 },
+      );
+    });
+  });
+  return { baseTexture: "provided-player", directionalSides: true, states: actorStates };
 }
 
 function fantasyActor(textureKey, folder, options = {}) {
@@ -85,7 +113,7 @@ const bossUp = sheet(
 );
 
 export const ACTOR_ASSETS = {
-  player: fantasyActor("provided-player", "1 Characters/2", { sideFaces: "left" }),
+  player: swordsmanPlayer(),
   rat: fantasyActor("provided-rat", "3 Dungeon Enemies/1", { sideFaces: "left" }),
   goblin_bat: fantasyActor("provided-goblin-bat", "3 Dungeon Enemies/2"),
   goblin_dagger: fantasyActor("provided-goblin-dagger", "3 Dungeon Enemies/3"),
@@ -206,7 +234,7 @@ const environmentSpritesheets = [
 export const PROVIDED_ASSETS = {
   localFilesAvailable: true,
   images: {
-    "provided-shadow": `${FANTASY_ROOT}/1 Characters/Other/Shadow.png`,
+    "provided-shadow": `${PLAYER_ROOT}/shadow_single.png`,
     "potion-icon": `${FANTASY_ROOT}/4 GUI/3 Icons/Icon_32.png`,
     "bottle-1": `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects/Other/5.png`,
     "bottle-2": `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects/Other/6.png`,
@@ -249,6 +277,6 @@ export const PROVIDED_ASSETS = {
   credits: {
     sources: CRAFTPIX_SOURCES,
     licenseUrl: "https://craftpix.net/file-licenses/",
-    runtimePolicy: "Runtime game art is loaded only from the two supplied CraftPix packs; generated fallback textures are disabled.",
+    runtimePolicy: "Runtime game art uses the supplied CraftPix dungeon, machine, and dedicated player packs; generated fallback textures are disabled.",
   },
 };
