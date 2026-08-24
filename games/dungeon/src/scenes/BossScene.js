@@ -90,16 +90,6 @@ export class BossScene extends Phaser.Scene {
       onPause: () => this.togglePause(),
       onBuff: () => toggleBuffPanel(this, this.hud, this.player),
     });
-    const entrySideLabel = { left: "左側", right: "右側", up: "上側", down: "下側" }[this.bossRoom.entrySide];
-    this.introText = this.add.text(480, 285, `第六房\n骨面機械王座\n\n從${entrySideLabel}開門走入…`, {
-      color: "#f5f1da",
-      fontFamily: "monospace",
-      fontSize: "22px",
-      fontStyle: "bold",
-      align: "center",
-      lineSpacing: 9,
-    }).setOrigin(0.5).setDepth(150);
-    this.showHint("閃避紅色預警 · 先處理鋼鐵蜘蛛 · 每個攻擊都有反擊窗口");
   }
 
   applyBuild() {
@@ -127,7 +117,6 @@ export class BossScene extends Phaser.Scene {
       machine: true,
       initiallyOpen: true,
     });
-    this.add.text(480, 94, "BOSS ROOM · 骨面機械王座", this.hudStyle(12, "#b9a9d4")).setOrigin(0.5).setDepth(2);
   }
 
   addWall(x, y, width, height) {
@@ -159,11 +148,6 @@ export class BossScene extends Phaser.Scene {
 
   hudStyle(fontSize, color) {
     return { color, fontFamily: "monospace", fontSize: `${fontSize}px`, fontStyle: "bold" };
-  }
-
-  showHint(message) {
-    this.hint = this.add.text(480, GAME_HEIGHT - 24, message, this.hudStyle(10, "#77798a")).setOrigin(0.5).setDepth(110);
-    this.time.delayedCall(5200, () => this.hint?.setVisible(false));
   }
 
   readInput() {
@@ -229,18 +213,15 @@ export class BossScene extends Phaser.Scene {
     this.player.facing.set(moveX, moveY);
     this.player.updateActor({ moveX: 0, moveY: 0, attack: false, dodge: false }, delta);
     this.battleStatus = "intro";
-    this.introRemaining = 850;
+    this.introRemaining = 320;
     closeSideDoor(this.entryDoor);
     this.tweens.add({ targets: this.entryPortal, alpha: 0.12, duration: 320 });
-    this.introText?.setText("第六房\n骨面機械王座\n\n入口關閉 · 決戰開始");
     this.audio.beep("boss");
   }
 
   updateIntro(delta) {
     this.introRemaining -= delta;
     if (this.introRemaining <= 0) {
-      this.introText?.destroy();
-      this.introText = null;
       this.battleStatus = "combat";
       this.audio.beep("boss");
     }

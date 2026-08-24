@@ -67,3 +67,16 @@ test("contact cooldown ticks down without becoming negative", () => {
   tickContactDamage(attacker, 1000);
   assert.equal(attacker.contactDamageCooldownRemaining, 0);
 });
+
+test("contact damage yields to an imminent deliberate attack", () => {
+  const { attacker, player, received } = makeCombatants({
+    attacker: { attackCooldownRemaining: 500, definition: { name: "測試怪物", damage: 10, contactDamage: 6, contactCooldownMs: 800, windupMs: 400 } },
+  });
+  attacker.attackCooldownRemaining = attacker.definition.windupMs + 100;
+  assert.equal(tryContactDamage(attacker, player), false);
+  assert.deepEqual(received, []);
+
+  attacker.attackCooldownRemaining = attacker.definition.windupMs + 400;
+  assert.equal(tryContactDamage(attacker, player), true);
+  assert.equal(received.length, 1);
+});

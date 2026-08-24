@@ -4,9 +4,14 @@ export function tickContactDamage(attacker, delta) {
 
 export function tryContactDamage(attacker, player) {
   if (!attacker?.active || !player?.active || player.health <= 0) return false;
-  if (["attack", "charge", "dead"].includes(attacker.state) || attacker.spawnProtectionRemaining > 0 || attacker.contactDamageCooldownRemaining > 0) return false;
-
   const definition = attacker.definition || {};
+  const deliberateAttackSoon = Number.isFinite(definition.windupMs)
+    && (attacker.attackCooldownRemaining || 0) <= definition.windupMs + 180;
+  if (["attack", "telegraph", "recover", "charge", "dead", "hurt"].includes(attacker.state)
+    || deliberateAttackSoon
+    || attacker.spawnProtectionRemaining > 0
+    || attacker.contactDamageCooldownRemaining > 0) return false;
+
   const damage = definition.contactDamage ?? Math.max(1, Math.round((definition.damage || 1) * 0.5));
   if (!player.takeDamage(damage, {
     knockback: {

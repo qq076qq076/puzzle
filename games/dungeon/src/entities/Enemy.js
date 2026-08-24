@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { playActorAnimation } from "../systems/actor-animations.js";
 import { tickContactDamage, tryContactDamage } from "../systems/contact-damage.js";
-import { createEnemyDashMotion } from "../systems/enemy-attack.js";
+import { createEnemyDashMotion, getEnemyAttackActiveMs, getEnemyEffectiveAttackRange, getEnemyInitialCooldownMs } from "../systems/enemy-attack.js";
 import { getRangedMovement, isRangedAttack } from "../systems/enemy-behavior.js";
 import { startKnockback, updateKnockback } from "../systems/knockback.js";
 import { spawnEnemyProjectilePattern } from "../systems/projectile-system.js";
@@ -18,9 +18,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.state = "idle";
     this.spawnProtectionRemaining = 850;
     this.alertRemaining = 380;
-    this.attackCooldownRemaining = 600 + sequence * 90;
+    this.attackCooldownRemaining = getEnemyInitialCooldownMs(sequence);
     this.contactDamageCooldownRemaining = 0;
     this.attackWindupRemaining = 0;
+    this.attackActiveRemaining = 0;
     this.recoverRemaining = 0;
     this.dashRemaining = 0;
     this.dashVelocityX = 0;
@@ -118,6 +119,17 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.updateVisuals();
       return;
     }
+    if (this.attackActiveRemaining > 0) {
+      this.attackActiveRemaining = Math.max(0, this.attackActiveRemaining - delta);
+      this.state = "attack";
+      this.setVelocity(0, 0);
+      if (this.attackActiveRemaining === 0) {
+        this.state = "recover";
+        this.recoverRemaining = this.definition.recoverMs;
+      }
+      this.updateVisuals();
+      return;
+    }
     if (this.recoverRemaining > 0) {
       this.recoverRemaining = Math.max(0, this.recoverRemaining - delta);
       this.state = "recover";
@@ -130,7 +142,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     const dy = player.y - this.y;
     const distance = Math.hypot(dx, dy) || 1;
     this.facing.set(dx / distance, dy / distance);
-    const attackRange = this.definition.attackRange;
+    const attackRange = getEnemyEffectiveAttackRange(this.definition);
     if (isRangedAttack(this.definition.attackKind)) {
       this.state = "chase";
       const movement = getRangedMovement(this.definition, dx, dy, distance, this.strafeDirection);
@@ -180,7 +192,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (isRangedAttack(kind)) {
       spawnEnemyProjectilePattern(this.scene, this, player, this.definition);
     } else {
-      if (distance <= this.definition.attackRange + 30) {
+      if (distance <= getEnemyEffectiveAttackRange(this.definition) + 30) {
         player.takeDamage(this.definition.damage, {
           knockback: {
             x: player.x - this.x,
@@ -191,8 +203,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
         });
       }
     }
-    this.state = "recover";
-    this.recoverRemaining = this.definition.recoverMs;
+    this.state = "attack";
+    this.attackActiveRemaining = getEnemyAttackActiveMs(this.definition);
+    this.setVelocity(0, 0);
+    playActorAnimation(this, this.assetId, "attack", this.facing, { restart: true });
   }
 
   tryContactDamage(player) {
@@ -206,6 +220,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.hitFlashRemaining = 110;
     if (context.knockback) {
       this.dashRemaining = 0;
+      this.attackActiveRemaining = 0;
       this.recoverRemaining = Math.max(this.recoverRemaining, 160);
       startKnockback(this, context.knockback, { distance: 18, durationMs: 110 });
     }

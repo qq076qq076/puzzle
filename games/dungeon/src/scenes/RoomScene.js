@@ -104,18 +104,6 @@ export class RoomScene extends Phaser.Scene {
       onBuff: () => toggleBuffPanel(this, this.hud, this.player),
     });
     this.introRemaining = 0;
-    this.introText = this.add
-      .text(GAME_WIDTH / 2, 270, `ROOM ${this.currentRoom.roomNumber}/6\n${this.currentRoom.name}\n\n從${this.getSideLabel(this.currentRoom.entrySide)}開門走入…`, {
-        color: "#f5f1da",
-        fontFamily: "monospace",
-        fontSize: "20px",
-        fontStyle: "bold",
-        align: "center",
-        lineSpacing: 8,
-      })
-      .setOrigin(0.5)
-      .setDepth(150);
-    this.showHint("WASD／方向鍵移動 · Space 攻擊 · Shift 閃避 · Q 使用藥水");
   }
 
   applyBuild() {
@@ -160,7 +148,6 @@ export class RoomScene extends Phaser.Scene {
       const portal = this.add.sprite(x, y, "portal").setScale(0.38).setAlpha(0.46).setTint(0x72b9ca).setDepth(1);
       playEnvironmentAnimation(portal, "portal-idle");
     });
-    this.add.text(GAME_WIDTH / 2, 94, machine ? "機械污染區" : "古老地城", this.hudStyle(11, machine ? "#8fd1e8" : "#cdb28e")).setOrigin(0.5).setDepth(2);
   }
 
   addWall(x, y, width, height, machine = false) {
@@ -187,10 +174,6 @@ export class RoomScene extends Phaser.Scene {
     else patch.setTint(0x72758d);
   }
 
-  getSideLabel(side) {
-    return { left: "左側", right: "右側", up: "上側", down: "下側" }[side] || "入口";
-  }
-
   createTraps() {
     this.traps = this.currentRoom.trapPoints.map((point, index) => {
       const node = this.add.sprite(point[0], point[1], "trap", 0).setScale(2.3).setAlpha(0.34).setDepth(1);
@@ -215,11 +198,6 @@ export class RoomScene extends Phaser.Scene {
 
   hudStyle(fontSize, color) {
     return { color, fontFamily: "monospace", fontSize: `${fontSize}px`, fontStyle: "bold" };
-  }
-
-  showHint(message) {
-    this.hint = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 24, message, this.hudStyle(10, "#77798a")).setOrigin(0.5).setDepth(110);
-    this.time.delayedCall(5200, () => this.hint?.setVisible(false));
   }
 
   readInput() {
@@ -294,18 +272,15 @@ export class RoomScene extends Phaser.Scene {
     this.player.facing.set(moveX, moveY);
     this.player.updateActor({ moveX: 0, moveY: 0, attack: false, dodge: false }, delta);
     this.roomStatus = "room_intro";
-    this.introRemaining = 700;
+    this.introRemaining = 320;
     closeSideDoor(this.entryDoor);
     this.tweens.add({ targets: this.entryPortal, alpha: 0.12, duration: 320 });
-    this.introText?.setText(`ROOM ${this.currentRoom.roomNumber}/6\n${this.currentRoom.name}\n\n入口關閉 · 房間封鎖`);
     this.audio.beep("telegraph");
   }
 
   updateRoomIntro(delta) {
     this.introRemaining -= delta;
     if (this.introRemaining <= 0) {
-      this.introText?.destroy();
-      this.introText = null;
       this.startCombat();
     }
   }

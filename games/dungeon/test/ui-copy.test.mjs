@@ -50,3 +50,14 @@ test("reward descriptions stay inside their card and use advanced wrapping", asy
   assert.match(source, /fixedWidth:\s*174/);
   assert.match(source, /wordWrap:\s*\{\s*width:\s*174,\s*useAdvancedWrap:\s*true\s*\}/);
 });
+
+test("room, corridor, and boss entrances render no instructional overlays", async () => {
+  const sources = await Promise.all([
+    "scenes/RoomScene.js",
+    "scenes/CorridorScene.js",
+    "scenes/BossScene.js",
+  ].map(readSource));
+  sources.forEach((source) => {
+    assert.doesNotMatch(source, /introText|showHint\(/);
+  });
+});
