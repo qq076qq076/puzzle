@@ -485,7 +485,7 @@
     if (event.pointerType === "mouse" && event.button !== 0) {
       return;
     }
-    if (streakShakeTimer !== null) {
+    if (streakShakeTimer !== null || event.target.closest("button, .message")) {
       return;
     }
     touchStart = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
