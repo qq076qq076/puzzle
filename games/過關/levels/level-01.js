@@ -83,12 +83,11 @@ class Level01Scene extends Phaser.Scene {
         scaleX: 1,
         scaleY: 1,
         angle: 0,
-        duration: 1400,
+        duration: 500,
         ease: "Cubic.In",
-        onUpdate: (tween) => {
-          if (!this.loadingHit && tween.progress >= 0.66) this.hitLoadingLabel();
-        },
         onComplete: () => {
+          // The impact begins only after the button has reached the exact center.
+          this.hitLoadingLabel();
           this.tweens.add({
             targets: this.button,
             scaleX: 1.035,
