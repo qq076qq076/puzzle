@@ -34,3 +34,19 @@ test("removed HUD, pause, seed, and reward instructions stay hidden", async () =
   assert.doesNotMatch(source, /roomLabel:\s*[`\"]FLOOR 1/);
   assert.doesNotMatch(source, /第\s*\$\{[^}]*currentWave[^}]*\}[^\n]*波/);
 });
+
+test("combat HUD shows a health bar and only an icon for sound controls", async () => {
+  const source = await readSource("ui/hud.js");
+  assert.match(source, /healthBarBack/);
+  assert.match(source, /healthBarFill/);
+  assert.match(source, /🔊/);
+  assert.match(source, /🔇/);
+  assert.doesNotMatch(source, /status:\s*scene\.add\.text/);
+  assert.doesNotMatch(source, /makeTouchOnlyButton\([^\n]+"(?:PAUSE|BUFFS|SOUND|MUTE)"/);
+});
+
+test("reward descriptions stay inside their card and use advanced wrapping", async () => {
+  const source = await readSource("scenes/RoomScene.js");
+  assert.match(source, /fixedWidth:\s*174/);
+  assert.match(source, /wordWrap:\s*\{\s*width:\s*174,\s*useAdvancedWrap:\s*true\s*\}/);
+});

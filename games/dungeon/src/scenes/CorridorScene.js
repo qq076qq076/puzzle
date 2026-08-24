@@ -10,7 +10,7 @@ import { applyPlayerBuild, capturePlayerBuild, normalizeRunBuild } from "../syst
 import { cloneRunStats, createRunStats } from "../systems/run-state.js";
 import { TouchControls } from "../systems/touch-controls.js";
 import { makeRunSeed } from "../systems/rng.js";
-import { createCombatHud, createPauseOverlay, toggleBuffPanel, updateCombatHud } from "../ui/hud.js";
+import { createCombatHud, createPauseOverlay, toggleBuffPanel, updateCombatHud, updateSoundIcon } from "../ui/hud.js";
 import { disableMouseInput } from "../ui/input.js";
 import { bindPauseKeyboard, createPauseKeyboardHandlers, unbindPauseKeyboard } from "../ui/pause-keyboard.js";
 import { buildCorridorWorld } from "../world/corridor-world.js";
@@ -72,7 +72,7 @@ export class CorridorScene extends Phaser.Scene {
       pause: () => this.togglePause(),
       sound: () => {
         this.audio.toggle();
-        this.hud?.soundButton.text.setText(this.audio.enabled ? "SOUND" : "MUTE");
+        updateSoundIcon(this.hud, this.audio.enabled);
       },
       buffs: () => {
         if (!this.paused) toggleBuffPanel(this, this.hud, this.player);
@@ -164,10 +164,8 @@ export class CorridorScene extends Phaser.Scene {
     this.audio.beep("ui");
   }
 
-  updateHud(status = null) {
-    updateCombatHud(this.hud, this.player, {
-      status: status || this.statusMessage || "探索走廊",
-    });
+  updateHud() {
+    updateCombatHud(this.hud, this.player);
   }
 
   updateCorridorEvents() {

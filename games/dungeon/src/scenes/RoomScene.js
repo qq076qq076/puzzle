@@ -18,7 +18,7 @@ import { playEnvironmentAnimation } from "../systems/actor-animations.js";
 import { closeSideDoor, constrainActorToClosedDoor, createSideDoor, openSideDoor } from "../systems/door-system.js";
 import { TouchControls } from "../systems/touch-controls.js";
 import { disableMouseInput, makeTouchOnlyButton } from "../ui/input.js";
-import { createCombatHud, createPauseOverlay, toggleBuffPanel, updateCombatHud } from "../ui/hud.js";
+import { createCombatHud, createPauseOverlay, toggleBuffPanel, updateCombatHud, updateSoundIcon } from "../ui/hud.js";
 import { bindPauseKeyboard, createPauseKeyboardHandlers, unbindPauseKeyboard } from "../ui/pause-keyboard.js";
 import { constrainActorToBounds } from "../systems/knockback.js";
 import { createBreakableBottle, resolveBottleHits, updateBottlePickups } from "../systems/destructible-system.js";
@@ -74,7 +74,7 @@ export class RoomScene extends Phaser.Scene {
       pause: () => this.togglePause(),
       sound: () => {
         this.audio.toggle();
-        this.hud?.soundButton.text.setText(this.audio.enabled ? "SOUND" : "MUTE");
+        updateSoundIcon(this.hud, this.audio.enabled);
       },
       buffs: () => toggleBuffPanel(this, this.hud, this.player),
       attack: () => {
@@ -541,7 +541,8 @@ export class RoomScene extends Phaser.Scene {
       fontFamily: "monospace",
       fontSize: "12px",
       align: "center",
-      wordWrap: { width: 174 },
+      fixedWidth: 174,
+      wordWrap: { width: 174, useAdvancedWrap: true },
       lineSpacing: 5,
     }).setOrigin(0.5);
     this.rewardCards.push({ card, iconBack, icon, name, effect, rewardId });
@@ -610,20 +611,8 @@ export class RoomScene extends Phaser.Scene {
     return capturePlayerBuild(this.player);
   }
 
-  updateHud(status = null) {
-    const clearLabel = this.roomStatus === "cleared" ? "房間清除 · 獎勵準備中" : null;
-    const passageOpen = this.roomStatus === "transition" || this.roomStatus === "loading";
-    const roomStatusLabel = {
-      entering: "進入房間",
-      room_intro: "房間封鎖",
-      combat: "戰鬥中",
-      reward: "選擇獎勵",
-      defeat: "戰鬥結束",
-    }[this.roomStatus] || "";
-    this.hud.status.setVisible(!passageOpen);
-    updateCombatHud(this.hud, this.player, {
-      status: passageOpen ? null : status || this.statusMessage || clearLabel || roomStatusLabel,
-    });
+  updateHud() {
+    updateCombatHud(this.hud, this.player);
   }
 
   showStatus(message) {

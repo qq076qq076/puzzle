@@ -1,4 +1,5 @@
 import { BUFFS } from "../data/buffs.js";
+import Phaser from "phaser";
 import { getDungeonAudio } from "../systems/audio-system.js";
 import { getBuffStack } from "../systems/buff-system.js";
 import { makeTouchOnlyButton } from "./input.js";
@@ -6,48 +7,46 @@ import { moveMenuSelection } from "./menu-selection.js";
 
 export function createCombatHud(scene, options = {}) {
   const hud = {
-    avatar: scene.add.image(30, 42, "provided-player").setScale(1.35).setScrollFactor(0).setDepth(110),
-    health: scene.add.text(58, 24, "HP 100/100", scene.hudStyle(12, "#f5f1da")).setScrollFactor(0).setDepth(110),
-    status: scene.add.text(58, 48, "房間準備中", scene.hudStyle(10, "#aaa8b5")).setScrollFactor(0).setDepth(110),
+    avatar: scene.add.image(30, 36, "provided-player").setScale(1.35).setScrollFactor(0).setDepth(110),
+    health: scene.add.text(58, 18, "HP 100/100", scene.hudStyle(12, "#f5f1da")).setScrollFactor(0).setDepth(110),
+    healthBarBack: scene.add.rectangle(58, 48, 168, 10, 0x151722, 0.96).setOrigin(0, 0.5).setStrokeStyle(2, 0x69718d, 0.95).setScrollFactor(0).setDepth(109),
+    healthBarFill: scene.add.rectangle(60, 48, 164, 6, 0x77bd88, 1).setOrigin(0, 0.5).setScrollFactor(0).setDepth(110),
     buffs: scene.add.text(24, 496, "BUFFS —", scene.hudStyle(10, "#b9a9d4")).setScrollFactor(0).setDepth(110),
     gold: scene.add.text(590, 496, "GOLD 0", scene.hudStyle(10, "#dfb84f")).setOrigin(0, 1).setScrollFactor(0).setDepth(110),
     potionIcon: scene.add.image(734, 486, "potion-icon").setScale(2).setScrollFactor(0).setDepth(110),
     potion: scene.add.text(750, 496, "POTION 0 [Q]", scene.hudStyle(10, "#77bd88")).setOrigin(0, 1).setScrollFactor(0).setDepth(110),
   };
   const audio = scene.audio || getDungeonAudio();
-  hud.pauseButton = makeTouchOnlyButton(scene, 778, 30, 72, 28, "PAUSE", () => options.onPause?.(), {
-    color: 0x20283b,
-    strokeColor: 0x69718d,
-    fontSize: "9px",
-    depth: 112,
-  });
-  hud.soundButton = makeTouchOnlyButton(scene, 872, 30, 72, 28, audio.enabled ? "SOUND" : "MUTE", () => {
+  hud.soundButton = makeTouchOnlyButton(scene, 920, 30, 40, 32, audio.enabled ? "🔊" : "🔇", () => {
     audio.toggle();
-    hud.soundButton.text.setText(audio.enabled ? "SOUND" : "MUTE");
+    updateSoundIcon(hud, audio.enabled);
     options.onSound?.(audio.enabled);
   }, {
     color: 0x20283b,
     strokeColor: 0x69718d,
-    fontSize: "9px",
+    fontSize: "18px",
     depth: 112,
   });
-  hud.buffButton = makeTouchOnlyButton(scene, 690, 30, 66, 28, "BUFFS", () => options.onBuff?.(), {
-    color: 0x352c50,
-    strokeColor: 0xb9a9d4,
-    fontSize: "9px",
-    depth: 112,
-  });
+  updateSoundIcon(hud, audio.enabled);
   return hud;
 }
 
-export function updateCombatHud(hud, player, options = {}) {
+export function updateSoundIcon(hud, enabled) {
+  if (!hud?.soundButton) return;
+  hud.soundButton.text.setText(enabled ? "🔊" : "🔇");
+  hud.soundButton.background.setAlpha(enabled ? 1 : 0.58);
+}
+
+export function updateCombatHud(hud, player) {
   if (!hud || !player) return;
   hud.health.setText(`HP ${Math.ceil(player.health)}/${player.maxHealth}`);
+  const healthRatio = Phaser.Math.Clamp(player.health / Math.max(1, player.maxHealth), 0, 1);
+  hud.healthBarFill.setScale(healthRatio, 1).setVisible(healthRatio > 0);
+  hud.healthBarFill.setFillStyle(healthRatio > 0.5 ? 0x77bd88 : healthRatio > 0.25 ? 0xdfb84f : 0xe17b70, 1);
   const buffNames = player.buffs.map((id) => `${BUFFS[id]?.name ?? id}×${getBuffStack(player, id)}`).filter((value, index, all) => all.indexOf(value) === index);
   hud.buffs.setText(buffNames.length ? `BUFFS ${buffNames.join(" · ")}` : "BUFFS —");
   hud.gold.setText(`GOLD ${player.gold || 0}`);
   hud.potion.setText(`POTION ${player.consumables || 0} [Q]`);
-  if (options.status) hud.status.setText(options.status);
 }
 
 export function toggleBuffPanel(scene, hud, player) {

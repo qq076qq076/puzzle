@@ -16,7 +16,7 @@ import { closeSideDoor, constrainActorToClosedDoor, createSideDoor } from "../sy
 import { applyPlayerBuild, normalizeRunBuild } from "../systems/player-build.js";
 import { TouchControls } from "../systems/touch-controls.js";
 import { disableMouseInput, isTouchPointer, makeTouchOnlyButton } from "../ui/input.js";
-import { createCombatHud, createPauseOverlay, toggleBuffPanel, updateCombatHud } from "../ui/hud.js";
+import { createCombatHud, createPauseOverlay, toggleBuffPanel, updateCombatHud, updateSoundIcon } from "../ui/hud.js";
 import { bindPauseKeyboard, createPauseKeyboardHandlers, unbindPauseKeyboard } from "../ui/pause-keyboard.js";
 import { constrainActorToBounds } from "../systems/knockback.js";
 import { generateFloorMap } from "../systems/room-generator.js";
@@ -63,7 +63,7 @@ export class BossScene extends Phaser.Scene {
       pause: () => this.togglePause(),
       sound: () => {
         this.audio.toggle();
-        this.hud?.soundButton.text.setText(this.audio.enabled ? "SOUND" : "MUTE");
+        updateSoundIcon(this.hud, this.audio.enabled);
       },
       buffs: () => toggleBuffPanel(this, this.hud, this.player),
       attack: () => {
@@ -406,12 +406,10 @@ export class BossScene extends Phaser.Scene {
     this.showDamageNumber(this.player.x, this.player.y - 26, amount, "#e17b70");
   }
 
-  updateHud(status = null) {
+  updateHud() {
     const ratio = Phaser.Math.Clamp(this.boss.health / this.boss.maxHealth, 0, 1);
     this.bossBarFill.setDisplaySize(Math.max(1, 592 * ratio), 14);
-    updateCombatHud(this.hud, this.player, {
-      status: status || this.statusMessage || `魔王階段 ${this.boss.phase}`,
-    });
+    updateCombatHud(this.hud, this.player);
   }
 
   showStatus(message) {
