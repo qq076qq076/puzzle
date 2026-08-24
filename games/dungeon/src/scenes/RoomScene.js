@@ -23,6 +23,7 @@ import { bindPauseKeyboard, createPauseKeyboardHandlers, unbindPauseKeyboard } f
 import { constrainActorToBounds } from "../systems/knockback.js";
 import { createBreakableBottle, resolveBottleHits, updateBottlePickups } from "../systems/destructible-system.js";
 import { getBoundarySeamRects, getBoundaryWallRects } from "../systems/room-boundary-layout.js";
+import { getDungeonWallTexture } from "../systems/wall-texture.js";
 
 export class RoomScene extends Phaser.Scene {
   constructor() {
@@ -155,7 +156,7 @@ export class RoomScene extends Phaser.Scene {
   }
 
   addWall(x, y, width, height, machine = false) {
-    const texture = machine ? "wall-machine" : "wall-fantasy";
+    const texture = getDungeonWallTexture(machine, x, y, width, height);
     const wall = this.walls.create(x, y, texture);
     wall.setVisible(false);
     wall.setDisplaySize(width, height).refreshBody();
@@ -172,7 +173,7 @@ export class RoomScene extends Phaser.Scene {
   }
 
   addWallPatch(x, y, width, height, machine = false) {
-    const texture = machine ? "wall-machine" : "wall-fantasy";
+    const texture = getDungeonWallTexture(machine, x, y, width, height);
     const patch = this.add.tileSprite(x, y, width, height, texture).setDepth(0);
     if (!machine) patch.setTileScale(2, 2);
     else patch.setTint(0x72758d);

@@ -6,6 +6,7 @@ import test from "node:test";
 
 import { ACTOR_ASSETS, PROVIDED_ASSETS } from "../src/data/assets.js";
 import { ROOM_DECORATION_TEXTURES } from "../src/data/room-decorations.js";
+import { FANTASY_WALL_TEXTURE_KEYS } from "../src/data/wall-art.js";
 import { getActorOrientation } from "../src/systems/actor-animations.js";
 
 const assetsRoot = fileURLToPath(new URL("../assets/", import.meta.url));
@@ -82,6 +83,9 @@ test("world effects are mapped to supplied CraftPix files without generated fall
   assert.match(PROVIDED_ASSETS.credits.runtimePolicy, /generated fallback textures are disabled/i);
   ROOM_DECORATION_TEXTURES.forEach((texture) => {
     assert.match(PROVIDED_ASSETS.images[texture], /roguelike-game-kit-pixel-art\/2 Dungeon Tileset\/2 Objects\//);
+  });
+  FANTASY_WALL_TEXTURE_KEYS.forEach((texture) => {
+    assert.match(PROVIDED_ASSETS.images[texture], /roguelike-game-kit-pixel-art\/2 Dungeon Tileset\/1 Tiles\/Tile_/);
   });
 
   const source = (await readJavaScriptTree(sourceRoot)).join("\n");

@@ -5,6 +5,7 @@ import { getSideVector } from "../data/rooms.js";
 import { createBreakableBottle } from "../systems/destructible-system.js";
 import { getCorridorDoorGeometry, getCorridorDoorway, getCorridorRenderFloorCells } from "../systems/corridor-geometry.js";
 import { getCorridorWallCells } from "../systems/corridor-wall-geometry.js";
+import { getDungeonWallTexture } from "../systems/wall-texture.js";
 
 function uniqueCells(cells) {
   return [...new Map(cells.map((cell) => [cell.join(","), cell])).values()];
@@ -43,7 +44,6 @@ export function buildCorridorWorld(scene, corridor) {
   const layout = createLayout(corridor);
   const machine = corridor.theme === "machine";
   const floorKey = machine ? "room-floor-machine" : "room-floor-fantasy";
-  const wallKey = machine ? "wall-machine" : "wall-fantasy";
   scene.cameras.main.setBackgroundColor(machine ? "#080d16" : "#090b13");
 
   layout.floorCells.forEach((cell) => {
@@ -56,6 +56,7 @@ export function buildCorridorWorld(scene, corridor) {
   const collisionWallKeys = new Set(layout.collisionWallCells.map((cell) => cell.join(",")));
   layout.wallCells.forEach((cell) => {
     const [x, y] = layout.toPixel(cell);
+    const wallKey = getDungeonWallTexture(machine, cell[0], cell[1], 1, 1);
     if (collisionWallKeys.has(cell.join(","))) {
       const body = walls.create(x, y, wallKey).setVisible(false).setDisplaySize(layout.cellSize, layout.cellSize);
       body.refreshBody();

@@ -269,6 +269,8 @@ export const PROVIDED_ASSETS = {
     ...fireballImages,
     "room-floor-fantasy": `${FANTASY_ROOT}/2 Dungeon Tileset/1 Tiles/Tile_20.png`,
     "wall-fantasy": `${FANTASY_ROOT}/2 Dungeon Tileset/1 Tiles/Tile_16.png`,
+    "wall-fantasy-alt": `${FANTASY_ROOT}/2 Dungeon Tileset/1 Tiles/Tile_31.png`,
+    "wall-fantasy-deep": `${FANTASY_ROOT}/2 Dungeon Tileset/1 Tiles/Tile_15.png`,
     "reward-chest": `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects/Boxes/12.png`,
     "room-decor-bookshelf": `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects/Bookshelf/8.png`,
     "room-decor-table": `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects/Tables/1.png`,
