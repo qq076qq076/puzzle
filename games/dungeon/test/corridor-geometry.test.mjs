@@ -8,6 +8,7 @@ import {
   isCorridorDoorToDoorWalkable,
 } from "../src/systems/corridor-geometry.js";
 import { generateFloorMap } from "../src/systems/room-generator.js";
+import { getCorridorWallCells } from "../src/systems/corridor-wall-geometry.js";
 
 test("every generated corridor has connected floor between both door apertures", () => {
   Array.from({ length: 80 }, (_, index) => generateFloorMap(`walkable-corridor-${index}`)).forEach((floor) => {
@@ -43,4 +44,18 @@ test("door geometry sits outside the aperture on all four sides", () => {
       ), 20);
     });
   });
+});
+
+test("corridor corner fill stays visual-only and does not create diagonal air walls", () => {
+  const corridor = {
+    start: [0, 0],
+    end: [3, 1],
+    entrySide: "left",
+    exitSide: "right",
+    floorCells: [[0, 0], [1, 0], [2, 0], [2, 1], [3, 1]],
+  };
+  const visualWalls = new Set(getCorridorWallCells(corridor.floorCells).map((cell) => cell.join(",")));
+  const collisionWalls = new Set(getCorridorWallCells(corridor.floorCells, [], false).map((cell) => cell.join(",")));
+  assert.ok(visualWalls.has("-1,1"), "the corner remains visually filled");
+  assert.equal(collisionWalls.has("-1,1"), false, "the diagonal corner must not become an air wall");
 });

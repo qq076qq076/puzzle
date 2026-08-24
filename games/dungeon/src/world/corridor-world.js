@@ -4,26 +4,10 @@ import { createSideDoor } from "../systems/door-system.js";
 import { getSideVector } from "../data/rooms.js";
 import { createBreakableBottle } from "../systems/destructible-system.js";
 import { getCorridorDoorGeometry, getCorridorDoorway, getCorridorRenderFloorCells } from "../systems/corridor-geometry.js";
+import { getCorridorWallCells } from "../systems/corridor-wall-geometry.js";
 
 function uniqueCells(cells) {
   return [...new Map(cells.map((cell) => [cell.join(","), cell])).values()];
-}
-
-function getWallCells(floorCells, corridor) {
-  const floorKeys = new Set(floorCells.map((cell) => cell.join(",")));
-  const walls = new Map();
-  floorCells.forEach(([x, y]) => {
-    for (let dy = -1; dy <= 1; dy += 1) {
-      for (let dx = -1; dx <= 1; dx += 1) {
-        if (dx === 0 && dy === 0) continue;
-        const key = `${x + dx},${y + dy}`;
-        if (!floorKeys.has(key)) walls.set(key, [x + dx, y + dy]);
-      }
-    }
-  });
-  getCorridorDoorway(corridor, true).outside.forEach((cell) => walls.delete(cell.join(",")));
-  getCorridorDoorway(corridor, false).outside.forEach((cell) => walls.delete(cell.join(",")));
-  return [...walls.values()];
 }
 
 function createLayout(corridor) {
@@ -40,7 +24,14 @@ function createLayout(corridor) {
   const offsetX = GAME_WIDTH / 2 - ((minX + maxX) / 2) * cellSize;
   const offsetY = 310 - ((minY + maxY) / 2) * cellSize;
   const toPixel = ([x, y]) => [x * cellSize + offsetX, y * cellSize + offsetY];
-  return { floorCells, wallCells: getWallCells(floorCells, corridor), cellSize, toPixel };
+  const doorways = [getCorridorDoorway(corridor, true), getCorridorDoorway(corridor, false)];
+  return {
+    floorCells,
+    wallCells: getCorridorWallCells(floorCells, doorways),
+    collisionWallCells: getCorridorWallCells(floorCells, doorways, false),
+    cellSize,
+    toPixel,
+  };
 }
 
 function offsetBySide(point, side, distance) {
@@ -62,10 +53,13 @@ export function buildCorridorWorld(scene, corridor) {
   });
 
   const walls = scene.physics.add.staticGroup();
+  const collisionWallKeys = new Set(layout.collisionWallCells.map((cell) => cell.join(",")));
   layout.wallCells.forEach((cell) => {
     const [x, y] = layout.toPixel(cell);
-    const body = walls.create(x, y, wallKey).setVisible(false).setDisplaySize(layout.cellSize, layout.cellSize);
-    body.refreshBody();
+    if (collisionWallKeys.has(cell.join(","))) {
+      const body = walls.create(x, y, wallKey).setVisible(false).setDisplaySize(layout.cellSize, layout.cellSize);
+      body.refreshBody();
+    }
     const visual = scene.add.image(x, y, wallKey).setDisplaySize(layout.cellSize, layout.cellSize).setDepth(-1);
     if (machine) visual.setTint(0x72758d);
   });
