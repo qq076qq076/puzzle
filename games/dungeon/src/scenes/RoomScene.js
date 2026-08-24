@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config.js";
 import { MONSTERS } from "../data/monsters.js";
+import { ROOM_BOUNDS } from "../data/rooms.js";
 import { Enemy } from "../entities/Enemy.js";
 import { Player } from "../entities/Player.js";
 import { applyReward, getRewardChoices, getRewardColor, getRewardDefinition } from "../systems/reward-system.js";
@@ -19,6 +20,7 @@ import { TouchControls } from "../systems/touch-controls.js";
 import { disableMouseInput, makeTouchOnlyButton } from "../ui/input.js";
 import { createCombatHud, createPauseOverlay, toggleBuffPanel, updateCombatHud } from "../ui/hud.js";
 import { bindPauseKeyboard, createPauseKeyboardHandlers, unbindPauseKeyboard } from "../ui/pause-keyboard.js";
+import { constrainActorToBounds } from "../systems/knockback.js";
 
 export class RoomScene extends Phaser.Scene {
   constructor() {
@@ -349,7 +351,7 @@ export class RoomScene extends Phaser.Scene {
       if (this.waveTransitionRemaining <= 0) this.startNextWave();
     } else if (this.currentWave < this.currentRoom.waves.length - 1) {
       this.waveTransitionRemaining = 800;
-      this.showStatus(`第 ${this.currentWave + 1} 波已清除 · 下一波準備中`);
+      this.showStatus("敵人增援準備中");
     } else {
       this.beginRoomClear();
     }
@@ -406,8 +408,8 @@ export class RoomScene extends Phaser.Scene {
   }
 
   showEnemyTelegraph(enemy, kind, duration) {
-    const ranged = ["ranged", "spell", "burst"].includes(kind);
-    const color = kind === "spell" ? 0x9ce06f : ranged ? 0x8fd1e8 : kind === "pounce" || kind === "dash" ? 0xe17b70 : 0xdfb84f;
+    const ranged = ["ranged", "spell", "burst", "laser"].includes(kind);
+    const color = kind === "spell" ? 0xffa64d : kind === "laser" ? 0x75e9ff : ranged ? 0x8fd1e8 : kind === "pounce" || kind === "dash" ? 0xe17b70 : 0xdfb84f;
     const radius = ranged ? 34 : 42;
     const node = this.add.circle(enemy.x, enemy.y, radius, color, 0.12).setStrokeStyle(2, color, 0.9).setDepth(3);
     this.telegraphs.push({ node, remaining: duration, enemy });
@@ -559,6 +561,7 @@ export class RoomScene extends Phaser.Scene {
     [this.player, ...this.enemies].forEach((actor) => {
       constrainActorToClosedDoor(actor, this.entryDoor);
       constrainActorToClosedDoor(actor, this.exitDoor);
+      constrainActorToBounds(actor, ROOM_BOUNDS);
     });
   }
 
@@ -578,12 +581,11 @@ export class RoomScene extends Phaser.Scene {
   }
 
   updateHud(status = null) {
-    const waveLabel = this.roomStatus === "combat" ? `第 ${Math.max(1, this.currentWave + 1)}/${this.currentRoom.waves.length} 波` : null;
     const clearLabel = this.roomStatus === "cleared" ? "房間清除 · 獎勵準備中" : null;
     const passageOpen = this.roomStatus === "transition" || this.roomStatus === "loading";
     this.hud.status.setVisible(!passageOpen);
     updateCombatHud(this.hud, this.player, {
-      status: passageOpen ? null : status || this.statusMessage || clearLabel || waveLabel || this.roomStatus,
+      status: passageOpen ? null : status || this.statusMessage || clearLabel || this.roomStatus,
     });
   }
 

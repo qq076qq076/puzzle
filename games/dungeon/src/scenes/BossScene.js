@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config.js";
 import { MONSTERS } from "../data/monsters.js";
 import { getBossVolleyOffsets } from "../data/boss-patterns.js";
-import { ENTRY_DOOR_POINT, ENTRY_POINT, ENTRY_SPAWN_POINT } from "../data/rooms.js";
+import { ENTRY_DOOR_POINT, ENTRY_POINT, ENTRY_SPAWN_POINT, ROOM_BOUNDS } from "../data/rooms.js";
 import { Boss } from "../entities/Boss.js";
 import { Enemy } from "../entities/Enemy.js";
 import { Player } from "../entities/Player.js";
@@ -18,6 +18,7 @@ import { TouchControls } from "../systems/touch-controls.js";
 import { disableMouseInput, isTouchPointer, makeTouchOnlyButton } from "../ui/input.js";
 import { createCombatHud, createPauseOverlay, toggleBuffPanel, updateCombatHud } from "../ui/hud.js";
 import { bindPauseKeyboard, createPauseKeyboardHandlers, unbindPauseKeyboard } from "../ui/pause-keyboard.js";
+import { constrainActorToBounds } from "../systems/knockback.js";
 
 export class BossScene extends Phaser.Scene {
   constructor() {
@@ -240,6 +241,7 @@ export class BossScene extends Phaser.Scene {
     this.updateTelegraphs(delta);
     updateProjectiles(this, this.player, delta);
     [this.player, this.boss, ...this.enemies].forEach((actor) => constrainActorToClosedDoor(actor, this.entryDoor));
+    [this.player, this.boss, ...this.enemies].forEach((actor) => constrainActorToBounds(actor, ROOM_BOUNDS));
     this.updatePhaseBoundary(delta);
     if (this.player.health <= 0) this.openDefeat();
     else if (!this.boss.active) this.openVictory();

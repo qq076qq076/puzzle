@@ -123,6 +123,15 @@ function collectActorSheets() {
 
 const environmentSpritesheets = [
   sheet(
+    "player-weapon-swing",
+    `${MACHINE_ROOT}/1 Main Character/2 Weapons/7.png`,
+    48,
+    48,
+    9,
+    34,
+    0,
+  ),
+  sheet(
     "door-side",
     `${FANTASY_ROOT}/2 Dungeon Tileset/3 Animated objects/Door_S.png`,
     14,
@@ -204,6 +213,7 @@ export const PROVIDED_ASSETS = {
     "reward-icon-power": `${FANTASY_ROOT}/4 GUI/3 Icons/Icon_43.png`,
     "reward-icon-heal": `${FANTASY_ROOT}/4 GUI/3 Icons/Icon_50.png`,
     "enemy-projectile": `${MACHINE_ROOT}/1 Main Character/2 Weapons/Projectiles/10.png`,
+    "laser-projectile": `${MACHINE_ROOT}/1 Main Character/2 Weapons/Projectiles/15.png`,
     "spell-projectile": `${FANTASY_ROOT}/3 Dungeon Enemies/Other/Fireball.png`,
     "room-floor-fantasy": `${FANTASY_ROOT}/2 Dungeon Tileset/1 Tiles/Tile_20.png`,
     "wall-fantasy": `${FANTASY_ROOT}/2 Dungeon Tileset/1 Tiles/Tile_16.png`,
@@ -213,6 +223,7 @@ export const PROVIDED_ASSETS = {
   },
   spritesheets: [...collectActorSheets(), ...environmentSpritesheets],
   environmentAnimations: [
+    { key: "player-weapon-swing-animation", texture: "player-weapon-swing", frameCount: 9, start: 1, end: 6, frameRate: 34, repeat: 0 },
     { key: "door-side-open", texture: "door-side", frameCount: 4, frameRate: 12, repeat: 0 },
     { key: "portal-idle", texture: "portal", frameCount: 4, frameRate: 6 },
     { key: "reward-console-idle", texture: "reward-console", frameCount: 6, frameRate: 7 },

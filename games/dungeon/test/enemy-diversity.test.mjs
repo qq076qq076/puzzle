@@ -23,6 +23,15 @@ test("mage and robot use distinct telegraphed ranged patterns", () => {
   assert.ok(NORMAL_MONSTER_POOLS[3].includes("robot_gunner"));
 });
 
+test("mage fires a visible fireball and robot uses a laser projectile", () => {
+  assert.equal(MONSTERS.plague_mage.attackKind, "spell");
+  assert.equal(MONSTERS.plague_mage.projectileTexture, "spell-projectile");
+  assert.equal(MONSTERS.plague_mage.projectileVisual, "fireball");
+  assert.equal(MONSTERS.robot_gunner.attackKind, "laser");
+  assert.equal(MONSTERS.robot_gunner.projectileTexture, "laser-projectile");
+  assert.equal(MONSTERS.robot_gunner.projectileVisual, "laser");
+});
+
 test("ranged enemies retreat, strafe, and approach around their preferred range", () => {
   const definition = MONSTERS.robot_gunner;
   assert.equal(getRangedMovement(definition, 100, 0, 100).mode, "retreat");

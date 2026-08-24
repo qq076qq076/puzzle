@@ -62,6 +62,8 @@ test("world effects are mapped to supplied CraftPix files without generated fall
   assert.match(spritesheets.get("hit-spark"), /D_Blood\.png$/);
   assert.match(spritesheets.get("player-attack-effect"), /3 Effects\/1_1\.png$/);
   assert.match(PROVIDED_ASSETS.images["enemy-projectile"], /Projectiles\/10\.png$/);
+  assert.match(PROVIDED_ASSETS.images["laser-projectile"], /Projectiles\/15\.png$/);
+  assert.match(spritesheets.get("player-weapon-swing"), /Weapons\/7\.png$/);
   assert.match(PROVIDED_ASSETS.credits.runtimePolicy, /generated fallback textures are disabled/i);
 
   const source = (await readJavaScriptTree(sourceRoot)).join("\n");

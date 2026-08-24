@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { startKnockback, updateKnockback } from "../src/systems/knockback.js";
+import { constrainActorToBounds, startKnockback, updateKnockback } from "../src/systems/knockback.js";
 
 function makeActor() {
   return {
@@ -35,4 +35,32 @@ test("knockback ignores missing directions and supports an explicit speed", () =
   assert.equal(startKnockback(actor, { x: -2, y: 0, speed: 90, durationMs: 80 }), true);
   assert.equal(actor.velocity.x, -90);
   assert.equal(actor.velocity.y, 0);
+});
+
+test("wall contact cancels knockback instead of reapplying velocity into the wall", () => {
+  const actor = makeActor();
+  actor.body = { blocked: { right: true }, touching: {} };
+  startKnockback(actor, { x: 1, y: 0, distance: 20, durationMs: 100 });
+  assert.equal(updateKnockback(actor, 16), true);
+  assert.equal(actor.knockbackRemaining, 0);
+  assert.deepEqual(actor.velocity, { x: 0, y: 0 });
+});
+
+test("actors outside arena bounds are reset inside and lose knockback", () => {
+  const actor = makeActor();
+  actor.active = true;
+  actor.x = 950;
+  actor.y = 40;
+  actor.knockbackRemaining = 80;
+  actor.body = {
+    halfWidth: 10,
+    halfHeight: 12,
+    reset(x, y) {
+      actor.x = x;
+      actor.y = y;
+    },
+  };
+  assert.equal(constrainActorToBounds(actor, { left: 56, right: 904, top: 92, bottom: 488 }), true);
+  assert.deepEqual({ x: actor.x, y: actor.y }, { x: 894, y: 104 });
+  assert.equal(actor.knockbackRemaining, 0);
 });

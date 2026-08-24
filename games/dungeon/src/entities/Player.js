@@ -117,20 +117,28 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   showAttackEffect() {
     const angle = Math.atan2(this.attackFacing.y, this.attackFacing.x);
+    const weapon = this.scene.add
+      .sprite(this.x, this.y - 3, "player-weapon-swing", 1)
+      .setScale(1.55)
+      .setRotation(angle)
+      .setDepth(22 + this.y / 10000);
     const effect = this.scene.add
       .sprite(this.x + this.attackFacing.x * 14, this.y + this.attackFacing.y * 14, "player-attack-effect", 0)
       .setOrigin(0.08, 0.5)
-      .setScale(1.2)
+      .setScale(1.3)
       .setRotation(angle)
       .setTint(0xf6d36c)
       .setDepth(20 + this.y / 10000);
-    const destroyEffect = () => {
-      this.attackEffects.delete(effect);
-      if (effect.active) effect.destroy();
+    const destroyNode = (node) => {
+      this.attackEffects.delete(node);
+      if (node.active) node.destroy();
     };
+    this.attackEffects.add(weapon);
+    weapon.once("animationcomplete-player-weapon-swing-animation", () => destroyNode(weapon));
+    if (!playEnvironmentAnimation(weapon, "player-weapon-swing-animation")) destroyNode(weapon);
     this.attackEffects.add(effect);
-    effect.once("animationcomplete-player-attack-sweep", destroyEffect);
-    if (!playEnvironmentAnimation(effect, "player-attack-sweep")) destroyEffect();
+    effect.once("animationcomplete-player-attack-sweep", () => destroyNode(effect));
+    if (!playEnvironmentAnimation(effect, "player-attack-sweep")) destroyNode(effect);
   }
 
   tryDodge(direction) {

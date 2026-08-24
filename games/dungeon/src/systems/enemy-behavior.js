@@ -1,4 +1,4 @@
-const RANGED_ATTACK_KINDS = new Set(["ranged", "spell", "burst"]);
+const RANGED_ATTACK_KINDS = new Set(["ranged", "spell", "burst", "laser"]);
 
 export function isRangedAttack(kind) {
   return RANGED_ATTACK_KINDS.has(kind);

@@ -30,7 +30,10 @@ export function registerCraftPixAnimations(scene) {
     if (scene.anims.exists(definition.key) || !hasNumberedFrames(scene, definition.texture)) return;
     scene.anims.create({
       key: definition.key,
-      frames: scene.anims.generateFrameNumbers(definition.texture, { start: 0, end: definition.frameCount - 1 }),
+      frames: scene.anims.generateFrameNumbers(definition.texture, {
+        start: definition.start ?? 0,
+        end: definition.end ?? definition.frameCount - 1,
+      }),
       frameRate: definition.frameRate,
       repeat: definition.repeat ?? -1,
     });
