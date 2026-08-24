@@ -54,7 +54,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.buffStacks = {};
     this.facing = new Phaser.Math.Vector2(1, 0);
     this.attackFacing = this.facing.clone();
-    this.attackEffects = new Set();
     this.shadowOffsetY = 22;
     this.shadow = scene.add.image(x, y + this.shadowOffsetY, "provided-shadow").setScale(2).setAlpha(0.62).setDepth(5);
     playActorAnimation(this, "player", "idle", this.facing);
@@ -111,40 +110,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.attackStarted = true;
     this.attackHitResolved = false;
     this.attackFacing.copy(this.facing);
-    this.showAttackEffect();
     this.scene.audio?.beep("attack");
     return true;
-  }
-
-  showAttackEffect() {
-    const angle = Math.atan2(this.attackFacing.y, this.attackFacing.x);
-    const halfArc = Phaser.Math.DegToRad(this.attackArcDeg / 2);
-    const sweep = this.scene.add.graphics()
-      .setPosition(this.x, this.y)
-      .setRotation(angle)
-      .setScale(0.72)
-      .setDepth(20 + this.y / 10000);
-    sweep.fillStyle(0xf6d36c, 0.24);
-    sweep.lineStyle(3, 0xffe6a0, 0.92);
-    sweep.beginPath();
-    sweep.moveTo(14, 0);
-    sweep.arc(0, 0, this.attackRange, -halfArc, halfArc, false);
-    sweep.closePath();
-    sweep.fillPath();
-    sweep.strokePath();
-    this.attackEffects.add(sweep);
-    this.scene.tweens.add({
-      targets: sweep,
-      scaleX: 1,
-      scaleY: 1,
-      alpha: 0,
-      duration: 142,
-      ease: "Quad.Out",
-      onComplete: () => {
-        this.attackEffects.delete(sweep);
-        if (sweep.active) sweep.destroy();
-      },
-    });
   }
 
   tryDodge(direction) {
@@ -207,8 +174,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   destroy(fromScene) {
-    this.attackEffects?.forEach((effect) => effect.destroy());
-    this.attackEffects?.clear();
     this.shadow?.destroy();
     super.destroy(fromScene);
   }

@@ -71,7 +71,7 @@ export function getActorOrientation(actorId, facing) {
   if (!actor) return { direction, flipX: false, rotation: 0 };
 
   if (actor.rotationMode === "from-down") {
-    const rotation = direction === "up" ? Math.PI : direction === "side" ? (x < 0 ? Math.PI / 2 : -Math.PI / 2) : 0;
+    const rotation = direction === "up" ? Math.PI : direction === "side" ? (x < 0 ? -Math.PI / 2 : Math.PI / 2) : 0;
     return { direction, flipX: false, rotation };
   }
 

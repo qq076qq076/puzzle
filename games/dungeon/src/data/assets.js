@@ -29,7 +29,7 @@ function sheet(key, path, frameWidth, frameHeight, frameCount, frameRate, repeat
 }
 
 function swordsmanPlayer() {
-  const directions = { right: 0, down: 1, left: 2, up: 3 };
+  const directions = { left: 0, down: 1, right: 2, up: 3 };
   const states = {
     idle: { key: "provided-player", file: "Swordsman_lvl1_Idle_without_shadow.png", frames: 12, frameRate: 8, repeat: -1 },
     walk: { key: "provided-player-walk", file: "Swordsman_lvl1_Walk_without_shadow.png", frames: 6, frameRate: 11, repeat: -1 },
@@ -87,7 +87,7 @@ function machineEnemyActor(textureKey, folder) {
   const up = sheet(`${textureKey}-up`, `${MACHINE_ROOT}/3 Enemies/${folder}/RunSU.png`, 48, 48, 6, 8);
   return {
     baseTexture: textureKey,
-    sideFaces: "right",
+    sideFaces: "left",
     flipVerticalByHorizontalFacing: true,
     states: {
       idle: { down, side: down, up },
@@ -123,10 +123,10 @@ const bossUp = sheet(
 
 export const ACTOR_ASSETS = {
   player: swordsmanPlayer(),
-  rat: fantasyActor("provided-rat", "3 Dungeon Enemies/1", { sideFaces: "left" }),
-  goblin_bat: fantasyActor("provided-goblin-bat", "3 Dungeon Enemies/2"),
-  goblin_dagger: fantasyActor("provided-goblin-dagger", "3 Dungeon Enemies/3"),
-  plague_mage: fantasyActor("provided-plague-mage", "3 Dungeon Enemies/4"),
+  rat: fantasyActor("provided-rat", "3 Dungeon Enemies/1", { sideFaces: "right" }),
+  goblin_bat: fantasyActor("provided-goblin-bat", "3 Dungeon Enemies/2", { sideFaces: "left" }),
+  goblin_dagger: fantasyActor("provided-goblin-dagger", "3 Dungeon Enemies/3", { sideFaces: "left" }),
+  plague_mage: fantasyActor("provided-plague-mage", "3 Dungeon Enemies/4", { sideFaces: "left" }),
   robot_gunner: machineEnemyActor("provided-robot-gunner", "3"),
   machine_guard: machineEnemyActor("provided-machine-guard", "5"),
   steel_spider: {
@@ -139,7 +139,7 @@ export const ACTOR_ASSETS = {
   },
   boss: {
     baseTexture: "provided-boss",
-    sideFaces: "right",
+    sideFaces: "left",
     flipVerticalByHorizontalFacing: true,
     states: {
       idle: { down: bossDown, side: bossDown, up: bossUp },

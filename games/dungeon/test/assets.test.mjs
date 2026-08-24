@@ -84,11 +84,11 @@ test("world effects are mapped to supplied CraftPix files without generated fall
   assert.doesNotMatch(source, /generateTexture|slash-effect|texture-factory/);
 });
 
-test("player melee feedback is only a fan-shaped sweep", async () => {
+test("player melee feedback relies on the supplied attack animation without a drawn sweep", async () => {
   const source = await readFile(path.join(sourceRoot, "entities/Player.js"), "utf8");
-  assert.match(source, /add\.graphics\(\)/);
-  assert.match(source, /\.arc\(0, 0, this\.attackRange/);
+  assert.doesNotMatch(source, /add\.graphics\(\)|showAttackEffect|attackEffects/);
   assert.doesNotMatch(source, /player-weapon-swing|player-attack-effect|spawnProjectile/);
+  assert.match(source, /playActorAnimation\(this, "player", "attack"/);
 });
 
 test("player and fantasy enemies provide directional movement and attacks", () => {
@@ -105,12 +105,16 @@ test("player and fantasy enemies provide directional movement and attacks", () =
 });
 
 test("actor orientation follows each source sprite's modeled direction", () => {
+  assert.equal(ACTOR_ASSETS.player.states.idle.left.start, 0);
+  assert.equal(ACTOR_ASSETS.player.states.idle.right.start, 24);
   assert.deepEqual(getActorOrientation("player", { x: 1, y: 0 }), { direction: "right", flipX: false, rotation: 0 });
   assert.deepEqual(getActorOrientation("player", { x: -1, y: 0 }), { direction: "left", flipX: false, rotation: 0 });
-  assert.equal(getActorOrientation("rat", { x: 1, y: 0 }).flipX, true);
-  assert.equal(getActorOrientation("goblin_bat", { x: 1, y: 0 }).flipX, false);
-  assert.equal(getActorOrientation("goblin_bat", { x: -1, y: 0 }).flipX, true);
-  assert.equal(getActorOrientation("steel_spider", { x: 1, y: 0 }).rotation, -Math.PI / 2);
+  assert.equal(getActorOrientation("rat", { x: 1, y: 0 }).flipX, false);
+  assert.equal(getActorOrientation("rat", { x: -1, y: 0 }).flipX, true);
+  assert.equal(getActorOrientation("goblin_bat", { x: 1, y: 0 }).flipX, true);
+  assert.equal(getActorOrientation("goblin_bat", { x: -1, y: 0 }).flipX, false);
+  assert.equal(getActorOrientation("steel_spider", { x: 1, y: 0 }).rotation, Math.PI / 2);
   assert.equal(getActorOrientation("steel_spider", { x: 0, y: -1 }).rotation, Math.PI);
-  assert.equal(getActorOrientation("robot_gunner", { x: -1, y: 0 }).flipX, true);
+  assert.equal(getActorOrientation("robot_gunner", { x: -1, y: 0 }).flipX, false);
+  assert.equal(getActorOrientation("robot_gunner", { x: 1, y: 0 }).flipX, true);
 });

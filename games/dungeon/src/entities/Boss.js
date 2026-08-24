@@ -38,7 +38,7 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     this.chargeRemaining = 0;
     this.chargeHit = false;
     this.facing = new Phaser.Math.Vector2(0, 1);
-    this.setScale(2.5);
+    this.setScale(3);
     this.setDepth(12);
     this.setCollideWorldBounds(true);
     this.body.setCircle(19);

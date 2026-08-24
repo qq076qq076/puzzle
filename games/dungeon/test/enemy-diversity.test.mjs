@@ -13,6 +13,14 @@ test("monster durability rises as movement speed falls", () => {
   });
 });
 
+test("all regular monsters use the enlarged display scale", () => {
+  for (const monster of Object.values(MONSTERS)) {
+    assert.ok(monster.scale >= 2, `${monster.id} should render at the enlarged scale`);
+  }
+  assert.ok(MONSTERS.rat.scale > 2);
+  assert.ok(MONSTERS.machine_guard.scale > MONSTERS.robot_gunner.scale);
+});
+
 test("mage and robot use distinct telegraphed ranged patterns", () => {
   assert.equal(isRangedAttack(MONSTERS.plague_mage.attackKind), true);
   assert.equal(MONSTERS.plague_mage.projectileTexture, "spell-projectile");
