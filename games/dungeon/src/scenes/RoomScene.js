@@ -144,6 +144,10 @@ export class RoomScene extends Phaser.Scene {
     });
     this.createTraps();
     this.bottles = (this.currentRoom.bottles || []).map((plan) => createBreakableBottle(this, plan));
+    this.roomDecorations = (this.currentRoom.decorations || []).map((plan) => this.add.image(plan.x, plan.y, plan.texture)
+      .setScale(plan.scale)
+      .setFlipX(plan.flipX)
+      .setDepth(1 + plan.y / 10000));
     this.currentRoom.machineDecor.forEach(([x, y]) => {
       const portal = this.add.sprite(x, y, "portal").setScale(0.38).setAlpha(0.46).setTint(0x72b9ca).setDepth(1);
       playEnvironmentAnimation(portal, "portal-idle");

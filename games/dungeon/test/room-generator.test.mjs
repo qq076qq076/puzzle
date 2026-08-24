@@ -13,6 +13,7 @@ import {
 } from "../src/systems/room-generator.js";
 import { ROOM_TEMPLATES } from "../src/data/rooms.js";
 import { ROOM_SIDES, getOppositeSide, getSideVector } from "../src/data/rooms.js";
+import { ROOM_DECORATION_TEXTURES } from "../src/data/room-decorations.js";
 
 test("same run seed reproduces the complete six-room floor", () => {
   const first = generateFloor("fixed-seed");
@@ -130,6 +131,16 @@ test("normal rooms sometimes contain breakable bottles with deterministic drops"
   assert.ok(bottles.every((bottle) => /^bottle-[1-4]$/.test(bottle.texture)));
   assert.ok(bottles.some((bottle) => bottle.drop));
   assert.deepEqual(generateFloor("bottle-repeat"), generateFloor("bottle-repeat"));
+});
+
+test("fantasy rooms receive deterministic supplied dungeon decorations", () => {
+  const floors = Array.from({ length: 20 }, (_, index) => generateFloor(`decorations-${index}`));
+  const fantasyRooms = floors.flatMap((floor) => floor.slice(0, 5)).filter((room) => room.theme === "fantasy");
+  assert.ok(fantasyRooms.length > 0);
+  assert.ok(fantasyRooms.every((room) => room.decorations.length >= 2));
+  assert.ok(fantasyRooms.flatMap((room) => room.decorations).every((decoration) =>
+    ROOM_DECORATION_TEXTURES.includes(decoration.texture)));
+  assert.deepEqual(generateFloor("decor-repeat"), generateFloor("decor-repeat"));
 });
 
 test("floor map layout changes with seed while remaining valid", () => {

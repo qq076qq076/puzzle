@@ -9,6 +9,7 @@ import { generateRoomContent, getRoomTemplatePool } from "./room-content-generat
 import { pointWalkable, validateRoom } from "./room-validation.js";
 import { createRng } from "./rng.js";
 import { rollBottleDrop } from "./destructible-system.js";
+import { generateRoomDecorations } from "./room-decoration-generator.js";
 
 const BOTTLE_CANDIDATE_POINTS = Object.freeze([
   [170, 150], [790, 150], [170, 430], [790, 430],
@@ -38,8 +39,12 @@ function generateRoomBottles(runSeed, roomIndex, room) {
   return bottles;
 }
 
-function withRoomBottles(runSeed, roomIndex, room) {
-  return { ...room, bottles: generateRoomBottles(runSeed, roomIndex, room) };
+function withRoomFeatures(runSeed, roomIndex, room) {
+  const roomWithBottles = { ...room, bottles: generateRoomBottles(runSeed, roomIndex, room) };
+  return {
+    ...roomWithBottles,
+    decorations: generateRoomDecorations(runSeed, roomIndex, roomWithBottles),
+  };
 }
 
 export function getRoomConnectionSides(runSeed, roomIndex) {
@@ -110,7 +115,7 @@ export function generateRoom(runSeed, roomIndex, previousTemplateId = null) {
   const template = getTemplate(content.templateId);
   let room = assembleNormalRoom(content, template, runSeed, roomIndex);
   room.validation = validateRoom(room);
-  if (room.validation.valid) return withRoomBottles(runSeed, roomIndex, room);
+  if (room.validation.valid) return withRoomFeatures(runSeed, roomIndex, room);
 
   const fallbackTemplate = getRoomTemplatePool(roomIndex).find((candidate) => {
     if (candidate.id === previousTemplateId) return false;
@@ -121,5 +126,5 @@ export function generateRoom(runSeed, roomIndex, previousTemplateId = null) {
     rewardIds: [BUFF_POOL_BY_ROOM[roomIndex][0], "minor_heal", "gold_cache"],
   }, fallbackTemplate, runSeed, roomIndex);
   room.validation = { ...validateRoom(room), fallback: true };
-  return withRoomBottles(runSeed, roomIndex, room);
+  return withRoomFeatures(runSeed, roomIndex, room);
 }
