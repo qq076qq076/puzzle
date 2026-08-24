@@ -624,9 +624,16 @@ export class RoomScene extends Phaser.Scene {
   updateHud(status = null) {
     const clearLabel = this.roomStatus === "cleared" ? "房間清除 · 獎勵準備中" : null;
     const passageOpen = this.roomStatus === "transition" || this.roomStatus === "loading";
+    const roomStatusLabel = {
+      entering: "進入房間",
+      room_intro: "房間封鎖",
+      combat: "戰鬥中",
+      reward: "選擇獎勵",
+      defeat: "戰鬥結束",
+    }[this.roomStatus] || "";
     this.hud.status.setVisible(!passageOpen);
     updateCombatHud(this.hud, this.player, {
-      status: passageOpen ? null : status || this.statusMessage || clearLabel || this.roomStatus,
+      status: passageOpen ? null : status || this.statusMessage || clearLabel || roomStatusLabel,
     });
   }
 

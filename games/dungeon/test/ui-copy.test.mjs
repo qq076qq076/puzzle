@@ -32,4 +32,5 @@ test("removed HUD, pause, seed, and reward instructions stay hidden", async () =
     assert.equal(source.includes(removedCopy), false, `${removedCopy} must not be rendered`);
   }
   assert.doesNotMatch(source, /roomLabel:\s*[`\"]FLOOR 1/);
+  assert.doesNotMatch(source, /第\s*\$\{[^}]*currentWave[^}]*\}[^\n]*波/);
 });
