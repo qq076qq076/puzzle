@@ -74,6 +74,9 @@ export function constrainActorToClosedDoor(actor, door) {
   const blockerHalfWidth = door.blocker?.body?.halfWidth || door.blockerWidth / 2 || 16;
   const blockerHalfHeight = door.blocker?.body?.halfHeight || door.blockerHeight / 2 || 16;
   if (door.side === "up" || door.side === "down") {
+    const outsideDoorSpan = actor.x + actorHalfWidth <= door.x - blockerHalfWidth
+      || actor.x - actorHalfWidth >= door.x + blockerHalfWidth;
+    if (outsideDoorSpan) return false;
     const boundary = door.side === "up"
       ? door.y + blockerHalfHeight + actorHalfHeight
       : door.y - blockerHalfHeight - actorHalfHeight;
@@ -83,6 +86,9 @@ export function constrainActorToClosedDoor(actor, door) {
     else actor.setPosition?.(actor.x, boundary);
     return true;
   }
+  const outsideDoorSpan = actor.y + actorHalfHeight <= door.y - blockerHalfHeight
+    || actor.y - actorHalfHeight >= door.y + blockerHalfHeight;
+  if (outsideDoorSpan) return false;
   const boundary = door.side === "left"
     ? door.x + blockerHalfWidth + actorHalfWidth
     : door.x - blockerHalfWidth - actorHalfWidth;

@@ -56,6 +56,18 @@ test("open doors do not constrain actors crossing the doorway", () => {
   assert.equal(actor.x, 32);
 });
 
+test("closed doors do not create an infinite wall outside the doorway span", () => {
+  const sideActor = makeActor(32);
+  sideActor.y = 330;
+  assert.equal(constrainActorToClosedDoor(sideActor, makeDoor("left")), false);
+  assert.equal(sideActor.x, 32);
+
+  const horizontalActor = makeActor(530);
+  horizontalActor.y = 60;
+  assert.equal(constrainActorToClosedDoor(horizontalActor, makeDoor("up")), false);
+  assert.equal(horizontalActor.y, 60);
+});
+
 function makeAnimatedDoor() {
   const group = {
     children: new Set(),
