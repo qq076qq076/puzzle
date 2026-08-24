@@ -105,12 +105,14 @@ test("player and fantasy enemies provide directional movement and attacks", () =
 });
 
 test("actor orientation follows each source sprite's modeled direction", () => {
-  assert.equal(ACTOR_ASSETS.player.states.idle.left.start, 0);
+  assert.equal(ACTOR_ASSETS.player.states.idle.down.start, 0);
+  assert.equal(ACTOR_ASSETS.player.states.idle.left.start, 12);
   assert.equal(ACTOR_ASSETS.player.states.idle.right.start, 24);
+  assert.equal(ACTOR_ASSETS.player.states.idle.up.start, 36);
   assert.deepEqual(getActorOrientation("player", { x: 1, y: 0 }), { direction: "right", flipX: false, rotation: 0 });
   assert.deepEqual(getActorOrientation("player", { x: -1, y: 0 }), { direction: "left", flipX: false, rotation: 0 });
-  assert.equal(getActorOrientation("rat", { x: 1, y: 0 }).flipX, false);
-  assert.equal(getActorOrientation("rat", { x: -1, y: 0 }).flipX, true);
+  assert.equal(getActorOrientation("rat", { x: 1, y: 0 }).flipX, true);
+  assert.equal(getActorOrientation("rat", { x: -1, y: 0 }).flipX, false);
   assert.equal(getActorOrientation("goblin_bat", { x: 1, y: 0 }).flipX, true);
   assert.equal(getActorOrientation("goblin_bat", { x: -1, y: 0 }).flipX, false);
   assert.equal(getActorOrientation("steel_spider", { x: 1, y: 0 }).rotation, Math.PI / 2);

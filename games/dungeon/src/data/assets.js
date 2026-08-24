@@ -29,7 +29,7 @@ function sheet(key, path, frameWidth, frameHeight, frameCount, frameRate, repeat
 }
 
 function swordsmanPlayer() {
-  const directions = { left: 0, down: 1, right: 2, up: 3 };
+  const directions = { down: 0, left: 1, right: 2, up: 3 };
   const states = {
     idle: { key: "provided-player", file: "Swordsman_lvl1_Idle_without_shadow.png", frames: 12, frameRate: 8, repeat: -1 },
     walk: { key: "provided-player-walk", file: "Swordsman_lvl1_Walk_without_shadow.png", frames: 6, frameRate: 11, repeat: -1 },
@@ -123,7 +123,7 @@ const bossUp = sheet(
 
 export const ACTOR_ASSETS = {
   player: swordsmanPlayer(),
-  rat: fantasyActor("provided-rat", "3 Dungeon Enemies/1", { sideFaces: "right" }),
+  rat: fantasyActor("provided-rat", "3 Dungeon Enemies/1", { sideFaces: "left" }),
   goblin_bat: fantasyActor("provided-goblin-bat", "3 Dungeon Enemies/2", { sideFaces: "left" }),
   goblin_dagger: fantasyActor("provided-goblin-dagger", "3 Dungeon Enemies/3", { sideFaces: "left" }),
   plague_mage: fantasyActor("provided-plague-mage", "3 Dungeon Enemies/4", { sideFaces: "left" }),
