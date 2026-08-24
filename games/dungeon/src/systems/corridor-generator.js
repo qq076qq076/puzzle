@@ -1,5 +1,13 @@
 import { rollBottleDrop } from "./destructible-system.js";
 
+const CORRIDOR_AMBUSH_POOLS = [
+  ["rat", "goblin_bat"],
+  ["rat", "goblin_dagger", "plague_mage"],
+  ["goblin_bat", "goblin_dagger", "plague_mage"],
+  ["goblin_dagger", "plague_mage", "robot_gunner"],
+  ["plague_mage", "robot_gunner", "steel_spider"],
+];
+
 function appendCell(cells, x, y) {
   const last = cells[cells.length - 1];
   if (!last || last[0] !== x || last[1] !== y) cells.push([x, y]);
@@ -91,6 +99,24 @@ function pickEventCells(corridorIndex, mainCells, branch, eventRng) {
   const chestKey = chest?.cell.join(",");
   const candidates = [...mainCells.slice(2, -2), ...branch.cells.slice(2, -2)]
     .filter((cell, index, values) => cell.join(",") !== chestKey && values.findIndex((value) => value.join(",") === cell.join(",")) === index);
+  const ambush = eventRng.next() < 0.48 ? (() => {
+    const triggerCandidates = mainCells.slice(3, -3);
+    const triggerCell = [...eventRng.pick(triggerCandidates.length ? triggerCandidates : mainCells)];
+    const triggerKey = triggerCell.join(",");
+    const triggerIndex = candidates.findIndex((cell) => cell.join(",") === triggerKey);
+    if (triggerIndex >= 0) candidates.splice(triggerIndex, 1);
+    const enemyCount = Math.min(candidates.length, 2 + Math.floor(corridorIndex / 2));
+    const spawnCells = [];
+    while (candidates.length && spawnCells.length < enemyCount) {
+      spawnCells.push(candidates.splice(eventRng.int(0, candidates.length - 1), 1)[0]);
+    }
+    const pool = CORRIDOR_AMBUSH_POOLS[Math.min(corridorIndex, CORRIDOR_AMBUSH_POOLS.length - 1)];
+    return {
+      triggerCell,
+      spawnCells,
+      enemyIds: spawnCells.map(() => eventRng.pick(pool)),
+    };
+  })() : null;
   const trapCells = [];
   const trapCount = Math.min(candidates.length, 2 + (corridorIndex % 2));
   while (candidates.length && trapCells.length < trapCount) {
@@ -106,7 +132,7 @@ function pickEventCells(corridorIndex, mainCells, branch, eventRng) {
       drop: rollBottleDrop(eventRng),
     });
   }
-  return { chest, trapCells, bottles };
+  return { chest, trapCells, bottles, ambush };
 }
 
 export function buildCorridor(sourceRoom, targetRoom, corridorIndex, rng, width = 2, eventRng = rng, branchDepth = 3) {
@@ -130,7 +156,7 @@ export function buildCorridor(sourceRoom, targetRoom, corridorIndex, rng, width 
   const branch = buildLoopBranch(cells, rng, branchDepth);
   const branches = branch ? [branch] : [];
   const floorCells = uniqueFloorCells([...expandCorridorCells(cells), ...branches.flatMap((item) => item.floorCells)]);
-  const events = branch ? pickEventCells(corridorIndex, cells, branch, eventRng) : { chest: null, trapCells: [], bottles: [] };
+  const events = branch ? pickEventCells(corridorIndex, cells, branch, eventRng) : { chest: null, trapCells: [], bottles: [], ambush: null };
   return {
     id: `corridor-${corridorIndex + 1}`,
     corridorIndex,
@@ -147,6 +173,7 @@ export function buildCorridor(sourceRoom, targetRoom, corridorIndex, rng, width 
     trapCells: events.trapCells,
     chest: events.chest,
     bottles: events.bottles,
+    ambush: events.ambush,
     length: cells.length,
   };
 }

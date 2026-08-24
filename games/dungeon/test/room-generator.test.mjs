@@ -111,6 +111,13 @@ test("corridors contain deterministic branches, traps, and optional chests", () 
   assert.ok(corridors.some((corridor) => !corridor.chest));
   assert.ok(corridors.some((corridor) => corridor.bottles.length > 0));
   assert.ok(corridors.some((corridor) => corridor.bottles.length === 0));
+  assert.ok(corridors.some((corridor) => corridor.ambush));
+  assert.ok(corridors.some((corridor) => !corridor.ambush));
+  corridors.filter((corridor) => corridor.ambush).forEach((corridor) => {
+    assert.equal(corridor.ambush.spawnCells.length, corridor.ambush.enemyIds.length);
+    assert.ok(corridor.ambush.spawnCells.length >= 2);
+    assert.ok(corridor.ambush.enemyIds.every((enemyId) => MONSTERS[enemyId]));
+  });
   assert.deepEqual(generateFloorMap("event-repeat"), generateFloorMap("event-repeat"));
 });
 

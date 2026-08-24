@@ -113,7 +113,13 @@ export function validateFloorMap(floorMap) {
     return corridor.trapCells?.length >= 2
       && corridor.trapCells.every((cell) => floorKeys.has(cell.join(",")))
       && (!corridor.chest || floorKeys.has(corridor.chest.cell.join(",")))
-      && (corridor.bottles || []).every((bottle) => floorKeys.has(bottle.cell.join(",")));
+      && (corridor.bottles || []).every((bottle) => floorKeys.has(bottle.cell.join(",")))
+      && (!corridor.ambush || (
+        floorKeys.has(corridor.ambush.triggerCell.join(","))
+        && corridor.ambush.spawnCells.length === corridor.ambush.enemyIds.length
+        && corridor.ambush.spawnCells.length >= 2
+        && corridor.ambush.spawnCells.every((cell) => floorKeys.has(cell.join(",")))
+      ));
   });
   const corridorsClearRooms = corridors.every((corridor) =>
     corridor.floorCells.every((cell) => rooms.every((room) => !pointInsideBounds(cell, room.bounds))),

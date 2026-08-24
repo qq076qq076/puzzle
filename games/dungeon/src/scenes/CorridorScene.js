@@ -1,11 +1,16 @@
 import Phaser from "phaser";
+import { MONSTERS } from "../data/monsters.js";
+import { Enemy } from "../entities/Enemy.js";
 import { Player } from "../entities/Player.js";
 import { getDungeonAudio } from "../systems/audio-system.js";
 import { playEnvironmentAnimation } from "../systems/actor-animations.js";
-import { closeSideDoor, constrainActorToClosedDoor } from "../systems/door-system.js";
+import { closeSideDoor, constrainActorToClosedDoor, openSideDoor } from "../systems/door-system.js";
+import { resolveMeleeAttack, updateBleed } from "../systems/combat-system.js";
+import { clearProjectiles, updateProjectiles } from "../systems/projectile-system.js";
 import { generateFloorMap } from "../systems/room-generator.js";
 import { hasReachedCorridorExit } from "../systems/corridor-transition.js";
 import { canClaimCorridorChest, claimCorridorChest, getCorridorTrapPhase } from "../systems/corridor-events.js";
+import { isCorridorAmbushCleared, shouldTriggerCorridorAmbush } from "../systems/corridor-ambush.js";
 import { applyPlayerBuild, capturePlayerBuild, normalizeRunBuild } from "../systems/player-build.js";
 import { cloneRunStats, createRunStats } from "../systems/run-state.js";
 import { TouchControls } from "../systems/touch-controls.js";
@@ -31,6 +36,10 @@ export class CorridorScene extends Phaser.Scene {
     this.corridorStatus = "active";
     this.bottles = [];
     this.pickups = [];
+    this.enemies = [];
+    this.projectiles = [];
+    this.telegraphs = [];
+    this.pendingAmbushSpawns = 0;
   }
 
   create() {
@@ -46,6 +55,8 @@ export class CorridorScene extends Phaser.Scene {
     this.worldLayout = buildCorridorWorld(this, this.currentCorridor);
     this.bottles = this.worldLayout.bottles;
     this.player = new Player(this, this.worldLayout.spawn[0], this.worldLayout.spawn[1]);
+    this.enemyGroup = this.physics.add.group({ allowGravity: false });
+    this.physics.add.collider(this.enemyGroup, this.enemyGroup);
     const [entryOutX, entryOutY] = getSideVector(this.currentCorridor.entrySide);
     this.player.facing.set(-entryOutX, -entryOutY);
     applyPlayerBuild(this.player, this.build);
@@ -62,7 +73,6 @@ export class CorridorScene extends Phaser.Scene {
       this.tweens.add({ targets: this.worldLayout.entryPortal, alpha: 0.14, duration: 260 });
       this.audio.beep("telegraph");
     });
-    this.showHint("岔路可能有寶箱 · 注意地面陷阱 · Shift 閃避");
   }
 
   createInput() {
@@ -109,11 +119,6 @@ export class CorridorScene extends Phaser.Scene {
     return { color, fontFamily: "monospace", fontSize: `${fontSize}px`, fontStyle: "bold" };
   }
 
-  showHint(message) {
-    this.hint = this.add.text(480, 516, message, this.hudStyle(10, "#77798a")).setOrigin(0.5).setDepth(110);
-    this.time.delayedCall(4200, () => this.hint?.setVisible(false));
-  }
-
   readInput() {
     const moveX = Number(this.keyboard.D.isDown || this.keyboard.RIGHT.isDown) - Number(this.keyboard.A.isDown || this.keyboard.LEFT.isDown);
     const moveY = Number(this.keyboard.S.isDown || this.keyboard.DOWN.isDown) - Number(this.keyboard.W.isDown || this.keyboard.UP.isDown);
@@ -136,17 +141,77 @@ export class CorridorScene extends Phaser.Scene {
     if (this.paused) {
       return;
     }
+    if (this.corridorStatus === "defeat") {
+      if (Phaser.Input.Keyboard.JustDown(this.keyboard.ENTER) || Phaser.Input.Keyboard.JustDown(this.keyboard.R)) this.restartRun();
+      return;
+    }
     if (this.corridorStatus !== "active") return;
     const input = this.readInput();
     if (input.buff) toggleBuffPanel(this, this.hud, this.player);
     if (input.usePotion) this.player.consumePotion();
     this.player.updateActor({ moveX: input.moveX, moveY: input.moveY, attack: input.attack, dodge: input.dodge }, delta);
+    if (this.player.attackHitWindow) resolveMeleeAttack(this.player, this.enemies);
     resolveBottleHits(this.player, this.bottles);
     updateBottlePickups(this, this.player);
+    this.enemies.forEach((enemy) => enemy.updateAI(this.player, delta));
+    updateBleed(this.enemies, delta);
+    this.updateTelegraphs(delta);
+    updateProjectiles(this, this.player, delta);
     this.updateCorridorEvents();
+    this.updateCorridorAmbush();
     constrainActorToClosedDoor(this.player, this.worldLayout.entryDoor);
-    if (hasReachedCorridorExit(this.player, this.worldLayout.exitTrigger, this.currentCorridor.exitSide)) this.goToNextRoom();
+    constrainActorToClosedDoor(this.player, this.worldLayout.exitDoor);
+    this.enemies.forEach((enemy) => {
+      constrainActorToClosedDoor(enemy, this.worldLayout.entryDoor);
+      constrainActorToClosedDoor(enemy, this.worldLayout.exitDoor);
+    });
+    if (this.player.health <= 0) this.openDefeat();
+    else if (hasReachedCorridorExit(this.player, this.worldLayout.exitTrigger, this.currentCorridor.exitSide)) this.goToNextRoom();
     this.updateHud();
+  }
+
+  updateCorridorAmbush() {
+    const ambush = this.worldLayout.ambush;
+    if (!ambush) return;
+    if (shouldTriggerCorridorAmbush(ambush, this.player, this.worldLayout.layout.cellSize)) {
+      this.startCorridorAmbush(ambush);
+      return;
+    }
+    if (!isCorridorAmbushCleared(ambush, this.pendingAmbushSpawns, this.enemies)) return;
+    ambush.state = "cleared";
+    openSideDoor(this.worldLayout.entryDoor);
+    openSideDoor(this.worldLayout.exitDoor);
+    this.tweens.add({ targets: [this.worldLayout.entryPortal, this.worldLayout.exitPortal], alpha: 0.9, duration: 280 });
+    this.audio.beep("reward");
+  }
+
+  startCorridorAmbush(ambush) {
+    if (ambush.state !== "pending") return;
+    ambush.state = "active";
+    closeSideDoor(this.worldLayout.entryDoor);
+    closeSideDoor(this.worldLayout.exitDoor);
+    this.tweens.add({ targets: [this.worldLayout.entryPortal, this.worldLayout.exitPortal], alpha: 0.14, duration: 240 });
+    this.pendingAmbushSpawns = ambush.enemyIds.length;
+    ambush.enemyIds.forEach((enemyId, index) => {
+      const [x, y] = ambush.spawnPoints[index];
+      const marker = this.add.sprite(x, y, "spawn-marker", 0).setScale(0.58).setDepth(4);
+      playEnvironmentAnimation(marker, "spawn-marker-start");
+      this.time.delayedCall(220 + index * 180, () => {
+        this.pendingAmbushSpawns = Math.max(0, this.pendingAmbushSpawns - 1);
+        marker.destroy();
+        if (this.corridorStatus !== "active" || ambush.state !== "active") return;
+        const enemy = new Enemy(this, x, y, MONSTERS[enemyId], `corridor-${this.corridorIndex}-${index}`);
+        this.attachEnemyPhysics(enemy);
+        this.enemies.push(enemy);
+      });
+    });
+    this.audio.beep("wave");
+  }
+
+  attachEnemyPhysics(enemy) {
+    this.enemyGroup.add(enemy);
+    this.physics.add.collider(enemy, this.worldLayout.walls);
+    this.physics.add.collider(this.player, enemy, () => enemy.tryContactDamage(this.player));
   }
 
   togglePause() {
@@ -196,6 +261,43 @@ export class CorridorScene extends Phaser.Scene {
     }
   }
 
+  showEnemyTelegraph(enemy, kind, duration) {
+    const ranged = ["ranged", "spell", "burst", "laser"].includes(kind);
+    const color = kind === "spell" ? 0xffa64d : kind === "laser" ? 0x75e9ff : ranged ? 0x8fd1e8 : 0xe17b70;
+    const node = this.add.circle(enemy.x, enemy.y, ranged ? 34 : 42, color, 0.12).setStrokeStyle(2, color, 0.9).setDepth(3);
+    this.telegraphs.push({ node, remaining: duration, enemy });
+  }
+
+  updateTelegraphs(delta) {
+    this.telegraphs = this.telegraphs.filter((telegraph) => {
+      telegraph.remaining -= delta;
+      if (telegraph.enemy.active) telegraph.node.setPosition(telegraph.enemy.x, telegraph.enemy.y);
+      if (telegraph.remaining > 0) return true;
+      telegraph.node.destroy();
+      return false;
+    });
+  }
+
+  showDamageNumber(x, y, amount, color) {
+    const text = this.add.text(x, y, `-${amount}`, this.hudStyle(12, color)).setOrigin(0.5).setDepth(30);
+    this.tweens.add({ targets: text, y: y - 18, alpha: 0, duration: 420, onComplete: () => text.destroy() });
+  }
+
+  showHitEffect(x, y) {
+    const effect = this.add.sprite(x, y, "hit-spark", 0).setScale(1.6).setDepth(30);
+    effect.once("animationcomplete-hit-spark-burst", () => effect.destroy());
+    playEnvironmentAnimation(effect, "hit-spark-burst");
+  }
+
+  openDefeat() {
+    if (this.corridorStatus !== "active") return;
+    this.corridorStatus = "defeat";
+    this.player.setVelocity(0, 0);
+    clearProjectiles(this);
+    this.add.text(480, 270, "戰鬥失敗\n\nEnter／R 重新開始", this.hudStyle(22, "#e17b70")).setOrigin(0.5).setDepth(210);
+    this.audio.beep("defeat");
+  }
+
   showStatus(message) {
     this.statusMessage = message;
     this.time.delayedCall(1800, () => {
@@ -206,6 +308,7 @@ export class CorridorScene extends Phaser.Scene {
   async goToNextRoom() {
     if (this.corridorStatus === "loading") return;
     this.corridorStatus = "loading";
+    clearProjectiles(this);
     this.player?.setVelocity(0, 0);
     const nextRoomIndex = this.corridorIndex + 1;
     const data = {

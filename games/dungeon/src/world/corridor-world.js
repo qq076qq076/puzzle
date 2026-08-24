@@ -99,6 +99,12 @@ export function buildCorridorWorld(scene, corridor) {
     const [x, y] = layout.toPixel(plan.cell);
     return createBreakableBottle(scene, { ...plan, x, y }, Math.max(3.5, layout.cellSize / 12));
   });
+  const ambush = corridor.ambush ? {
+    trigger: layout.toPixel(corridor.ambush.triggerCell),
+    spawnPoints: corridor.ambush.spawnCells.map(layout.toPixel),
+    enemyIds: [...corridor.ambush.enemyIds],
+    state: "pending",
+  } : null;
   return {
     layout,
     walls,
@@ -109,6 +115,7 @@ export function buildCorridorWorld(scene, corridor) {
     traps,
     chest,
     bottles,
+    ambush,
     spawn: offsetBySide(entryCenter, entrySide, -layout.cellSize * 0.35),
     exitTrigger: offsetBySide(exitDoorPoint, exitSide, layout.cellSize * 0.48),
   };
