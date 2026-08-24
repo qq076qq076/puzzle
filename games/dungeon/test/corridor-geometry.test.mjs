@@ -4,6 +4,7 @@ import { ROOM_SIDES } from "../src/data/rooms.js";
 import {
   getCorridorDoorGeometry,
   getCorridorDoorway,
+  getCorridorRenderFloorCells,
   isCorridorDoorToDoorWalkable,
 } from "../src/systems/corridor-geometry.js";
 import { generateFloorMap } from "../src/systems/room-generator.js";
@@ -13,11 +14,12 @@ test("every generated corridor has connected floor between both door apertures",
     assert.equal(floor.validation.checks.walkableCorridors, true);
     floor.corridors.forEach((corridor) => {
       assert.equal(isCorridorDoorToDoorWalkable(corridor), true);
-      const floorKeys = new Set(corridor.floorCells.map((cell) => cell.join(",")));
+      const floorKeys = new Set(getCorridorRenderFloorCells(corridor).map((cell) => cell.join(",")));
       [true, false].forEach((atStart) => {
         const doorway = getCorridorDoorway(corridor, atStart);
         assert.ok(ROOM_SIDES.includes(doorway.side));
         assert.ok(doorway.aperture.every((cell) => floorKeys.has(cell.join(","))));
+        assert.ok(doorway.outside.every((cell) => !floorKeys.has(cell.join(","))));
       });
     });
   });

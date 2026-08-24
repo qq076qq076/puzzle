@@ -3,7 +3,7 @@ import { playEnvironmentAnimation } from "../systems/actor-animations.js";
 import { createSideDoor } from "../systems/door-system.js";
 import { getSideVector } from "../data/rooms.js";
 import { createBreakableBottle } from "../systems/destructible-system.js";
-import { getCorridorDoorGeometry, getCorridorDoorway } from "../systems/corridor-geometry.js";
+import { getCorridorDoorGeometry, getCorridorDoorway, getCorridorRenderFloorCells } from "../systems/corridor-geometry.js";
 
 function uniqueCells(cells) {
   return [...new Map(cells.map((cell) => [cell.join(","), cell])).values()];
@@ -27,7 +27,7 @@ function getWallCells(floorCells, corridor) {
 }
 
 function createLayout(corridor) {
-  const floorCells = uniqueCells(corridor.floorCells);
+  const floorCells = uniqueCells(getCorridorRenderFloorCells(corridor));
   const xs = floorCells.map(([x]) => x);
   const ys = floorCells.map(([, y]) => y);
   const minX = Math.min(...xs);
@@ -36,7 +36,7 @@ function createLayout(corridor) {
   const maxY = Math.max(...ys);
   const columns = maxX - minX + 1;
   const rows = maxY - minY + 1;
-  const cellSize = Math.max(34, Math.min(56, Math.floor(670 / (columns + 2)), Math.floor(310 / (rows + 2))));
+  const cellSize = Math.max(28, Math.min(56, Math.floor(670 / (columns + 2)), Math.floor(310 / (rows + 2))));
   const offsetX = GAME_WIDTH / 2 - ((minX + maxX) / 2) * cellSize;
   const offsetY = 310 - ((minY + maxY) / 2) * cellSize;
   const toPixel = ([x, y]) => [x * cellSize + offsetX, y * cellSize + offsetY];
@@ -109,7 +109,7 @@ export function buildCorridorWorld(scene, corridor) {
     traps,
     chest,
     bottles,
-    spawn: offsetBySide(entryCenter, entrySide, -layout.cellSize * 0.12),
+    spawn: offsetBySide(entryCenter, entrySide, -layout.cellSize * 0.35),
     exitTrigger: offsetBySide(exitDoorPoint, exitSide, layout.cellSize * 0.48),
   };
 }

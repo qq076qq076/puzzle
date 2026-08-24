@@ -4,14 +4,33 @@ function keyOf([x, y]) {
   return `${x},${y}`;
 }
 
+export function getCorridorRenderFloorCells(corridor) {
+  const floor = new Map((corridor.floorCells || []).map((cell) => [keyOf(cell), [...cell]]));
+  [corridor.start, corridor.end].forEach(([centerX, centerY]) => {
+    for (let y = centerY - 4; y <= centerY + 4; y += 1) {
+      for (let x = centerX - 2; x <= centerX + 2; x += 1) floor.set(`${x},${y}`, [x, y]);
+    }
+  });
+  return [...floor.values()];
+}
+
 export function getCorridorDoorway(corridor, atStart) {
-  const cell = atStart ? corridor.start : corridor.end;
+  const [centerX, centerY] = atStart ? corridor.start : corridor.end;
   const side = (atStart ? corridor.entrySide : corridor.exitSide) || (atStart ? "left" : "right");
-  const horizontalDoor = side === "up" || side === "down";
-  const aperture = horizontalDoor
-    ? [cell, [cell[0] + (atStart ? 1 : -1), cell[1]]]
-    : [cell, [cell[0], cell[1] + 1]];
   const [dx, dy] = getSideVector(side);
+  let aperture;
+  if (side === "up" || side === "down") {
+    const y = centerY + (side === "up" ? -4 : 4);
+    aperture = [[centerX - 1, y], [centerX, y]];
+  } else {
+    const x = centerX + (side === "left" ? -2 : 2);
+    const floor = new Set(getCorridorRenderFloorCells(corridor).map(keyOf));
+    const offsets = [-4, -3, -2, -1, 0, 1, 2, 3];
+    const offset = offsets.find((candidate) =>
+      !floor.has(`${x + dx},${centerY + candidate}`)
+      && !floor.has(`${x + dx},${centerY + candidate + 1}`)) ?? -4;
+    aperture = [[x, centerY + offset], [x, centerY + offset + 1]];
+  }
   return {
     side,
     aperture: aperture.map(([x, y]) => [x, y]),
@@ -37,10 +56,11 @@ export function getCorridorDoorGeometry(layout, corridor, atStart) {
 
 export function isCorridorDoorToDoorWalkable(corridor) {
   if (!corridor?.floorCells?.length) return false;
-  const floor = new Set(corridor.floorCells.map(keyOf));
+  const floor = new Set(getCorridorRenderFloorCells(corridor).map(keyOf));
   const start = getCorridorDoorway(corridor, true);
   const end = getCorridorDoorway(corridor, false);
   if (![...start.aperture, ...end.aperture].every((cell) => floor.has(keyOf(cell)))) return false;
+  if ([...start.outside, ...end.outside].some((cell) => floor.has(keyOf(cell)))) return false;
 
   const visited = new Set();
   const queue = [[...start.aperture[0]]];
