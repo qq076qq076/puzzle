@@ -4,6 +4,10 @@
   const SIZE = 4;
   const WINNING_TILE = 2048;
   const MOVE_DURATION = 210;
+  const BLOCKED_FEEDBACK_DURATION = 300;
+  const STREAK_SHAKE_THRESHOLD = 5;
+  const STREAK_SHAKE_FAST_THRESHOLD = 10;
+  const STREAK_SHAKE_DURATION = 1000;
   const BEST_SCORE_KEY = "2048-best-score";
   const DIRECTIONS = {
     up: "up",
@@ -35,6 +39,9 @@
   let isAnimating = false;
   let animationFrame = null;
   let animationTimer = null;
+  let blockedFeedbackTimer = null;
+  let streakShakeTimer = null;
+  let blockedStreak = 0;
 
   function emptyBoard() {
     return Array.from({ length: SIZE }, function () {
@@ -60,10 +67,12 @@
 
   function newGame() {
     cancelMoveAnimation();
+    cancelFeedbackAnimations();
     board = emptyBoard();
     score = 0;
     hasWon = false;
     keepPlaying = false;
+    blockedStreak = 0;
     hideMessage();
     spawnTile();
     spawnTile();
@@ -72,10 +81,12 @@
 
   function restoreGame(saved) {
     cancelMoveAnimation();
+    cancelFeedbackAnimations();
     board = saved.board.map(function (row) { return row.slice(); });
     score = saved.score;
     hasWon = Boolean(saved.hasWon);
     keepPlaying = Boolean(saved.keepPlaying);
+    blockedStreak = 0;
     hideMessage();
     render();
     if (hasWon && !keepPlaying) showWinMessage();
@@ -179,17 +190,24 @@
   }
 
   function move(direction) {
-    if (isAnimating || (hasWon && !keepPlaying)) {
+    if (isAnimating || streakShakeTimer !== null || (hasWon && !keepPlaying)) {
       return false;
     }
 
     const moveResult = buildMove(direction);
 
     if (boardsAreEqual(board, moveResult.nextBoard)) {
+      blockedStreak += 1;
       playBlockedFeedback(direction);
+      if (blockedStreak === STREAK_SHAKE_FAST_THRESHOLD) {
+        playStreakShake("fast");
+      } else if (blockedStreak === STREAK_SHAKE_THRESHOLD) {
+        playStreakShake("slow");
+      }
       return false;
     }
 
+    blockedStreak = 0;
     board = moveResult.nextBoard;
     score += moveResult.gained;
     if (score > bestScore) {
@@ -313,12 +331,48 @@
 
   function playBlockedFeedback(direction) {
     const className = "blocked-" + direction;
+    if (blockedFeedbackTimer !== null) {
+      window.clearTimeout(blockedFeedbackTimer);
+    }
     boardShellElement.classList.remove("blocked-up", "blocked-right", "blocked-down", "blocked-left");
     boardShellElement.offsetWidth;
     boardShellElement.classList.add(className);
-    window.setTimeout(function () {
+    blockedFeedbackTimer = window.setTimeout(function () {
       boardShellElement.classList.remove(className);
-    }, 180);
+      blockedFeedbackTimer = null;
+    }, BLOCKED_FEEDBACK_DURATION);
+  }
+
+  function cancelFeedbackAnimations() {
+    if (blockedFeedbackTimer !== null) {
+      window.clearTimeout(blockedFeedbackTimer);
+      blockedFeedbackTimer = null;
+    }
+    if (streakShakeTimer !== null) {
+      window.clearTimeout(streakShakeTimer);
+      streakShakeTimer = null;
+    }
+    boardShellElement.classList.remove(
+      "blocked-up",
+      "blocked-right",
+      "blocked-down",
+      "blocked-left",
+      "streak-shake-slow",
+      "streak-shake-fast"
+    );
+  }
+
+  function playStreakShake(speed) {
+    if (streakShakeTimer !== null) {
+      window.clearTimeout(streakShakeTimer);
+    }
+    boardShellElement.classList.remove("streak-shake-slow", "streak-shake-fast");
+    boardShellElement.offsetWidth;
+    boardShellElement.classList.add("streak-shake-" + speed);
+    streakShakeTimer = window.setTimeout(function () {
+      boardShellElement.classList.remove("streak-shake-slow", "streak-shake-fast");
+      streakShakeTimer = null;
+    }, STREAK_SHAKE_DURATION);
   }
 
   function movesAvailable() {
@@ -431,6 +485,9 @@
     if (event.pointerType === "mouse" && event.button !== 0) {
       return;
     }
+    if (streakShakeTimer !== null) {
+      return;
+    }
     touchStart = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
     boardShellElement.classList.add("is-dragging");
     if (boardShellElement.setPointerCapture) {
@@ -439,7 +496,7 @@
   }
 
   function handlePointerMove(event) {
-    if (!touchStart || event.pointerId !== touchStart.pointerId) {
+    if (!touchStart || streakShakeTimer !== null || event.pointerId !== touchStart.pointerId) {
       return;
     }
     event.preventDefault();
