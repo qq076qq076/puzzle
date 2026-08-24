@@ -132,6 +132,15 @@ const environmentSpritesheets = [
     0,
   ),
   sheet(
+    "bottle-break-effect",
+    `${MACHINE_ROOT}/3 Enemies/8 Other/Dust.png`,
+    64,
+    64,
+    6,
+    22,
+    0,
+  ),
+  sheet(
     "door-side",
     `${FANTASY_ROOT}/2 Dungeon Tileset/3 Animated objects/Door_S.png`,
     14,
@@ -217,6 +226,10 @@ export const PROVIDED_ASSETS = {
   images: {
     "provided-shadow": `${FANTASY_ROOT}/1 Characters/Other/Shadow.png`,
     "potion-icon": `${FANTASY_ROOT}/4 GUI/3 Icons/Icon_32.png`,
+    "bottle-1": `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects/Other/5.png`,
+    "bottle-2": `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects/Other/6.png`,
+    "bottle-3": `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects/Other/7.png`,
+    "bottle-4": `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects/Other/8.png`,
     "reward-icon-skull": `${FANTASY_ROOT}/4 GUI/3 Icons/Icon_01.png`,
     "reward-icon-sword": `${FANTASY_ROOT}/4 GUI/3 Icons/Icon_07.png`,
     "reward-icon-shield": `${FANTASY_ROOT}/4 GUI/3 Icons/Icon_11.png`,
@@ -242,6 +255,7 @@ export const PROVIDED_ASSETS = {
   spritesheets: [...collectActorSheets(), ...environmentSpritesheets],
   environmentAnimations: [
     { key: "player-weapon-swing-animation", texture: "player-weapon-swing", frameCount: 9, start: 1, end: 6, frameRate: 34, repeat: 0 },
+    { key: "bottle-break", texture: "bottle-break-effect", frameCount: 6, frameRate: 22, repeat: 0 },
     { key: "door-side-open", texture: "door-side", frameCount: 4, frameRate: 12, repeat: 0 },
     { key: "door-up-open", texture: "door-up", frameCount: 4, frameRate: 12, repeat: 0 },
     { key: "door-down-open", texture: "door-down", frameCount: 4, frameRate: 12, repeat: 0 },

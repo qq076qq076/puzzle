@@ -110,7 +110,8 @@ export function validateFloorMap(floorMap) {
     const floorKeys = new Set(corridor.floorCells.map((cell) => cell.join(",")));
     return corridor.trapCells?.length >= 2
       && corridor.trapCells.every((cell) => floorKeys.has(cell.join(",")))
-      && (!corridor.chest || floorKeys.has(corridor.chest.cell.join(",")));
+      && (!corridor.chest || floorKeys.has(corridor.chest.cell.join(",")))
+      && (corridor.bottles || []).every((bottle) => floorKeys.has(bottle.cell.join(",")));
   });
   const corridorsClearRooms = corridors.every((corridor) =>
     corridor.floorCells.every((cell) => rooms.every((room) => !pointInsideBounds(cell, room.bounds))),

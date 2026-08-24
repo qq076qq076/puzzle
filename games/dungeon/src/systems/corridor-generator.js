@@ -1,3 +1,5 @@
+import { rollBottleDrop } from "./destructible-system.js";
+
 function appendCell(cells, x, y) {
   const last = cells[cells.length - 1];
   if (!last || last[0] !== x || last[1] !== y) cells.push([x, y]);
@@ -94,7 +96,17 @@ function pickEventCells(corridorIndex, mainCells, branch, eventRng) {
   while (candidates.length && trapCells.length < trapCount) {
     trapCells.push(candidates.splice(eventRng.int(0, candidates.length - 1), 1)[0]);
   }
-  return { chest, trapCells };
+  const bottles = [];
+  if (candidates.length && eventRng.next() < 0.58) {
+    const cell = candidates.splice(eventRng.int(0, candidates.length - 1), 1)[0];
+    bottles.push({
+      id: `corridor-${corridorIndex + 1}-bottle-1`,
+      cell,
+      texture: `bottle-${eventRng.int(1, 4)}`,
+      drop: rollBottleDrop(eventRng),
+    });
+  }
+  return { chest, trapCells, bottles };
 }
 
 export function buildCorridor(sourceRoom, targetRoom, corridorIndex, rng, width = 2, eventRng = rng, branchDepth = 3) {
@@ -118,7 +130,7 @@ export function buildCorridor(sourceRoom, targetRoom, corridorIndex, rng, width 
   const branch = buildLoopBranch(cells, rng, branchDepth);
   const branches = branch ? [branch] : [];
   const floorCells = uniqueFloorCells([...expandCorridorCells(cells), ...branches.flatMap((item) => item.floorCells)]);
-  const events = branch ? pickEventCells(corridorIndex, cells, branch, eventRng) : { chest: null, trapCells: [] };
+  const events = branch ? pickEventCells(corridorIndex, cells, branch, eventRng) : { chest: null, trapCells: [], bottles: [] };
   return {
     id: `corridor-${corridorIndex + 1}`,
     corridorIndex,
@@ -134,6 +146,7 @@ export function buildCorridor(sourceRoom, targetRoom, corridorIndex, rng, width 
     branches,
     trapCells: events.trapCells,
     chest: events.chest,
+    bottles: events.bottles,
     length: cells.length,
   };
 }

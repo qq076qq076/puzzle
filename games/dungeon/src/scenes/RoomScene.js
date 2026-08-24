@@ -21,6 +21,7 @@ import { disableMouseInput, makeTouchOnlyButton } from "../ui/input.js";
 import { createCombatHud, createPauseOverlay, toggleBuffPanel, updateCombatHud } from "../ui/hud.js";
 import { bindPauseKeyboard, createPauseKeyboardHandlers, unbindPauseKeyboard } from "../ui/pause-keyboard.js";
 import { constrainActorToBounds } from "../systems/knockback.js";
+import { createBreakableBottle, resolveBottleHits, updateBottlePickups } from "../systems/destructible-system.js";
 
 export class RoomScene extends Phaser.Scene {
   constructor() {
@@ -50,6 +51,8 @@ export class RoomScene extends Phaser.Scene {
     this.rewardNavigationCooldown = 0;
     this.rewardTouchAxis = 0;
     this.rewardCards = [];
+    this.bottles = [];
+    this.pickups = [];
   }
 
   create() {
@@ -76,7 +79,7 @@ export class RoomScene extends Phaser.Scene {
       attack: () => {
         if (this.paused) return;
         if (this.roomStatus === "reward") this.chooseReward(this.rewardSelectionIndex);
-        else if (this.roomStatus === "combat") this.keyboardActions.attack = true;
+        else if (["combat", "cleared", "transition"].includes(this.roomStatus)) this.keyboardActions.attack = true;
       },
       dodge: () => {
         if (!this.paused && ["combat", "transition"].includes(this.roomStatus)) this.keyboardActions.dodge = true;
@@ -151,6 +154,7 @@ export class RoomScene extends Phaser.Scene {
       initiallyOpen: false,
     });
     this.createTraps();
+    this.bottles = (this.currentRoom.bottles || []).map((plan) => createBreakableBottle(this, plan));
     this.currentRoom.machineDecor.forEach(([x, y]) => {
       const portal = this.add.sprite(x, y, "portal").setScale(0.38).setAlpha(0.46).setTint(0x72b9ca).setDepth(1);
       playEnvironmentAnimation(portal, "portal-idle");
@@ -365,6 +369,8 @@ export class RoomScene extends Phaser.Scene {
     if (input.usePotion) this.player.consumePotion();
     this.player.updateActor(input, delta);
     if (this.player.attackHitWindow) resolveMeleeAttack(this.player, this.enemies);
+    resolveBottleHits(this.player, this.bottles);
+    updateBottlePickups(this, this.player);
     this.enemies.forEach((enemy) => enemy.updateAI(this.player, delta));
     updateBleed(this.enemies, delta);
     this.updateTraps(delta);
@@ -410,7 +416,9 @@ export class RoomScene extends Phaser.Scene {
     const input = this.readInput();
     if (input.buff) toggleBuffPanel(this, this.hud, this.player);
     if (input.usePotion) this.player.consumePotion();
-    this.player.updateActor({ moveX: input.moveX, moveY: input.moveY, attack: false, dodge: input.dodge }, delta);
+    this.player.updateActor({ moveX: input.moveX, moveY: input.moveY, attack: input.attack, dodge: input.dodge }, delta);
+    resolveBottleHits(this.player, this.bottles);
+    updateBottlePickups(this, this.player);
     constrainActorToClosedDoor(this.player, this.entryDoor);
     const delay = tickRoomClearDelay(this.roomClearRemaining, delta);
     this.roomClearRemaining = delay.remaining;
@@ -583,7 +591,9 @@ export class RoomScene extends Phaser.Scene {
     const input = this.readInput();
     if (input.buff) toggleBuffPanel(this, this.hud, this.player);
     if (input.usePotion) this.player.consumePotion();
-    this.player.updateActor({ moveX: input.moveX, moveY: input.moveY, attack: false, dodge: input.dodge }, delta);
+    this.player.updateActor({ moveX: input.moveX, moveY: input.moveY, attack: input.attack, dodge: input.dodge }, delta);
+    resolveBottleHits(this.player, this.bottles);
+    updateBottlePickups(this, this.player);
     constrainActorToClosedDoor(this.player, this.entryDoor);
     if (hasCrossedExit(this.player, this.currentRoom)) this.goToNextRoom();
   }

@@ -109,7 +109,20 @@ test("corridors contain deterministic branches, traps, and optional chests", () 
   assert.ok(corridors.every((corridor) => corridor.trapCells.length >= 2));
   assert.ok(corridors.some((corridor) => corridor.chest));
   assert.ok(corridors.some((corridor) => !corridor.chest));
+  assert.ok(corridors.some((corridor) => corridor.bottles.length > 0));
+  assert.ok(corridors.some((corridor) => corridor.bottles.length === 0));
   assert.deepEqual(generateFloorMap("event-repeat"), generateFloorMap("event-repeat"));
+});
+
+test("normal rooms sometimes contain breakable bottles with deterministic drops", () => {
+  const floors = Array.from({ length: 24 }, (_, index) => generateFloor(`bottles-${index}`));
+  const rooms = floors.flatMap((floor) => floor.slice(0, 5));
+  assert.ok(rooms.some((room) => room.bottles.length > 0));
+  assert.ok(rooms.some((room) => room.bottles.length === 0));
+  const bottles = rooms.flatMap((room) => room.bottles);
+  assert.ok(bottles.every((bottle) => /^bottle-[1-4]$/.test(bottle.texture)));
+  assert.ok(bottles.some((bottle) => bottle.drop));
+  assert.deepEqual(generateFloor("bottle-repeat"), generateFloor("bottle-repeat"));
 });
 
 test("floor map layout changes with seed while remaining valid", () => {

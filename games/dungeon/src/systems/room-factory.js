@@ -6,8 +6,41 @@ import {
   getOppositeSide,
 } from "../data/rooms.js";
 import { generateRoomContent, getRoomTemplatePool } from "./room-content-generator.js";
-import { validateRoom } from "./room-validation.js";
+import { pointWalkable, validateRoom } from "./room-validation.js";
 import { createRng } from "./rng.js";
+import { rollBottleDrop } from "./destructible-system.js";
+
+const BOTTLE_CANDIDATE_POINTS = Object.freeze([
+  [170, 150], [790, 150], [170, 430], [790, 430],
+  [480, 190], [480, 390], [310, 290], [650, 290],
+]);
+
+function generateRoomBottles(runSeed, roomIndex, room) {
+  const rng = createRng(`${runSeed}:floor:0:room:${roomIndex}:bottles`);
+  if (rng.next() >= 0.68) return [];
+  const candidates = BOTTLE_CANDIDATE_POINTS.filter(([x, y]) =>
+    pointWalkable(x, y, room.obstacles, 20)
+    && Math.hypot(x - room.entry[0], y - room.entry[1]) >= 110
+    && Math.hypot(x - room.exit[0], y - room.exit[1]) >= 110
+    && room.trapPoints.every(([tx, ty]) => Math.hypot(x - tx, y - ty) >= 56));
+  const count = Math.min(candidates.length, rng.next() < 0.28 ? 2 : 1);
+  const bottles = [];
+  while (candidates.length && bottles.length < count) {
+    const [x, y] = candidates.splice(rng.int(0, candidates.length - 1), 1)[0];
+    bottles.push({
+      id: `room-${roomIndex + 1}-bottle-${bottles.length + 1}`,
+      x,
+      y,
+      texture: `bottle-${rng.int(1, 4)}`,
+      drop: rollBottleDrop(rng),
+    });
+  }
+  return bottles;
+}
+
+function withRoomBottles(runSeed, roomIndex, room) {
+  return { ...room, bottles: generateRoomBottles(runSeed, roomIndex, room) };
+}
 
 export function getRoomConnectionSides(runSeed, roomIndex) {
   let entrySide = createRng(`${runSeed}:floor:0:start-side`).pick(ROOM_SIDES);
@@ -77,7 +110,7 @@ export function generateRoom(runSeed, roomIndex, previousTemplateId = null) {
   const template = getTemplate(content.templateId);
   let room = assembleNormalRoom(content, template, runSeed, roomIndex);
   room.validation = validateRoom(room);
-  if (room.validation.valid) return room;
+  if (room.validation.valid) return withRoomBottles(runSeed, roomIndex, room);
 
   const fallbackTemplate = getRoomTemplatePool(roomIndex).find((candidate) => {
     if (candidate.id === previousTemplateId) return false;
@@ -88,5 +121,5 @@ export function generateRoom(runSeed, roomIndex, previousTemplateId = null) {
     rewardIds: [BUFF_POOL_BY_ROOM[roomIndex][0], "minor_heal", "gold_cache"],
   }, fallbackTemplate, runSeed, roomIndex);
   room.validation = { ...validateRoom(room), fallback: true };
-  return room;
+  return withRoomBottles(runSeed, roomIndex, room);
 }

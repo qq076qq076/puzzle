@@ -2,6 +2,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../config.js";
 import { playEnvironmentAnimation } from "../systems/actor-animations.js";
 import { createSideDoor } from "../systems/door-system.js";
 import { getSideVector } from "../data/rooms.js";
+import { createBreakableBottle } from "../systems/destructible-system.js";
 
 function uniqueCells(cells) {
   return [...new Map(cells.map((cell) => [cell.join(","), cell])).values()];
@@ -107,6 +108,10 @@ export function buildCorridorWorld(scene, corridor) {
     const node = scene.add.image(x, y, "reward-chest").setScale(Math.max(2.4, layout.cellSize / 13)).setDepth(3);
     return { x, y, node, reward: { ...corridor.chest.reward }, active: true };
   })() : null;
+  const bottles = (corridor.bottles || []).map((plan) => {
+    const [x, y] = layout.toPixel(plan.cell);
+    return createBreakableBottle(scene, { ...plan, x, y }, Math.max(3.5, layout.cellSize / 12));
+  });
   return {
     layout,
     walls,
@@ -116,6 +121,7 @@ export function buildCorridorWorld(scene, corridor) {
     exitPortal,
     traps,
     chest,
+    bottles,
     spawn: offsetBySide([entryCenterX, entryCenterY], entrySide, -layout.cellSize * 0.5),
     exitTrigger: offsetBySide([exitCenterX, exitCenterY], exitSide, layout.cellSize * 0.82),
   };

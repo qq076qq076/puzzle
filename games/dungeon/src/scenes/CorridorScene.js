@@ -15,6 +15,7 @@ import { disableMouseInput } from "../ui/input.js";
 import { bindPauseKeyboard, createPauseKeyboardHandlers, unbindPauseKeyboard } from "../ui/pause-keyboard.js";
 import { buildCorridorWorld } from "../world/corridor-world.js";
 import { getSideVector } from "../data/rooms.js";
+import { resolveBottleHits, updateBottlePickups } from "../systems/destructible-system.js";
 
 export class CorridorScene extends Phaser.Scene {
   constructor() {
@@ -28,6 +29,8 @@ export class CorridorScene extends Phaser.Scene {
     this.runStats = cloneRunStats(data.runStats || createRunStats(this.runSeed));
     this.paused = false;
     this.corridorStatus = "active";
+    this.bottles = [];
+    this.pickups = [];
   }
 
   create() {
@@ -41,6 +44,7 @@ export class CorridorScene extends Phaser.Scene {
     }
 
     this.worldLayout = buildCorridorWorld(this, this.currentCorridor);
+    this.bottles = this.worldLayout.bottles;
     this.player = new Player(this, this.worldLayout.spawn[0], this.worldLayout.spawn[1]);
     const [entryOutX, entryOutY] = getSideVector(this.currentCorridor.entrySide);
     this.player.facing.set(-entryOutX, -entryOutY);
@@ -73,6 +77,9 @@ export class CorridorScene extends Phaser.Scene {
       buffs: () => {
         if (!this.paused) toggleBuffPanel(this, this.hud, this.player);
       },
+      attack: () => {
+        if (!this.paused && this.corridorStatus === "active") this.keyboardActions.attack = true;
+      },
       dodge: () => {
         if (!this.paused && this.corridorStatus === "active") this.keyboardActions.dodge = true;
       },
@@ -85,6 +92,7 @@ export class CorridorScene extends Phaser.Scene {
     this.input.keyboard.on("keydown-P", this.keyHandlers.pause);
     this.input.keyboard.on("keydown-M", this.keyHandlers.sound);
     this.input.keyboard.on("keydown-B", this.keyHandlers.buffs);
+    this.input.keyboard.on("keydown-SPACE", this.keyHandlers.attack);
     this.input.keyboard.on("keydown-SHIFT", this.keyHandlers.dodge);
     this.input.keyboard.on("keydown-Q", this.keyHandlers.potion);
     bindPauseKeyboard(this, this.pauseKeyHandlers);
@@ -116,6 +124,7 @@ export class CorridorScene extends Phaser.Scene {
     return {
       moveX: this.touchControls?.enabled && Math.hypot(touchMove.x, touchMove.y) > 0.08 ? touchMove.x : moveX,
       moveY: this.touchControls?.enabled && Math.hypot(touchMove.x, touchMove.y) > 0.08 ? touchMove.y : moveY,
+      attack: actions.attack || buffered.attack || Phaser.Input.Keyboard.JustDown(this.keyboard.SPACE),
       dodge: actions.dodge || buffered.dodge || Phaser.Input.Keyboard.JustDown(this.keyboard.SHIFT),
       usePotion: actions.potion || buffered.potion || Phaser.Input.Keyboard.JustDown(this.keyboard.Q),
       buff: actions.buff,
@@ -131,7 +140,9 @@ export class CorridorScene extends Phaser.Scene {
     const input = this.readInput();
     if (input.buff) toggleBuffPanel(this, this.hud, this.player);
     if (input.usePotion) this.player.consumePotion();
-    this.player.updateActor({ moveX: input.moveX, moveY: input.moveY, attack: false, dodge: input.dodge }, delta);
+    this.player.updateActor({ moveX: input.moveX, moveY: input.moveY, attack: input.attack, dodge: input.dodge }, delta);
+    resolveBottleHits(this.player, this.bottles);
+    updateBottlePickups(this, this.player);
     this.updateCorridorEvents();
     constrainActorToClosedDoor(this.player, this.worldLayout.entryDoor);
     if (hasReachedCorridorExit(this.player, this.worldLayout.exitTrigger, this.currentCorridor.exitSide)) this.goToNextRoom();
@@ -225,6 +236,7 @@ export class CorridorScene extends Phaser.Scene {
       this.input.keyboard.off("keydown-P", this.keyHandlers.pause);
       this.input.keyboard.off("keydown-M", this.keyHandlers.sound);
       this.input.keyboard.off("keydown-B", this.keyHandlers.buffs);
+      this.input.keyboard.off("keydown-SPACE", this.keyHandlers.attack);
       this.input.keyboard.off("keydown-SHIFT", this.keyHandlers.dodge);
       this.input.keyboard.off("keydown-Q", this.keyHandlers.potion);
     }
