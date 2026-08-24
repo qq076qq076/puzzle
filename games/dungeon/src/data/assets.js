@@ -123,15 +123,6 @@ function collectActorSheets() {
 
 const environmentSpritesheets = [
   sheet(
-    "player-weapon-swing",
-    `${MACHINE_ROOT}/1 Main Character/2 Weapons/7.png`,
-    48,
-    48,
-    9,
-    34,
-    0,
-  ),
-  sheet(
     "bottle-break-effect",
     `${MACHINE_ROOT}/3 Enemies/8 Other/Dust.png`,
     64,
@@ -210,15 +201,6 @@ const environmentSpritesheets = [
     18,
     0,
   ),
-  sheet(
-    "player-attack-effect",
-    `${MACHINE_ROOT}/1 Main Character/3 Effects/1_1.png`,
-    96,
-    96,
-    6,
-    30,
-    0,
-  ),
 ];
 
 export const PROVIDED_ASSETS = {
@@ -254,7 +236,6 @@ export const PROVIDED_ASSETS = {
   },
   spritesheets: [...collectActorSheets(), ...environmentSpritesheets],
   environmentAnimations: [
-    { key: "player-weapon-swing-animation", texture: "player-weapon-swing", frameCount: 9, start: 1, end: 6, frameRate: 34, repeat: 0 },
     { key: "bottle-break", texture: "bottle-break-effect", frameCount: 6, frameRate: 22, repeat: 0 },
     { key: "door-side-open", texture: "door-side", frameCount: 4, frameRate: 12, repeat: 0 },
     { key: "door-up-open", texture: "door-up", frameCount: 4, frameRate: 12, repeat: 0 },
@@ -264,7 +245,6 @@ export const PROVIDED_ASSETS = {
     { key: "trap-rise", texture: "trap", frameCount: 6, frameRate: 12, repeat: 0 },
     { key: "spawn-marker-start", texture: "spawn-marker", frameCount: 6, frameRate: 10, repeat: 0 },
     { key: "hit-spark-burst", texture: "hit-spark", frameCount: 4, frameRate: 18, repeat: 0 },
-    { key: "player-attack-sweep", texture: "player-attack-effect", frameCount: 6, frameRate: 30, repeat: 0 },
   ],
   credits: {
     sources: CRAFTPIX_SOURCES,

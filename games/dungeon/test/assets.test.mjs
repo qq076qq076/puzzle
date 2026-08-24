@@ -60,10 +60,10 @@ test("world effects are mapped to supplied CraftPix files without generated fall
   assert.match(spritesheets.get("trap"), /Spikes\.png$/);
   assert.match(spritesheets.get("spawn-marker"), /Portal1_Start\.png$/);
   assert.match(spritesheets.get("hit-spark"), /D_Blood\.png$/);
-  assert.match(spritesheets.get("player-attack-effect"), /3 Effects\/1_1\.png$/);
   assert.match(PROVIDED_ASSETS.images["enemy-projectile"], /Projectiles\/10\.png$/);
   assert.match(PROVIDED_ASSETS.images["laser-projectile"], /Projectiles\/15\.png$/);
-  assert.match(spritesheets.get("player-weapon-swing"), /Weapons\/7\.png$/);
+  assert.equal(spritesheets.has("player-attack-effect"), false);
+  assert.equal(spritesheets.has("player-weapon-swing"), false);
   for (let index = 1; index <= 4; index += 1) {
     assert.match(PROVIDED_ASSETS.images[`bottle-${index}`], new RegExp(`/Other/${index + 4}\\.png$`));
   }
@@ -72,6 +72,13 @@ test("world effects are mapped to supplied CraftPix files without generated fall
 
   const source = (await readJavaScriptTree(sourceRoot)).join("\n");
   assert.doesNotMatch(source, /generateTexture|slash-effect|texture-factory/);
+});
+
+test("player melee feedback is only a fan-shaped sweep", async () => {
+  const source = await readFile(path.join(sourceRoot, "entities/Player.js"), "utf8");
+  assert.match(source, /add\.graphics\(\)/);
+  assert.match(source, /\.arc\(0, 0, this\.attackRange/);
+  assert.doesNotMatch(source, /player-weapon-swing|player-attack-effect|spawnProjectile/);
 });
 
 test("player and fantasy enemies provide directional movement and attacks", () => {

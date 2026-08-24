@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { playActorAnimation, playEnvironmentAnimation } from "../systems/actor-animations.js";
+import { playActorAnimation } from "../systems/actor-animations.js";
 import { useEmergencyPotion } from "../systems/consumable-system.js";
 import { startKnockback, updateKnockback } from "../systems/knockback.js";
 
@@ -117,28 +117,33 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   showAttackEffect() {
     const angle = Math.atan2(this.attackFacing.y, this.attackFacing.x);
-    const weapon = this.scene.add
-      .sprite(this.x, this.y - 3, "player-weapon-swing", 1)
-      .setScale(1.55)
+    const halfArc = Phaser.Math.DegToRad(this.attackArcDeg / 2);
+    const sweep = this.scene.add.graphics()
+      .setPosition(this.x, this.y)
       .setRotation(angle)
-      .setDepth(22 + this.y / 10000);
-    const effect = this.scene.add
-      .sprite(this.x + this.attackFacing.x * 14, this.y + this.attackFacing.y * 14, "player-attack-effect", 0)
-      .setOrigin(0.08, 0.5)
-      .setScale(1.3)
-      .setRotation(angle)
-      .setTint(0xf6d36c)
+      .setScale(0.72)
       .setDepth(20 + this.y / 10000);
-    const destroyNode = (node) => {
-      this.attackEffects.delete(node);
-      if (node.active) node.destroy();
-    };
-    this.attackEffects.add(weapon);
-    weapon.once("animationcomplete-player-weapon-swing-animation", () => destroyNode(weapon));
-    if (!playEnvironmentAnimation(weapon, "player-weapon-swing-animation")) destroyNode(weapon);
-    this.attackEffects.add(effect);
-    effect.once("animationcomplete-player-attack-sweep", () => destroyNode(effect));
-    if (!playEnvironmentAnimation(effect, "player-attack-sweep")) destroyNode(effect);
+    sweep.fillStyle(0xf6d36c, 0.24);
+    sweep.lineStyle(3, 0xffe6a0, 0.92);
+    sweep.beginPath();
+    sweep.moveTo(14, 0);
+    sweep.arc(0, 0, this.attackRange, -halfArc, halfArc, false);
+    sweep.closePath();
+    sweep.fillPath();
+    sweep.strokePath();
+    this.attackEffects.add(sweep);
+    this.scene.tweens.add({
+      targets: sweep,
+      scaleX: 1,
+      scaleY: 1,
+      alpha: 0,
+      duration: 142,
+      ease: "Quad.Out",
+      onComplete: () => {
+        this.attackEffects.delete(sweep);
+        if (sweep.active) sweep.destroy();
+      },
+    });
   }
 
   tryDodge(direction) {
