@@ -10,6 +10,9 @@ export function createRng(seed) {
     int(min, max) {
       return Math.floor(this.next() * (max - min + 1)) + min;
     },
+    real(min, max) {
+      return this.next() * (max - min) + min;
+    },
     pick(values) {
       return values[Math.floor(this.next() * values.length)];
     },

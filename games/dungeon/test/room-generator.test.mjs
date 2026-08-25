@@ -11,9 +11,16 @@ import {
   validateRoom,
   WAVE_COUNTS,
 } from "../src/systems/room-generator.js";
+import {
+  DEFAULT_DECORATION_PROFILE,
+  PROP_DEFINITIONS,
+  ROOM_BACKGROUND_TEXTURES,
+  ROOM_DECORATION_PROFILES,
+  ROOM_DECORATION_TEXTURES,
+  ROOM_FIRE_PAIRS,
+} from "../src/data/room-decorations.js";
 import { ROOM_TEMPLATES } from "../src/data/rooms.js";
 import { ROOM_SIDES, getOppositeSide, getSideVector } from "../src/data/rooms.js";
-import { ROOM_DECORATION_TEXTURES } from "../src/data/room-decorations.js";
 
 test("same run seed reproduces the complete six-room floor", () => {
   const first = generateFloor("fixed-seed");
@@ -139,8 +146,43 @@ test("fantasy rooms receive deterministic supplied dungeon decorations", () => {
   assert.ok(fantasyRooms.length > 0);
   assert.ok(fantasyRooms.every((room) => room.decorations.length >= 2));
   assert.ok(fantasyRooms.flatMap((room) => room.decorations).every((decoration) =>
-    ROOM_DECORATION_TEXTURES.includes(decoration.texture)));
+    [...ROOM_DECORATION_TEXTURES, ...ROOM_BACKGROUND_TEXTURES].includes(decoration.texture)));
   assert.deepEqual(generateFloor("decor-repeat"), generateFloor("decor-repeat"));
+});
+
+test("fantasy room dressing follows its room purpose and keeps navigation landmarks clear", () => {
+  const rooms = Array.from({ length: 30 }, (_, index) => generateFloor(`dressing-${index}`))
+    .flatMap((floor) => floor.slice(0, 5))
+    .filter((room) => room.theme === "fantasy");
+  const fireSideByPoint = new Map(Object.entries(ROOM_FIRE_PAIRS)
+    .flatMap(([side, points]) => points.map(([x, y]) => [`${x},${y}`, side])));
+
+  rooms.forEach((room) => {
+    const profile = ROOM_DECORATION_PROFILES[room.templateId] || DEFAULT_DECORATION_PROFILE;
+    const allowedByPlacement = {
+      wall: new Set(profile.wallProps.map((key) => PROP_DEFINITIONS[key].texture)),
+      obstacle: new Set(profile.obstacleProps.map((key) => PROP_DEFINITIONS[key].texture)),
+      floor: new Set(profile.floorProps.map((key) => PROP_DEFINITIONS[key].texture)),
+    };
+    room.decorations.filter(({ kind }) => kind === "prop").forEach((decoration) => {
+      assert.ok(allowedByPlacement[decoration.placement].has(decoration.texture));
+    });
+    assert.equal(new Set(room.decorations.map(({ id }) => id)).size, room.decorations.length);
+    room.decorations.filter(({ kind }) => kind === "floor-patch").forEach(({ x, y }) => {
+      assert.ok((x - 112) % 32 === 0);
+      assert.ok((y - 144) % 32 === 0);
+      assert.ok(Math.hypot(x - room.entry[0], y - room.entry[1]) >= 54);
+      assert.ok(Math.hypot(x - room.exit[0], y - room.exit[1]) >= 54);
+    });
+    assert.equal(room.firePoints.length, profile.firePairCount * 2);
+    room.firePoints.forEach(([x, y]) => {
+      const side = fireSideByPoint.get(`${x},${y}`);
+      assert.ok(side);
+      assert.notEqual(side, room.entrySide);
+      assert.notEqual(side, room.exitSide);
+      room.spawnPoints.forEach((spawn) => assert.ok(Math.hypot(x - spawn[0], y - spawn[1]) >= 80));
+    });
+  });
 });
 
 test("floor map layout changes with seed while remaining valid", () => {

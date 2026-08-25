@@ -15,6 +15,7 @@ const FANTASY_ROOT = "./roguelike-game-kit-pixel-art";
 const MACHINE_ROOT = "./shoot";
 const PLAYER_ROOT = "./player/PNG/Swordsman_lvl1/Without_shadow";
 const MAGIC_ROOT = "./water-and-fire-magic-sprite-vector-pack/Fire Ball/PNG";
+const OBJECT_ROOT = `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects`;
 const FIREBALL_FRAME_KEYS = Object.freeze(Array.from(
   { length: 8 },
   (_, index) => index === 0 ? "spell-projectile" : `spell-projectile-${String(index + 1).padStart(2, "0")}`,
@@ -240,6 +241,14 @@ const environmentSpritesheets = [
     18,
     0,
   ),
+  sheet(
+    "room-fire",
+    `${FANTASY_ROOT}/2 Dungeon Tileset/3 Animated objects/Fire1.png`,
+    16,
+    16,
+    8,
+    10,
+  ),
 ];
 
 export const PROVIDED_ASSETS = {
@@ -268,18 +277,33 @@ export const PROVIDED_ASSETS = {
     "laser-projectile": `${MACHINE_ROOT}/1 Main Character/2 Weapons/Projectiles/15.png`,
     ...fireballImages,
     "room-floor-fantasy": `${FANTASY_ROOT}/2 Dungeon Tileset/1 Tiles/Tile_20.png`,
+    "room-floor-fantasy-alt": `${FANTASY_ROOT}/2 Dungeon Tileset/1 Tiles/Tile_21.png`,
+    "room-floor-fantasy-stone": `${FANTASY_ROOT}/2 Dungeon Tileset/1 Tiles/Tile_22.png`,
+    "wall-fantasy-cracked": `${FANTASY_ROOT}/2 Dungeon Tileset/1 Tiles/Tile_31.png`,
     "wall-fantasy": `${FANTASY_ROOT}/2 Dungeon Tileset/1 Tiles/Tile_16.png`,
     "wall-fantasy-alt": `${FANTASY_ROOT}/2 Dungeon Tileset/1 Tiles/Tile_31.png`,
     "wall-fantasy-deep": `${FANTASY_ROOT}/2 Dungeon Tileset/1 Tiles/Tile_15.png`,
     "reward-chest": `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects/Boxes/12.png`,
-    "room-decor-bookshelf": `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects/Bookshelf/8.png`,
-    "room-decor-table": `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects/Tables/1.png`,
-    "room-decor-chair": `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects/Chairs/1.png`,
-    "room-decor-crates": `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects/Boxes/16.png`,
-    "room-decor-barricade": `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects/Blockage/1.png`,
-    "room-decor-rubble": `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects/Blockage/5.png`,
-    "room-decor-torch": `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects/Torches/1.png`,
-    "room-decor-glow": `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects/Other/20.png`,
+    "room-decor-bookshelf": `${OBJECT_ROOT}/Bookshelf/5.png`,
+    "room-decor-bookshelf-alt": `${OBJECT_ROOT}/Bookshelf/9.png`,
+    "room-decor-table": `${OBJECT_ROOT}/Tables/1.png`,
+    "room-decor-table-vertical": `${OBJECT_ROOT}/Tables/3.png`,
+    "room-decor-altar": `${OBJECT_ROOT}/Tables/5.png`,
+    "room-decor-chair": `${OBJECT_ROOT}/Chairs/1.png`,
+    "room-decor-chair-side": `${OBJECT_ROOT}/Chairs/3.png`,
+    "room-decor-chair-broken": `${OBJECT_ROOT}/Chairs/4.png`,
+    "room-decor-crates": `${OBJECT_ROOT}/Boxes/7.png`,
+    "room-decor-crate-open": `${OBJECT_ROOT}/Boxes/2.png`,
+    "room-decor-crate-closed": `${OBJECT_ROOT}/Boxes/1.png`,
+    "room-decor-sack": `${OBJECT_ROOT}/Other/32.png`,
+    "room-decor-barricade": `${OBJECT_ROOT}/Blockage/3.png`,
+    "room-decor-rubble": `${OBJECT_ROOT}/Blockage/5.png`,
+    "room-decor-bones": `${OBJECT_ROOT}/Other/31.png`,
+    "room-decor-chain": `${OBJECT_ROOT}/Other/37.png`,
+    "room-decor-weapon": `${OBJECT_ROOT}/Other/39.png`,
+    "room-decor-candle": `${OBJECT_ROOT}/Other/13.png`,
+    "room-decor-glow": `${OBJECT_ROOT}/Other/20.png`,
+    "room-decor-torch-mount": `${OBJECT_ROOT}/Torches/2.png`,
     "room-floor-machine": `${MACHINE_ROOT}/2 Location/1 Tiles/Tile_28.png`,
     "wall-machine": `${MACHINE_ROOT}/2 Location/1 Tiles/Tile_19.png`,
   },
@@ -294,6 +318,7 @@ export const PROVIDED_ASSETS = {
     { key: "trap-rise", texture: "trap", frameCount: 6, frameRate: 12, repeat: 0 },
     { key: "spawn-marker-start", texture: "spawn-marker", frameCount: 6, frameRate: 10, repeat: 0 },
     { key: "hit-spark-burst", texture: "hit-spark", frameCount: 4, frameRate: 18, repeat: 0 },
+    { key: "room-fire-idle", texture: "room-fire", frameCount: 8, frameRate: 10 },
     { key: "spell-projectile-flight", frames: FIREBALL_FRAME_KEYS, frameRate: 18, repeat: -1 },
   ],
   credits: {

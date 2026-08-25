@@ -9,7 +9,7 @@ import { generateRoomContent, getRoomTemplatePool } from "./room-content-generat
 import { pointWalkable, validateRoom } from "./room-validation.js";
 import { createRng } from "./rng.js";
 import { rollBottleDrop } from "./destructible-system.js";
-import { generateRoomDecorations } from "./room-decoration-generator.js";
+import { generateRoomDecorations, generateRoomFirePoints } from "./room-decoration-generator.js";
 
 const BOTTLE_CANDIDATE_POINTS = Object.freeze([
   [170, 150], [790, 150], [170, 430], [790, 430],
@@ -40,7 +40,11 @@ function generateRoomBottles(runSeed, roomIndex, room) {
 }
 
 function withRoomFeatures(runSeed, roomIndex, room) {
-  const roomWithBottles = { ...room, bottles: generateRoomBottles(runSeed, roomIndex, room) };
+  const roomWithBottles = {
+    ...room,
+    bottles: room.theme === "fantasy" ? generateRoomBottles(runSeed, roomIndex, room) : [],
+  };
+  roomWithBottles.firePoints = generateRoomFirePoints(runSeed, roomIndex, roomWithBottles);
   return {
     ...roomWithBottles,
     decorations: generateRoomDecorations(runSeed, roomIndex, roomWithBottles),

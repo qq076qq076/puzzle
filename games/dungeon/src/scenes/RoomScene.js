@@ -117,6 +117,16 @@ export class RoomScene extends Phaser.Scene {
     this.floorVisual = this.add.tileSprite(0, 0, GAME_WIDTH, GAME_HEIGHT, floorKey).setOrigin(0).setDepth(-10);
     if (!machine) this.floorVisual.setTileScale(2, 2);
     this.floorVisual.setTint(machine ? 0xb9c8e4 : 0xd3c0c9);
+    if (!machine) {
+      (this.currentRoom.decorations || []).filter(({ kind }) => kind === "floor-patch").forEach((patch) => {
+        this.add.image(patch.x, patch.y, patch.texture)
+          .setScale(patch.scale)
+          .setFlipX(patch.flipX)
+          .setAlpha(patch.alpha ?? 1)
+          .setTint(0xd3c0c9)
+          .setDepth(-9);
+      });
+    }
     this.walls = this.physics.add.staticGroup();
     this.createBoundaryWalls(machine);
     this.currentRoom.obstacles.forEach(([x, y, width, height]) => this.addWall(x + width / 2, y + height / 2, width, height, machine));
@@ -145,10 +155,27 @@ export class RoomScene extends Phaser.Scene {
     });
     this.createTraps();
     this.bottles = (this.currentRoom.bottles || []).map((plan) => createBreakableBottle(this, plan));
-    this.roomDecorations = (this.currentRoom.decorations || []).map((plan) => this.add.image(plan.x, plan.y, plan.texture)
-      .setScale(plan.scale)
-      .setFlipX(plan.flipX)
-      .setDepth(1 + plan.y / 10000));
+    this.roomDecorations = (this.currentRoom.decorations || [])
+      .filter(({ kind }) => kind !== "floor-patch")
+      .map((plan) => {
+        const visual = this.add.image(plan.x, plan.y, plan.texture)
+          .setScale(plan.scale)
+          .setFlipX(plan.flipX)
+          .setAlpha(0.92);
+        if (plan.kind === "wall-accent") visual.setTint(0xcfc2cb).setDepth(-0.5);
+        else visual.setY(plan.y + (plan.offsetY || 0)).setDepth(1 + plan.y / 10000 - (plan.depthOffset || 0));
+        return { plan, visual };
+      });
+    this.environmentAnimations = [];
+    (this.currentRoom.firePoints || []).forEach(([x, y], index) => {
+      const mount = this.add.image(x, y + 9, "room-decor-torch-mount").setScale(2.5).setDepth(0.8 + y / 10000);
+      const flame = this.add.sprite(x, y, "room-fire").setScale(2.35).setOrigin(0.5, 0.7).setDepth(1 + y / 10000);
+      flame.setFrame(index % 8);
+      playEnvironmentAnimation(flame, "room-fire-idle");
+      const glow = this.add.image(x, y + 5, "room-decor-glow").setScale(3).setAlpha(0.24).setBlendMode(Phaser.BlendModes.ADD).setDepth(-7);
+      this.tweens.add({ targets: glow, alpha: 0.38, duration: 900, yoyo: true, repeat: -1, ease: "Sine.easeInOut", delay: index * 120 });
+      this.environmentAnimations.push(mount, flame, glow);
+    });
     this.currentRoom.machineDecor.forEach(([x, y]) => {
       const portal = this.add.sprite(x, y, "portal").setScale(0.38).setAlpha(0.46).setTint(0x72b9ca).setDepth(1);
       playEnvironmentAnimation(portal, "portal-idle");
