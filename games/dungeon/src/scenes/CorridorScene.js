@@ -21,6 +21,7 @@ import { bindPauseKeyboard, createPauseKeyboardHandlers, unbindPauseKeyboard } f
 import { buildCorridorWorld } from "../world/corridor-world.js";
 import { getSideVector } from "../data/rooms.js";
 import { resolveBottleHits, updateBottlePickups } from "../systems/destructible-system.js";
+import { resetTrapVictims, resolveActiveTrapHits } from "../systems/trap-damage.js";
 
 export class CorridorScene extends Phaser.Scene {
   constructor() {
@@ -239,16 +240,17 @@ export class CorridorScene extends Phaser.Scene {
       if (phase !== trap.phase) {
         if (phase === "active") playEnvironmentAnimation(trap.node, "trap-rise");
         if (phase === "idle") trap.node.stop().setFrame(0);
-        trap.damaged = phase === "idle" ? false : trap.damaged;
+        if (phase === "idle") resetTrapVictims(trap);
         trap.phase = phase;
       }
       if (phase === "warning") trap.node.stop().setFrame(2).setAlpha(0.68);
       else trap.node.setAlpha(phase === "active" ? 1 : 0.28);
-      if (phase === "active" && !trap.damaged && Math.hypot(this.player.x - trap.x, this.player.y - trap.y) <= 28) {
-        trap.damaged = true;
-        this.player.takeDamage(10);
-        this.showStatus("走廊陷阱命中");
-      }
+      trap.active = phase === "active";
+      const hits = resolveActiveTrapHits(trap, [
+        { actor: this.player, damage: 10, kind: "player" },
+        ...this.enemies.map((enemy) => ({ actor: enemy, damage: 16, kind: "enemy" })),
+      ]);
+      if (hits.some(({ kind }) => kind === "player")) this.showStatus("走廊陷阱命中");
     });
     const chest = this.worldLayout.chest;
     if (canClaimCorridorChest(this.player, chest)) {

@@ -1,11 +1,15 @@
+import { FANTASY_WALL_TEXTURES } from "./wall-art.js";
+
 function freezeDefinitions(definitions) {
   return Object.freeze(definitions.map((definition) => Object.freeze(definition)));
 }
 
-export const WALL_ACCENT_DECORATIONS = freezeDefinitions([
-  { texture: "wall-fantasy-cracked", kind: "wall-accent", scale: 2 },
-  { texture: "wall-fantasy-deep", kind: "wall-accent", scale: 2 },
-]);
+export const WALL_ACCENT_DECORATIONS = Object.freeze({
+  top: freezeDefinitions([{ texture: FANTASY_WALL_TEXTURES["horizontal-top"], kind: "wall-accent", scale: 2 }]),
+  bottom: freezeDefinitions([{ texture: FANTASY_WALL_TEXTURES["horizontal-bottom"], kind: "wall-accent", scale: 2 }]),
+  left: freezeDefinitions([{ texture: FANTASY_WALL_TEXTURES["vertical-left"], kind: "wall-accent", scale: 2 }]),
+  right: freezeDefinitions([{ texture: FANTASY_WALL_TEXTURES["vertical-right"], kind: "wall-accent", scale: 2 }]),
+});
 
 export const PROP_DEFINITIONS = Object.freeze({
   table: Object.freeze({ texture: "room-decor-table", scale: 2.7 }),
@@ -83,7 +87,7 @@ export const FLOOR_PATCH_TEXTURES = Object.freeze([
 
 export const ROOM_BACKGROUND_TEXTURES = Object.freeze([
   ...new Set([
-    ...WALL_ACCENT_DECORATIONS.map(({ texture }) => texture),
+    ...Object.values(WALL_ACCENT_DECORATIONS).flatMap((definitions) => definitions.map(({ texture }) => texture)),
     ...FLOOR_PATCH_TEXTURES,
   ]),
 ]);

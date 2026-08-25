@@ -83,7 +83,7 @@ export function buildCorridorWorld(scene, corridor) {
   const traps = corridor.trapCells.map((cell, index) => {
     const [x, y] = layout.toPixel(cell);
     const node = scene.add.sprite(x, y, "trap", 0).setScale(Math.max(1.7, layout.cellSize / 18)).setAlpha(0.28).setDepth(1);
-    return { x, y, node, phaseOffset: index * 530, phase: "idle", damaged: false };
+    return { x, y, node, phaseOffset: index * 530, phase: "idle", active: false, damagedActors: new Set() };
   });
   const chest = corridor.chest ? (() => {
     const [x, y] = layout.toPixel(corridor.chest.cell);

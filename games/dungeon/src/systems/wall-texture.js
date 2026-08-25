@@ -1,7 +1,12 @@
-import { FANTASY_WALL_TEXTURE_KEYS } from "../data/wall-art.js";
+import { FANTASY_WALL_TEXTURES } from "../data/wall-art.js";
 
-export function getDungeonWallTexture(machine, x = 0, y = 0, width = 0, height = 0) {
+function inferWallRole(x, y, width, height) {
+  if (width >= height) return y < 290 ? "horizontal-top" : "horizontal-bottom";
+  return x < 480 ? "vertical-left" : "vertical-right";
+}
+
+export function getDungeonWallTexture(machine, x = 0, y = 0, width = 0, height = 0, role = null) {
   if (machine) return "wall-machine";
-  const signature = Math.abs(Math.round(x * 3 + y * 5 + width * 7 + height * 11));
-  return FANTASY_WALL_TEXTURE_KEYS[signature % FANTASY_WALL_TEXTURE_KEYS.length];
+  return FANTASY_WALL_TEXTURES[role || inferWallRole(x, y, width, height)]
+    || FANTASY_WALL_TEXTURES["horizontal-top"];
 }

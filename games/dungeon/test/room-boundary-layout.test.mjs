@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { ROOM_SIDES } from "../src/data/rooms.js";
-import { getBoundarySeamRects, getBoundaryWallRects } from "../src/systems/room-boundary-layout.js";
+import {
+  getBoundarySeamModels,
+  getBoundarySeamRects,
+  getBoundaryWallModels,
+  getBoundaryWallRects,
+} from "../src/systems/room-boundary-layout.js";
 
 function edges([x, y, width, height]) {
   return [x - width / 2, y - height / 2, x + width / 2, y + height / 2];
@@ -28,5 +33,25 @@ test("wall segments meet every door blocker and have asset-backed seam patches",
       assert.ok(rects.some(([left, , right, bottom]) => bottom === 246 && x >= left && x <= right));
       assert.ok(rects.some(([left, top, right]) => top === 334 && x >= left && x <= right));
     }
+  });
+});
+
+test("boundary wall models label every straight side and corner explicitly", () => {
+  assert.deepEqual(getBoundaryWallModels([]).map(({ role }) => role), [
+    "horizontal-top",
+    "horizontal-bottom",
+    "vertical-left",
+    "vertical-right",
+  ]);
+  assert.deepEqual(getBoundarySeamModels([]).map(({ role }) => role), [
+    "corner-top-left",
+    "corner-top-right",
+    "corner-bottom-left",
+    "corner-bottom-right",
+  ]);
+  ROOM_SIDES.forEach((side) => {
+    const models = getBoundarySeamModels([side]);
+    assert.equal(models.length, 6);
+    assert.ok(models.every(({ rect, role }) => rect.length === 4 && typeof role === "string"));
   });
 });

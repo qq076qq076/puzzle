@@ -22,8 +22,9 @@ import { createCombatHud, createPauseOverlay, toggleBuffPanel, updateCombatHud, 
 import { bindPauseKeyboard, createPauseKeyboardHandlers, unbindPauseKeyboard } from "../ui/pause-keyboard.js";
 import { constrainActorToBounds } from "../systems/knockback.js";
 import { createBreakableBottle, resolveBottleHits, updateBottlePickups } from "../systems/destructible-system.js";
-import { getBoundarySeamRects, getBoundaryWallRects } from "../systems/room-boundary-layout.js";
+import { getBoundarySeamModels, getBoundaryWallModels } from "../systems/room-boundary-layout.js";
 import { getDungeonWallTexture } from "../systems/wall-texture.js";
+import { resetTrapVictims, resolveActiveTrapHits } from "../systems/trap-damage.js";
 
 export class RoomScene extends Phaser.Scene {
   constructor() {
@@ -182,8 +183,8 @@ export class RoomScene extends Phaser.Scene {
     });
   }
 
-  addWall(x, y, width, height, machine = false) {
-    const texture = getDungeonWallTexture(machine, x, y, width, height);
+  addWall(x, y, width, height, machine = false, role = null) {
+    const texture = getDungeonWallTexture(machine, x, y, width, height, role);
     const wall = this.walls.create(x, y, texture);
     wall.setVisible(false);
     wall.setDisplaySize(width, height).refreshBody();
@@ -195,12 +196,12 @@ export class RoomScene extends Phaser.Scene {
 
   createBoundaryWalls(machine) {
     const openings = new Set([this.currentRoom.entrySide, this.currentRoom.exitSide]);
-    getBoundaryWallRects(openings).forEach(([x, y, width, height]) => this.addWall(x, y, width, height, machine));
-    getBoundarySeamRects(openings).forEach(([x, y, width, height]) => this.addWallPatch(x, y, width, height, machine));
+    getBoundaryWallModels(openings).forEach(({ rect: [x, y, width, height], role }) => this.addWall(x, y, width, height, machine, role));
+    getBoundarySeamModels(openings).forEach(({ rect: [x, y, width, height], role }) => this.addWallPatch(x, y, width, height, machine, role));
   }
 
-  addWallPatch(x, y, width, height, machine = false) {
-    const texture = getDungeonWallTexture(machine, x, y, width, height);
+  addWallPatch(x, y, width, height, machine = false, role = null) {
+    const texture = getDungeonWallTexture(machine, x, y, width, height, role);
     const patch = this.add.tileSprite(x, y, width, height, texture).setDepth(0);
     if (!machine) patch.setTileScale(2, 2);
     else patch.setTint(0x72758d);
@@ -216,7 +217,7 @@ export class RoomScene extends Phaser.Scene {
         phase: index * 440,
         active: false,
         wasActive: false,
-        damaged: false,
+        damagedActors: new Set(),
       };
     });
   }
@@ -401,7 +402,7 @@ export class RoomScene extends Phaser.Scene {
     this.traps.forEach((trap) => {
       trap.active = false;
       trap.wasActive = false;
-      trap.damaged = false;
+      resetTrapVictims(trap);
       trap.node.stop().setFrame(0).setAlpha(0.16);
     });
     this.showStatus("房間清除 · 獎勵準備中");
@@ -427,17 +428,17 @@ export class RoomScene extends Phaser.Scene {
       const cycle = (time + trap.phase) % 2500;
       const warning = cycle >= 1300 && cycle < 1800;
       trap.active = cycle >= 1800 && cycle < 2280;
-      trap.damaged = cycle < 1800 ? false : trap.damaged;
+      if (cycle < 1800) resetTrapVictims(trap);
       if (trap.active && !trap.wasActive) playEnvironmentAnimation(trap.node, "trap-rise");
       if (!trap.active && warning) trap.node.stop().setFrame(2);
       if (!trap.active && !warning) trap.node.stop().setFrame(0);
       trap.node.setAlpha(trap.active ? 1 : warning ? 0.68 : 0.34);
       trap.wasActive = trap.active;
-      if (trap.active && !trap.damaged && Phaser.Math.Distance.Between(trap.x, trap.y, this.player.x, this.player.y) <= 28) {
-        trap.damaged = true;
-        this.player.takeDamage(12);
-        this.showStatus("陷阱命中");
-      }
+      const hits = resolveActiveTrapHits(trap, [
+        { actor: this.player, damage: 12, kind: "player" },
+        ...this.enemies.map((enemy) => ({ actor: enemy, damage: 18, kind: "enemy" })),
+      ]);
+      if (hits.some(({ kind }) => kind === "player")) this.showStatus("陷阱命中");
     });
     void delta;
   }

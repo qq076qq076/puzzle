@@ -56,12 +56,13 @@ function generateWallAccents(roomIndex, room, rng) {
   };
   const openings = new Set([room.entrySide, room.exitSide]);
   const candidates = Object.keys(sideCandidates).flatMap((side) => sideCandidates[side]
-    .filter((point) => !openings.has(side) || farFrom(point, [room.entry, room.exit].filter(Boolean), 130)));
+    .filter((point) => !openings.has(side) || farFrom(point, [room.entry, room.exit].filter(Boolean), 130))
+    .map((point) => ({ point, side })));
   const count = Math.min(candidates.length, rng.int(3, 6));
   const accents = [];
   while (candidates.length && accents.length < count) {
-    const point = takeRandom(rng, candidates);
-    const definition = rng.pick(WALL_ACCENT_DECORATIONS);
+    const { point, side } = takeRandom(rng, candidates);
+    const definition = rng.pick(WALL_ACCENT_DECORATIONS[side]);
     accents.push({
       id: `room-${roomIndex + 1}-wall-accent-${accents.length + 1}`,
       x: point[0],
