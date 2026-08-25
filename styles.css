@@ -1896,59 +1896,41 @@ h1 {
   user-select: none;
 }
 
-.gomoku-board-shell::before,
-.gomoku-board-shell::after {
-  position: absolute;
-  inset: clamp(9px, 1.9vw, 14px);
-  border-radius: 9px;
-  content: "";
-  opacity: 0;
+.gomoku-board-shell.stones-vibrate .gomoku-cell[data-player="black"]::after,
+.gomoku-board-shell.stones-vibrate .gomoku-cell[data-player="white"]::after,
+.gomoku-board-shell.stones-vibrate .gomoku-move-number {
+  animation: gomoku-stones-shake 480ms ease-in-out;
+}
+
+.gomoku-board-shell.stones-vibrate .gomoku-cell.is-last-move::before {
+  animation: gomoku-star-shake 480ms ease-in-out;
+}
+
+.gomoku-board-shell.stones-fallen .gomoku-board {
   pointer-events: none;
 }
 
-.gomoku-board-shell::before {
-  z-index: 5;
-  background:
-    linear-gradient(116deg, transparent 0 47%, rgba(77, 48, 34, 0.72) 47.3% 47.9%, transparent 48.3%),
-    linear-gradient(38deg, transparent 0 52%, rgba(77, 48, 34, 0.64) 52.3% 52.9%, transparent 53.3%),
-    linear-gradient(88deg, transparent 0 49%, rgba(77, 48, 34, 0.55) 49.3% 49.8%, transparent 50.2%),
-    linear-gradient(154deg, transparent 0 54%, rgba(77, 48, 34, 0.58) 54.3% 54.8%, transparent 55.2%),
-    radial-gradient(circle at 50% 50%, transparent 0 8%, rgba(77, 48, 34, 0.62) 8.3% 8.8%, transparent 9.2%);
-  mix-blend-mode: multiply;
-  transition: opacity 180ms ease;
+.gomoku-board-shell.stones-fallen .gomoku-cell[data-player="black"]::after,
+.gomoku-board-shell.stones-fallen .gomoku-cell[data-player="white"]::after {
+  animation: gomoku-stone-fall 1200ms forwards;
+  animation-delay: calc(var(--stone-delay, 0) * 1ms);
 }
 
-.gomoku-board-shell::after {
-  z-index: 6;
-  background:
-    linear-gradient(28deg, transparent 0 43%, rgba(255, 248, 227, 0.72) 43.3% 44%, transparent 44.5%),
-    linear-gradient(143deg, transparent 0 57%, rgba(255, 248, 227, 0.66) 57.3% 58%, transparent 58.5%),
-    radial-gradient(circle at 50% 50%, rgba(255, 248, 227, 0.78), transparent 31%);
-  transform: scale(0.78);
+.gomoku-board-shell.stones-fallen .gomoku-move-number,
+.gomoku-board-shell.stones-fallen .gomoku-cell.is-last-move::before {
+  animation: gomoku-marker-hide 220ms ease-out forwards;
 }
 
-.gomoku-board-shell.is-cracked::before {
-  opacity: 1;
+.gomoku-board-shell.stones-restore .gomoku-cell[data-player="black"]::after,
+.gomoku-board-shell.stones-restore .gomoku-cell[data-player="white"]::after {
+  animation: gomoku-stone-return 720ms backwards;
+  animation-delay: calc(var(--stone-delay, 0) * 1ms);
 }
 
-.gomoku-board-shell.is-cracked .gomoku-board {
-  filter: contrast(1.06) saturate(0.78);
-  transform: rotate(-0.35deg);
-}
-
-.gomoku-board-shell.is-shattered::before {
-  opacity: 1;
-  animation: gomoku-crack-pulse 650ms ease-out forwards;
-}
-
-.gomoku-board-shell.is-shattered::after {
-  opacity: 1;
-  animation: gomoku-shatter-flash 700ms ease-out forwards;
-}
-
-.gomoku-board-shell.is-shattered .gomoku-board {
-  pointer-events: none;
-  animation: gomoku-board-shatter 700ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+.gomoku-board-shell.stones-restore .gomoku-move-number,
+.gomoku-board-shell.stones-restore .gomoku-cell.is-last-move::before {
+  animation: gomoku-marker-show 320ms ease-out backwards;
+  animation-delay: calc(var(--stone-delay, 0) * 1ms);
 }
 
 .gomoku-board {
@@ -2072,22 +2054,134 @@ h1 {
   }
 }
 
-@keyframes gomoku-crack-pulse {
-  0% { opacity: 0.35; transform: scale(0.98); }
-  42% { opacity: 1; transform: scale(1.01); }
-  100% { opacity: 0.88; transform: scale(1); }
+@keyframes gomoku-stones-shake {
+  0%,
+  100% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg) scale(1);
+  }
+
+  18% {
+    transform: translate(-8%, 1%) rotate(-10deg) scale(1.02);
+  }
+
+  38% {
+    transform: translate(7%, -2%) rotate(8deg) scale(1.02);
+  }
+
+  58% {
+    transform: translate(-5%, 1%) rotate(-6deg);
+  }
+
+  78% {
+    transform: translate(4%, -1%) rotate(4deg);
+  }
 }
 
-@keyframes gomoku-shatter-flash {
-  0% { opacity: 0; transform: scale(0.78); }
-  26% { opacity: 1; transform: scale(1.02); }
-  100% { opacity: 0; transform: scale(1.18); }
+@keyframes gomoku-star-shake {
+  0%,
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.08);
+  }
+
+  18% {
+    transform: translate(calc(-50% - 8%), calc(-50% + 1%)) rotate(-10deg) scale(1.08);
+  }
+
+  38% {
+    transform: translate(calc(-50% + 7%), calc(-50% - 2%)) rotate(8deg) scale(1.08);
+  }
+
+  58% {
+    transform: translate(calc(-50% - 5%), calc(-50% + 1%)) rotate(-6deg) scale(1.08);
+  }
+
+  78% {
+    transform: translate(calc(-50% + 4%), calc(-50% - 1%)) rotate(4deg) scale(1.08);
+  }
 }
 
-@keyframes gomoku-board-shatter {
-  0% { opacity: 1; filter: contrast(1.06) saturate(0.78); transform: rotate(-0.35deg) scale(1); }
-  34% { opacity: 1; filter: contrast(1.16) saturate(0.54); transform: rotate(1deg) scale(0.985); }
-  100% { opacity: 0; filter: blur(4px) saturate(0.25); transform: rotate(-2deg) scale(1.075); }
+@keyframes gomoku-stone-fall {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+    animation-timing-function: cubic-bezier(0.4, 0, 1, 0.6);
+  }
+
+  38% {
+    transform: translate(1%, calc(var(--stone-fall, 0) * 1%)) rotate(140deg) scale(1.08, 0.9);
+    animation-timing-function: cubic-bezier(0, 0, 0.6, 1);
+  }
+
+  46% {
+    transform: translate(-1%, calc(var(--stone-fall, 0) * 74%)) rotate(190deg) scale(0.98, 1.02);
+    animation-timing-function: cubic-bezier(0.4, 0, 1, 0.6);
+  }
+
+  58% {
+    transform: translate(0, calc(var(--stone-fall, 0) * 1%)) rotate(230deg) scale(1.05, 0.93);
+    animation-timing-function: cubic-bezier(0, 0, 0.6, 1);
+  }
+
+  66% {
+    transform: translate(0, calc(var(--stone-fall, 0) * 90%)) rotate(250deg);
+    animation-timing-function: cubic-bezier(0.4, 0, 1, 0.6);
+  }
+
+  74% {
+    transform: translate(0, calc(var(--stone-fall, 0) * 1%)) rotate(265deg) scale(1.03, 0.97);
+    animation-timing-function: cubic-bezier(0, 0, 0.6, 1);
+  }
+
+  80% {
+    transform: translate(0, calc(var(--stone-fall, 0) * 97%)) rotate(275deg);
+    animation-timing-function: cubic-bezier(0.4, 0, 1, 0.6);
+  }
+
+  86%,
+  100% {
+    transform: translate(0, calc(var(--stone-fall, 0) * 1%)) rotate(280deg) scale(1);
+  }
+}
+
+@keyframes gomoku-marker-hide {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes gomoku-stone-return {
+  0% {
+    transform: translate(0, calc(var(--stone-fall, 0) * 1%)) rotate(280deg);
+    animation-timing-function: cubic-bezier(0.3, 0, 0.3, 1);
+  }
+
+  70% {
+    transform: translate(0, calc(var(--stone-fall, 0) * -4%)) rotate(360deg) scale(1.04);
+    animation-timing-function: cubic-bezier(0.4, 0, 1, 0.6);
+  }
+
+  85% {
+    transform: translate(0, calc(var(--stone-fall, 0) * 1.5%)) rotate(360deg) scale(0.99);
+  }
+
+  100% {
+    transform: translate(0, 0) rotate(360deg) scale(1);
+  }
+}
+
+@keyframes gomoku-marker-show {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 .gomoku-move-number {

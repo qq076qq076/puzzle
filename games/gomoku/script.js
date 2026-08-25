@@ -6,9 +6,10 @@
   const BLACK = 1;
   const WHITE = 2;
   const AI_MOVE_INTERVAL = 360;
-  const EASTER_EGG_CRACK_CLICKS = 5;
-  const EASTER_EGG_SHATTER_CLICKS = 10;
+  const EASTER_EGG_VIBRATE_CLICKS = 5;
+  const EASTER_EGG_FALL_CLICKS = 10;
   const EASTER_EGG_RESTORE_DELAY = 5000;
+  const EASTER_EGG_RESTORE_ANIM_MS = 1400;
 
   const boardElement = document.getElementById("gomoku-board");
   const boardShellElement = document.querySelector(".gomoku-board-shell");
@@ -42,6 +43,7 @@
   let easterEggClickCount = 0;
   let easterEggState = "normal";
   let easterEggRestoreTimerId = null;
+  let easterEggRestoreAnimTimerId = null;
 
   function getNow() {
     return window.performance && typeof window.performance.now === "function" ? window.performance.now() : Date.now();
@@ -80,63 +82,82 @@
     return boardElement.querySelector('[data-row="' + row + '"][data-column="' + column + '"]');
   }
 
-  function clearEasterEggRestoreTimer() {
+  function clearEasterEggTimers() {
     if (easterEggRestoreTimerId !== null) {
       window.clearTimeout(easterEggRestoreTimerId);
       easterEggRestoreTimerId = null;
     }
+    if (easterEggRestoreAnimTimerId !== null) {
+      window.clearTimeout(easterEggRestoreAnimTimerId);
+      easterEggRestoreAnimTimerId = null;
+    }
   }
 
   function restoreEasterEgg() {
-    clearEasterEggRestoreTimer();
+    if (easterEggRestoreTimerId !== null) {
+      window.clearTimeout(easterEggRestoreTimerId);
+      easterEggRestoreTimerId = null;
+    }
     easterEggCellKey = null;
     easterEggClickCount = 0;
     easterEggState = "normal";
-    boardShellElement.classList.remove("is-cracked", "is-shattered");
+    boardShellElement.classList.remove("stones-vibrate", "stones-fallen");
+    boardShellElement.classList.add("stones-restore");
     boardElement.removeAttribute("aria-busy");
     updateTurnDisplay();
+    if (easterEggRestoreAnimTimerId !== null) {
+      window.clearTimeout(easterEggRestoreAnimTimerId);
+    }
+    easterEggRestoreAnimTimerId = window.setTimeout(function () {
+      easterEggRestoreAnimTimerId = null;
+      boardShellElement.classList.remove("stones-restore");
+    }, EASTER_EGG_RESTORE_ANIM_MS);
   }
 
   function resetEasterEggSequence() {
-    clearEasterEggRestoreTimer();
+    clearEasterEggTimers();
     easterEggCellKey = null;
     easterEggClickCount = 0;
     easterEggState = "normal";
-    boardShellElement.classList.remove("is-cracked", "is-shattered");
+    boardShellElement.classList.remove("stones-vibrate", "stones-fallen", "stones-restore");
     boardElement.removeAttribute("aria-busy");
   }
 
   function registerEasterEggClick(row, column) {
-    if (gameOver || easterEggState === "shattered") {
+    if (gameOver || easterEggState === "fallen") {
       return false;
     }
 
     const cellKey = row + ":" + column;
     if (cellKey !== easterEggCellKey) {
-      const wasCracked = easterEggState === "cracked";
+      const wasActive = easterEggState !== "normal";
       easterEggCellKey = cellKey;
       easterEggClickCount = 0;
       easterEggState = "normal";
-      boardShellElement.classList.remove("is-cracked");
-      if (wasCracked) {
+      boardShellElement.classList.remove("stones-vibrate");
+      if (wasActive) {
         updateTurnDisplay();
       }
     }
 
     easterEggClickCount += 1;
-    if (easterEggClickCount === EASTER_EGG_CRACK_CLICKS) {
-      easterEggState = "cracked";
-      boardShellElement.classList.add("is-cracked");
+    if (easterEggClickCount === EASTER_EGG_VIBRATE_CLICKS) {
+      easterEggState = "vibrating";
+      boardShellElement.classList.remove("stones-vibrate");
+      void boardShellElement.offsetWidth;
+      boardShellElement.classList.add("stones-vibrate");
       statusElement.className = "gomoku-status is-easter-egg";
-      statusElement.textContent = "棋盤出現裂痕……再點五次試試。";
-    } else if (easterEggClickCount >= EASTER_EGG_SHATTER_CLICKS) {
-      easterEggState = "shattered";
-      boardShellElement.classList.remove("is-cracked");
-      boardShellElement.classList.add("is-shattered");
+      statusElement.textContent = "所有棋子震動了一下……再點五次試試。";
+    } else if (easterEggClickCount >= EASTER_EGG_FALL_CLICKS) {
+      easterEggState = "fallen";
+      boardShellElement.classList.remove("stones-vibrate");
+      boardShellElement.classList.add("stones-fallen");
       boardElement.setAttribute("aria-busy", "true");
       statusElement.className = "gomoku-status is-easter-egg";
-      statusElement.textContent = "棋盤碎掉了，五秒後復原。";
-      clearEasterEggRestoreTimer();
+      statusElement.textContent = "棋子全都掉下去了，五秒後復原。";
+      if (easterEggRestoreTimerId !== null) {
+        window.clearTimeout(easterEggRestoreTimerId);
+      }
       easterEggRestoreTimerId = window.setTimeout(restoreEasterEgg, EASTER_EGG_RESTORE_DELAY);
       return true;
     }
@@ -164,6 +185,8 @@
         cell.type = "button";
         cell.dataset.row = String(row);
         cell.dataset.column = String(column);
+        cell.style.setProperty("--stone-delay", String(column * 22));
+        cell.style.setProperty("--stone-fall", String(Math.round(((BOARD_SIZE - row - 0.86) / 0.72) * 100)));
         cell.setAttribute("role", "gridcell");
         cell.setAttribute("aria-label", "第 " + (row + 1) + " 行，第 " + (column + 1) + " 列，空位");
 
