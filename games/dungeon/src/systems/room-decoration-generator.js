@@ -9,6 +9,7 @@ import {
 } from "../data/room-decorations.js";
 import { pointWalkable } from "./room-validation.js";
 import { createRng } from "./rng.js";
+import { ROOM_BOUNDS } from "../data/rooms.js";
 
 function farFrom(point, otherPoints, distance) {
   return otherPoints.every(([x, y]) => Math.hypot(point[0] - x, point[1] - y) >= distance);
@@ -76,21 +77,6 @@ function generateWallAccents(roomIndex, room, rng) {
   return accents;
 }
 
-function generateWallProps(roomIndex, room, profile, rng) {
-  if (!profile.wallProps.length || room.entrySide === "up" || room.exitSide === "up") return [];
-  const candidates = [[184, 130], [296, 130], [664, 130], [776, 130]]
-    .filter((point) => farFrom(point, reservedPoints(room), 72));
-  const count = Math.min(candidates.length, rng.int(1, 2));
-  const props = [];
-  const propTypes = [...profile.wallProps];
-  while (candidates.length && props.length < count) {
-    const point = takeRandom(rng, candidates);
-    const definition = PROP_DEFINITIONS[takeRandom(rng, propTypes)];
-    props.push(makeProp(roomIndex, props.length, point, definition, "wall", rng, { flipX: false }));
-  }
-  return props;
-}
-
 function floorPatchCandidates(room) {
   const points = [];
   for (let y = 144; y <= 432; y += 32) {
@@ -134,17 +120,20 @@ function generateFloorPatches(runSeed, roomIndex, room) {
 
 function generateObstacleProps(roomIndex, room, profile, rng) {
   const anchors = (room.obstacles || [])
-    .filter(([, , width, height]) => width >= 40 || height >= 40)
-    .map(([x, y, width, height]) => [x + width / 2, y + height / 2])
-    .filter((point) => farFrom(point, [room.entry, room.exit].filter(Boolean), 110))
-    .filter((point) => farFrom(point, [...(room.spawnPoints || []), ...(room.trapPoints || [])], 62));
+    .filter(([x, y, width, height]) => (width >= 40 || height >= 40)
+      && width <= 96 && height <= 96
+      && x >= ROOM_BOUNDS.left + 32 && x + width <= ROOM_BOUNDS.right - 32
+      && y >= ROOM_BOUNDS.top + 32 && y + height <= ROOM_BOUNDS.bottom - 32)
+    .map(([x, y, width, height]) => ({ point: [x + width / 2, y + height / 2], obstacleRect: [x, y, width, height] }))
+    .filter(({ point }) => farFrom(point, [room.entry, room.exit].filter(Boolean), 110))
+    .filter(({ point }) => farFrom(point, [...(room.spawnPoints || []), ...(room.trapPoints || [])], 62));
   const count = Math.min(anchors.length, rng.int(1, 2));
   const props = [];
   const propTypes = [...profile.obstacleProps];
   while (anchors.length && props.length < count) {
-    const point = takeRandom(rng, anchors);
+    const { point, obstacleRect } = takeRandom(rng, anchors);
     const definition = PROP_DEFINITIONS[takeRandom(rng, propTypes)];
-    props.push(makeProp(roomIndex, props.length, point, definition, "obstacle", rng));
+    props.push(makeProp(roomIndex, props.length, point, definition, "obstacle", rng, { obstacleRect }));
   }
   return props;
 }
@@ -152,7 +141,7 @@ function generateObstacleProps(roomIndex, room, profile, rng) {
 function generateFloorProps(roomIndex, room, profile, rng, existing) {
   const candidates = ROOM_DECORATION_CANDIDATE_POINTS
     .map((point) => [...point])
-    .filter(([x, y]) => pointWalkable(x, y, room.obstacles || [], 24))
+    .filter(([x, y]) => pointWalkable(x, y, room.obstacles || [], 44))
     .filter((point) => farFrom(point, reservedPoints(room), 66))
     .filter((point) => farFrom(point, existing.map(({ x, y }) => [x, y]), 62));
   const count = Math.min(candidates.length, profile.floorProps.length, rng.int(3, 5));
@@ -191,8 +180,7 @@ export function generateRoomDecorations(runSeed, roomIndex, room) {
     ...generateWallAccents(roomIndex, room, rng),
     ...generateFloorPatches(runSeed, roomIndex, room),
   ];
-  const wallProps = generateWallProps(roomIndex, room, profile, rng);
   const obstacleProps = generateObstacleProps(roomIndex, room, profile, rng);
-  const floorProps = generateFloorProps(roomIndex, room, profile, rng, [...wallProps, ...obstacleProps]);
-  return [...background, ...wallProps, ...obstacleProps, ...floorProps];
+  const floorProps = generateFloorProps(roomIndex, room, profile, rng, obstacleProps);
+  return [...background, ...obstacleProps, ...floorProps];
 }

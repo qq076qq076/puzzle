@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config.js";
 import { MONSTERS } from "../data/monsters.js";
-import { ROOM_BOUNDS, getSideVector } from "../data/rooms.js";
+import { getSideVector } from "../data/rooms.js";
 import { Enemy } from "../entities/Enemy.js";
 import { Player } from "../entities/Player.js";
 import { applyReward, getRewardChoices, getRewardColor, getRewardDefinition } from "../systems/reward-system.js";
@@ -20,11 +20,11 @@ import { TouchControls } from "../systems/touch-controls.js";
 import { disableMouseInput, makeTouchOnlyButton } from "../ui/input.js";
 import { createCombatHud, createPauseOverlay, toggleBuffPanel, updateCombatHud, updateSoundIcon } from "../ui/hud.js";
 import { bindPauseKeyboard, createPauseKeyboardHandlers, unbindPauseKeyboard } from "../ui/pause-keyboard.js";
-import { constrainActorToBounds } from "../systems/knockback.js";
 import { createBreakableBottle, resolveBottleHits, updateBottlePickups } from "../systems/destructible-system.js";
 import { getBoundarySeamModels, getBoundaryWallModels } from "../systems/room-boundary-layout.js";
 import { getDungeonWallTexture } from "../systems/wall-texture.js";
 import { resetTrapVictims, resolveActiveTrapHits } from "../systems/trap-damage.js";
+import { keepActorOnRoomFloor } from "../systems/room-navigation.js";
 
 export class RoomScene extends Phaser.Scene {
   constructor() {
@@ -130,7 +130,18 @@ export class RoomScene extends Phaser.Scene {
     }
     this.walls = this.physics.add.staticGroup();
     this.createBoundaryWalls(machine);
-    this.currentRoom.obstacles.forEach(([x, y, width, height]) => this.addWall(x + width / 2, y + height / 2, width, height, machine));
+    const replacedObstacles = new Set((this.currentRoom.decorations || [])
+      .filter(({ placement, obstacleRect }) => placement === "obstacle" && obstacleRect)
+      .map(({ obstacleRect }) => obstacleRect.join(",")));
+    this.currentRoom.obstacles.forEach(([x, y, width, height]) => this.addWall(
+      x + width / 2,
+      y + height / 2,
+      width,
+      height,
+      machine,
+      null,
+      !replacedObstacles.has([x, y, width, height].join(",")),
+    ));
 
     this.entryPortal = this.add.sprite(this.currentRoom.entryDoor[0], this.currentRoom.entryDoor[1], "portal").setScale(0.58).setAlpha(0.82).setDepth(2);
     playEnvironmentAnimation(this.entryPortal, "portal-idle");
@@ -183,14 +194,14 @@ export class RoomScene extends Phaser.Scene {
     });
   }
 
-  addWall(x, y, width, height, machine = false, role = null) {
+  addWall(x, y, width, height, machine = false, role = null, showVisual = true) {
     const texture = getDungeonWallTexture(machine, x, y, width, height, role);
     const wall = this.walls.create(x, y, texture);
     wall.setVisible(false);
     wall.setDisplaySize(width, height).refreshBody();
-    wall.wallVisual = this.add.tileSprite(x, y, width, height, texture).setDepth(-1);
-    if (!machine) wall.wallVisual.setTileScale(2, 2);
-    else wall.wallVisual.setTint(0x72758d);
+    wall.wallVisual = showVisual ? this.add.tileSprite(x, y, width, height, texture).setDepth(-1) : null;
+    if (wall.wallVisual && !machine) wall.wallVisual.setTileScale(2, 2);
+    else if (wall.wallVisual) wall.wallVisual.setTint(0x72758d);
     return wall;
   }
 
@@ -417,6 +428,7 @@ export class RoomScene extends Phaser.Scene {
     resolveBottleHits(this.player, this.bottles);
     updateBottlePickups(this, this.player);
     constrainActorToClosedDoor(this.player, this.entryDoor);
+    keepActorOnRoomFloor(this.player, this.currentRoom.obstacles);
     const delay = tickRoomClearDelay(this.roomClearRemaining, delta);
     this.roomClearRemaining = delay.remaining;
     if (delay.ready) this.openReward();
@@ -600,7 +612,7 @@ export class RoomScene extends Phaser.Scene {
     [this.player, ...this.enemies].forEach((actor) => {
       constrainActorToClosedDoor(actor, this.entryDoor);
       constrainActorToClosedDoor(actor, this.exitDoor);
-      constrainActorToBounds(actor, ROOM_BOUNDS);
+      keepActorOnRoomFloor(actor, this.currentRoom.obstacles);
     });
   }
 

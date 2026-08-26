@@ -19,8 +19,8 @@ import {
   ROOM_DECORATION_TEXTURES,
   ROOM_FIRE_PAIRS,
 } from "../src/data/room-decorations.js";
-import { ROOM_TEMPLATES } from "../src/data/rooms.js";
-import { ROOM_SIDES, getOppositeSide, getSideVector } from "../src/data/rooms.js";
+import { ROOM_BOUNDS, ROOM_SIDES, ROOM_TEMPLATES, getOppositeSide, getSideVector } from "../src/data/rooms.js";
+import { pointWalkable } from "../src/systems/room-validation.js";
 
 test("same run seed reproduces the complete six-room floor", () => {
   const first = generateFloor("fixed-seed");
@@ -160,12 +160,19 @@ test("fantasy room dressing follows its room purpose and keeps navigation landma
   rooms.forEach((room) => {
     const profile = ROOM_DECORATION_PROFILES[room.templateId] || DEFAULT_DECORATION_PROFILE;
     const allowedByPlacement = {
-      wall: new Set(profile.wallProps.map((key) => PROP_DEFINITIONS[key].texture)),
       obstacle: new Set(profile.obstacleProps.map((key) => PROP_DEFINITIONS[key].texture)),
       floor: new Set(profile.floorProps.map((key) => PROP_DEFINITIONS[key].texture)),
     };
     room.decorations.filter(({ kind }) => kind === "prop").forEach((decoration) => {
       assert.ok(allowedByPlacement[decoration.placement].has(decoration.texture));
+      assert.notEqual(decoration.placement, "wall");
+      if (decoration.placement === "floor") {
+        assert.equal(pointWalkable(decoration.x, decoration.y, room.obstacles, 44), true);
+      } else {
+        const [x, y, width, height] = decoration.obstacleRect;
+        assert.ok(x >= ROOM_BOUNDS.left + 32 && x + width <= ROOM_BOUNDS.right - 32);
+        assert.ok(y >= ROOM_BOUNDS.top + 32 && y + height <= ROOM_BOUNDS.bottom - 32);
+      }
     });
     assert.equal(new Set(room.decorations.map(({ id }) => id)).size, room.decorations.length);
     room.decorations.filter(({ kind }) => kind === "floor-patch").forEach(({ x, y }) => {
