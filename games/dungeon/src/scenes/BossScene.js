@@ -47,7 +47,7 @@ export class BossScene extends Phaser.Scene {
     disableMouseInput(this);
     this.audio = getDungeonAudio();
     this.createArena();
-    this.player = new Player(this, this.bossRoom.entrySpawn[0], this.bossRoom.entrySpawn[1]);
+    this.player = new Player(this, this.bossRoom.entrySpawn[0], this.bossRoom.entrySpawn[1], { level: 3 });
     this.enemyGroup = this.physics.add.group({ allowGravity: false });
     this.physics.add.collider(this.enemyGroup, this.enemyGroup);
     const [entryOutX, entryOutY] = getSideVector(this.bossRoom.entrySide);

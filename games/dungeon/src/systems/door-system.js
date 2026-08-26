@@ -1,4 +1,12 @@
-function getDoorAppearance(side) {
+function getDoorAppearance(side, variant = "normal") {
+  if (variant === "big") {
+    const direction = side === "up" ? "up" : side === "down" ? "down" : "side";
+    return {
+      texture: `room-big-door-${direction}`,
+      animation: `room-big-door-${direction}-open`,
+      scale: 2,
+    };
+  }
   if (side === "up") return { texture: "door-up", animation: "door-up-open" };
   if (side === "down") return { texture: "door-down", animation: "door-down-open" };
   return { texture: "door-side", animation: "door-side-open" };
@@ -20,20 +28,20 @@ function setBlockerEnabled(door, enabled) {
 }
 
 export function createSideDoor(scene, options) {
-  const { x, y, side, walls, machine = false, initiallyOpen = false } = options;
+  const { x, y, side, walls, machine = false, initiallyOpen = false, variant = "normal" } = options;
   const blockerTexture = machine ? "wall-machine" : "wall-fantasy";
   const verticalSide = side === "left" || side === "right";
   const blockerWidth = verticalSide ? 32 : 88;
   const blockerHeight = verticalSide ? 88 : 32;
-  const appearance = getDoorAppearance(side);
+  const appearance = getDoorAppearance(side, variant);
   const blocker = walls.create(x, y, blockerTexture);
   blocker.setVisible(false).setDisplaySize(blockerWidth, blockerHeight).refreshBody();
 
-  const visual = scene.add.sprite(x, y, appearance.texture, initiallyOpen ? 3 : 0).setScale(4).setDepth(6);
+  const visual = scene.add.sprite(x, y, appearance.texture, initiallyOpen ? 3 : 0).setScale(appearance.scale ?? 4).setDepth(6);
   visual.setFlipX(side === "left");
   if (machine) visual.setTint(0xb5e4ee);
 
-  const door = { x, y, side, walls, blocker, blockerWidth, blockerHeight, animation: appearance.animation, visual, isOpen: initiallyOpen, isAnimating: false };
+  const door = { x, y, side, walls, blocker, blockerWidth, blockerHeight, animation: appearance.animation, visual, isOpen: initiallyOpen, isAnimating: false, variant };
   setBlockerEnabled(door, !initiallyOpen);
   return door;
 }

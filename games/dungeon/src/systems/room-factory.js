@@ -39,10 +39,34 @@ function generateRoomBottles(runSeed, roomIndex, room) {
   return bottles;
 }
 
+function getTrapdoorDirection([x, y]) {
+  if (Math.abs(x - 480) > Math.abs(y - 290)) return "side";
+  return y < 290 ? "down" : "up";
+}
+
+function generateTrapVisuals(runSeed, roomIndex, room) {
+  const rng = createRng(`${runSeed}:floor:0:room:${roomIndex}:trap-visuals`);
+  return room.trapPoints.map((point, index) => {
+    const useTrapdoor = room.templateId === "trap_corridor" ? index % 2 === 1 : rng.next() < 0.36;
+    if (!useTrapdoor) {
+      return { texture: "trap", animation: "trap-rise", warningFrame: 2, idleFrame: 0, scale: 2.3 };
+    }
+    const direction = getTrapdoorDirection(point);
+    return {
+      texture: `room-trapdoor-${direction}`,
+      animation: `room-trapdoor-${direction}-open`,
+      warningFrame: 2,
+      idleFrame: 0,
+      scale: direction === "side" ? 1.8 : 2.05,
+    };
+  });
+}
+
 function withRoomFeatures(runSeed, roomIndex, room) {
   const roomWithBottles = {
     ...room,
     bottles: room.theme === "fantasy" ? generateRoomBottles(runSeed, roomIndex, room) : [],
+    trapVisuals: room.theme === "fantasy" ? generateTrapVisuals(runSeed, roomIndex, room) : [],
   };
   roomWithBottles.firePoints = generateRoomFirePoints(runSeed, roomIndex, roomWithBottles);
   return {
@@ -96,6 +120,11 @@ function assembleNormalRoom(content, template, runSeed, roomIndex) {
     trapPoints: template.trapPoints,
     machineDecor: template.machineDecor || [],
     spawnPoints,
+    entryDoorVariant: "normal",
+    exitDoorVariant: template.theme === "fantasy"
+      && (roomIndex === 4 || createRng(`${runSeed}:floor:0:room:${roomIndex}:door-variant`).next() < 0.24)
+      ? "big"
+      : "normal",
     ...connections,
   };
 }

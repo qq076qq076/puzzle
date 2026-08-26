@@ -87,8 +87,11 @@ export function buildCorridorWorld(scene, corridor) {
   });
   const chest = corridor.chest ? (() => {
     const [x, y] = layout.toPixel(corridor.chest.cell);
-    const node = scene.add.image(x, y, "reward-chest").setScale(Math.max(2.4, layout.cellSize / 13)).setDepth(3);
-    return { x, y, node, reward: { ...corridor.chest.reward }, active: true };
+    const variant = (corridor.corridorIndex % 2) + 1;
+    const texture = `room-chest-${variant}-down`;
+    const animation = `room-chest-${variant}-down-open`;
+    const node = scene.add.sprite(x, y, texture, 0).setScale(Math.max(2.2, layout.cellSize / 16)).setDepth(3);
+    return { x, y, node, animation, reward: { ...corridor.chest.reward }, active: true };
   })() : null;
   const bottles = (corridor.bottles || []).map((plan) => {
     const [x, y] = layout.toPixel(plan.cell);

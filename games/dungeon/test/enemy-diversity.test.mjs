@@ -33,6 +33,16 @@ test("mage and robot use distinct telegraphed ranged patterns", () => {
   assert.ok(NORMAL_MONSTER_POOLS[3].includes("robot_gunner"));
 });
 
+test("the remaining fantasy character sheets appear as distinct monsters", () => {
+  assert.equal(MONSTERS.tomb_scout.attackKind, "dash");
+  assert.equal(MONSTERS.crypt_archer.attackKind, "ranged");
+  assert.equal(MONSTERS.crypt_archer.projectileTexture, "fantasy-arrow");
+  assert.equal(MONSTERS.void_knight.attackKind, "melee");
+  assert.ok(NORMAL_MONSTER_POOLS.flat().includes("tomb_scout"));
+  assert.ok(NORMAL_MONSTER_POOLS.flat().includes("crypt_archer"));
+  assert.ok(NORMAL_MONSTER_POOLS.flat().includes("void_knight"));
+});
+
 test("mage fires a visible fireball and robot uses a laser projectile", () => {
   assert.equal(MONSTERS.plague_mage.attackKind, "spell");
   assert.equal(MONSTERS.plague_mage.projectileTexture, "spell-projectile");

@@ -63,7 +63,9 @@ export class RoomScene extends Phaser.Scene {
     this.audio = getDungeonAudio();
     this.currentRoom = this.floor[this.roomIndex];
     this.createRoom();
-    this.player = new Player(this, this.currentRoom.entrySpawn[0], this.currentRoom.entrySpawn[1]);
+    this.player = new Player(this, this.currentRoom.entrySpawn[0], this.currentRoom.entrySpawn[1], {
+      level: Math.min(3, Math.floor(this.roomIndex / 2) + 1),
+    });
     this.enemyGroup = this.physics.add.group({ allowGravity: false });
     this.physics.add.collider(this.enemyGroup, this.enemyGroup);
     const [entryOutX, entryOutY] = getSideVector(this.currentRoom.entrySide);
@@ -156,6 +158,7 @@ export class RoomScene extends Phaser.Scene {
       walls: this.walls,
       machine,
       initiallyOpen: true,
+      variant: this.currentRoom.entryDoorVariant,
     });
     this.exitDoor = createSideDoor(this, {
       x: this.currentRoom.exitDoor[0],
@@ -164,23 +167,29 @@ export class RoomScene extends Phaser.Scene {
       walls: this.walls,
       machine,
       initiallyOpen: false,
+      variant: this.currentRoom.exitDoorVariant,
     });
     this.createTraps();
     this.bottles = (this.currentRoom.bottles || []).map((plan) => createBreakableBottle(this, plan));
     this.roomDecorations = (this.currentRoom.decorations || [])
       .filter(({ kind }) => kind !== "floor-patch")
       .map((plan) => {
-        const visual = this.add.image(plan.x, plan.y, plan.texture)
+        const visual = plan.kind === "animated-prop"
+          ? this.add.sprite(plan.x, plan.y, plan.texture, 0)
+          : this.add.image(plan.x, plan.y, plan.texture);
+        visual
           .setScale(plan.scale)
           .setFlipX(plan.flipX)
           .setAlpha(0.92);
         if (plan.kind === "wall-accent") visual.setTint(0xcfc2cb).setDepth(-0.5);
         else visual.setY(plan.y + (plan.offsetY || 0)).setDepth(1 + plan.y / 10000 - (plan.depthOffset || 0));
+        if (plan.collision) this.addWall(plan.x, plan.y, plan.collision[0], plan.collision[1], machine, null, false);
         return { plan, visual };
       });
     this.environmentAnimations = [];
     (this.currentRoom.firePoints || []).forEach(([x, y], index) => {
-      const mount = this.add.image(x, y + 9, "room-decor-torch-mount").setScale(2.5).setDepth(0.8 + y / 10000);
+      const mountTexture = `dungeon-torch-mount-${((this.roomIndex * 3 + index) % 8) + 1}`;
+      const mount = this.add.image(x, y + 9, mountTexture).setScale(2.5).setDepth(0.8 + y / 10000);
       const flame = this.add.sprite(x, y, "room-fire").setScale(2.35).setOrigin(0.5, 0.7).setDepth(1 + y / 10000);
       flame.setFrame(index % 8);
       playEnvironmentAnimation(flame, "room-fire-idle");
@@ -220,7 +229,9 @@ export class RoomScene extends Phaser.Scene {
 
   createTraps() {
     this.traps = this.currentRoom.trapPoints.map((point, index) => {
-      const node = this.add.sprite(point[0], point[1], "trap", 0).setScale(2.3).setAlpha(0.34).setDepth(1);
+      const visual = this.currentRoom.trapVisuals?.[index]
+        || { texture: "trap", animation: "trap-rise", warningFrame: 2, idleFrame: 0, scale: 2.3 };
+      const node = this.add.sprite(point[0], point[1], visual.texture, visual.idleFrame).setScale(visual.scale).setAlpha(0.34).setDepth(1);
       return {
         x: point[0],
         y: point[1],
@@ -229,6 +240,9 @@ export class RoomScene extends Phaser.Scene {
         active: false,
         wasActive: false,
         damagedActors: new Set(),
+        animation: visual.animation,
+        warningFrame: visual.warningFrame,
+        idleFrame: visual.idleFrame,
       };
     });
   }
@@ -407,6 +421,7 @@ export class RoomScene extends Phaser.Scene {
     this.roomStatus = "cleared";
     this.roomClearRemaining = ROOM_CLEAR_REWARD_DELAY_MS;
     this.openExitDoor();
+    this.activateRoomDecorations("room-clear");
     clearProjectiles(this);
     this.telegraphs.forEach((telegraph) => telegraph.node.destroy());
     this.telegraphs = [];
@@ -441,9 +456,9 @@ export class RoomScene extends Phaser.Scene {
       const warning = cycle >= 1300 && cycle < 1800;
       trap.active = cycle >= 1800 && cycle < 2280;
       if (cycle < 1800) resetTrapVictims(trap);
-      if (trap.active && !trap.wasActive) playEnvironmentAnimation(trap.node, "trap-rise");
-      if (!trap.active && warning) trap.node.stop().setFrame(2);
-      if (!trap.active && !warning) trap.node.stop().setFrame(0);
+      if (trap.active && !trap.wasActive) playEnvironmentAnimation(trap.node, trap.animation);
+      if (!trap.active && warning) trap.node.stop().setFrame(trap.warningFrame);
+      if (!trap.active && !warning) trap.node.stop().setFrame(trap.idleFrame);
       trap.node.setAlpha(trap.active ? 1 : warning ? 0.68 : 0.34);
       trap.wasActive = trap.active;
       const hits = resolveActiveTrapHits(trap, [
@@ -453,6 +468,14 @@ export class RoomScene extends Phaser.Scene {
       if (hits.some(({ kind }) => kind === "player")) this.showStatus("陷阱命中");
     });
     void delta;
+  }
+
+  activateRoomDecorations(activation) {
+    this.roomDecorations?.forEach(({ plan, visual }) => {
+      if (plan.activation !== activation || !plan.animation || !visual.active) return;
+      visual.once(`animationcomplete-${plan.animation}`, () => visual.active && visual.setFrame(plan.finalFrame ?? 0));
+      playEnvironmentAnimation(visual, plan.animation);
+    });
   }
 
   showEnemyTelegraph(enemy, kind, duration) {

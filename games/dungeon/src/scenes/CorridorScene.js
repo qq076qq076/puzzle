@@ -55,7 +55,9 @@ export class CorridorScene extends Phaser.Scene {
 
     this.worldLayout = buildCorridorWorld(this, this.currentCorridor);
     this.bottles = this.worldLayout.bottles;
-    this.player = new Player(this, this.worldLayout.spawn[0], this.worldLayout.spawn[1]);
+    this.player = new Player(this, this.worldLayout.spawn[0], this.worldLayout.spawn[1], {
+      level: Math.min(3, Math.floor(this.corridorIndex / 2) + 1),
+    });
     this.enemyGroup = this.physics.add.group({ allowGravity: false });
     this.physics.add.collider(this.enemyGroup, this.enemyGroup);
     const [entryOutX, entryOutY] = getSideVector(this.currentCorridor.entrySide);
@@ -256,7 +258,8 @@ export class CorridorScene extends Phaser.Scene {
     if (canClaimCorridorChest(this.player, chest)) {
       const result = claimCorridorChest(this.player, chest);
       if (result.claimed) {
-        chest.node.setTint(0x777777).setAlpha(0.42);
+        chest.node.once(`animationcomplete-${chest.animation}`, () => chest.node.active && chest.node.setFrame(3));
+        playEnvironmentAnimation(chest.node, chest.animation);
         this.showStatus(result.message);
         this.audio.beep("reward");
       }

@@ -14,6 +14,7 @@ import {
 import {
   DEFAULT_DECORATION_PROFILE,
   PROP_DEFINITIONS,
+  ROOM_ANIMATED_TEXTURES,
   ROOM_BACKGROUND_TEXTURES,
   ROOM_DECORATION_PROFILES,
   ROOM_DECORATION_TEXTURES,
@@ -144,10 +145,22 @@ test("fantasy rooms receive deterministic supplied dungeon decorations", () => {
   const floors = Array.from({ length: 20 }, (_, index) => generateFloor(`decorations-${index}`));
   const fantasyRooms = floors.flatMap((floor) => floor.slice(0, 5)).filter((room) => room.theme === "fantasy");
   assert.ok(fantasyRooms.length > 0);
-  assert.ok(fantasyRooms.every((room) => room.decorations.length >= 2));
+  assert.ok(fantasyRooms.every((room) => room.decorations.length >= 10));
   assert.ok(fantasyRooms.flatMap((room) => room.decorations).every((decoration) =>
-    [...ROOM_DECORATION_TEXTURES, ...ROOM_BACKGROUND_TEXTURES].includes(decoration.texture)));
+    [...ROOM_DECORATION_TEXTURES, ...ROOM_ANIMATED_TEXTURES, ...ROOM_BACKGROUND_TEXTURES].includes(decoration.texture)));
+  assert.ok(fantasyRooms.every((room) => room.decorations.some(({ kind }) => kind === "animated-prop")));
   assert.deepEqual(generateFloor("decor-repeat"), generateFloor("decor-repeat"));
+});
+
+test("fantasy rooms vary animated treasure, levers, trapdoors, and large exit doors", () => {
+  const rooms = Array.from({ length: 48 }, (_, index) => generateFloor(`animated-room-${index}`))
+    .flatMap((floor) => floor.slice(0, 5))
+    .filter((room) => room.theme === "fantasy");
+  const animated = rooms.flatMap((room) => room.decorations.filter(({ kind }) => kind === "animated-prop"));
+  assert.ok(animated.some(({ texture }) => /^room-chest-[12]-(down|side|up)$/.test(texture)));
+  assert.ok(animated.some(({ texture }) => /^room-lever-[12]$/.test(texture)));
+  assert.ok(rooms.flatMap((room) => room.trapVisuals).some(({ texture }) => /^room-trapdoor-(down|side|up)$/.test(texture)));
+  assert.ok(rooms.some(({ exitDoorVariant }) => exitDoorVariant === "big"));
 });
 
 test("fantasy room dressing follows its room purpose and keeps navigation landmarks clear", () => {
@@ -173,6 +186,15 @@ test("fantasy room dressing follows its room purpose and keeps navigation landma
         assert.ok(x >= ROOM_BOUNDS.left + 32 && x + width <= ROOM_BOUNDS.right - 32);
         assert.ok(y >= ROOM_BOUNDS.top + 32 && y + height <= ROOM_BOUNDS.bottom - 32);
       }
+    });
+    room.decorations.filter(({ kind }) => kind === "clutter").forEach((decoration) => {
+      assert.ok(profile.clutterProps.includes(decoration.texture));
+      assert.equal(pointWalkable(decoration.x, decoration.y, room.obstacles, 28), true);
+    });
+    room.decorations.filter(({ kind }) => kind === "animated-prop").forEach((decoration) => {
+      assert.ok(ROOM_ANIMATED_TEXTURES.includes(decoration.texture));
+      assert.equal(decoration.activation, "room-clear");
+      assert.equal(pointWalkable(decoration.x, decoration.y, room.obstacles, 46), true);
     });
     assert.equal(new Set(room.decorations.map(({ id }) => id)).size, room.decorations.length);
     room.decorations.filter(({ kind }) => kind === "floor-patch").forEach(({ x, y }) => {

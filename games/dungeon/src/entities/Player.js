@@ -6,8 +6,11 @@ import { startKnockback, updateKnockback } from "../systems/knockback.js";
 const EPSILON = 0.001;
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
-  constructor(scene, x, y) {
-    super(scene, x, y, "provided-player");
+  constructor(scene, x, y, options = {}) {
+    const level = Math.max(1, Math.min(3, Number(options.level) || 1));
+    const assetId = level === 1 ? "player" : `player_lvl${level}`;
+    const texture = level === 1 ? "provided-player" : `provided-player-lvl${level}`;
+    super(scene, x, y, texture);
     scene.add.existing(this);
     scene.physics.add.existing(this);
     this.setScale(2);
@@ -18,6 +21,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.body.setMaxVelocity(230, 230);
 
     this.maxHealth = 100;
+    this.visualLevel = level;
+    this.assetId = assetId;
     this.health = 100;
     this.attackDamage = 20;
     this.attackRange = 88;
@@ -30,9 +35,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.attackStarted = false;
     this.attackHitWindow = false;
     this.attackHitResolved = false;
+    this.attackAnimationState = "attack";
     this.dodgeCooldownMs = 1200;
     this.dodgeCooldownRemaining = 0;
     this.dodgeRemaining = 0;
+    this.dodgeChainRemaining = 0;
+    this.hurtAnimationRemaining = 0;
+    this.deathAnimationPlayed = false;
     this.invulnerableRemaining = 0;
     this.knockbackRemaining = 0;
     this.knockbackVelocityX = 0;
@@ -56,7 +65,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.attackFacing = this.facing.clone();
     this.shadowOffsetY = 22;
     this.shadow = scene.add.image(x, y + this.shadowOffsetY, "provided-shadow").setScale(2).setAlpha(0.62).setDepth(5);
-    playActorAnimation(this, "player", "idle", this.facing);
+    playActorAnimation(this, this.assetId, "idle", this.facing);
   }
 
   updateActor(input, delta) {
@@ -65,11 +74,22 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.attackHitWindow = false;
     this.attackCooldownRemaining = Math.max(0, this.attackCooldownRemaining - dt);
     this.dodgeCooldownRemaining = Math.max(0, this.dodgeCooldownRemaining - dt);
+    this.dodgeChainRemaining = Math.max(0, this.dodgeChainRemaining - dt);
+    this.hurtAnimationRemaining = Math.max(0, this.hurtAnimationRemaining - dt);
     this.invulnerableRemaining = Math.max(0, this.invulnerableRemaining - dt);
+
+    if (this.health <= 0) {
+      this.setVelocity(0, 0);
+      this.updateVisuals();
+      return;
+    }
 
     if (this.dodgeRemaining > 0) {
       this.dodgeRemaining = Math.max(0, this.dodgeRemaining - dt);
-      if (this.dodgeRemaining === 0) this.setVelocity(0, 0);
+      if (this.dodgeRemaining === 0) {
+        this.setVelocity(0, 0);
+        this.dodgeChainRemaining = 420;
+      }
       this.updateVisuals();
       return;
     }
@@ -103,13 +123,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   tryAttack() {
-    if (this.attackCooldownRemaining > 0 || this.dodgeRemaining > 0 || this.health <= 0) return false;
+    if (this.attackCooldownRemaining > 0 || this.dodgeRemaining > 0 || this.hurtAnimationRemaining > 0 || this.health <= 0) return false;
     this.attackCooldownRemaining = this.attackCooldownMs;
     this.attackRemaining = 220;
     this.attackElapsed = 0;
     this.attackStarted = true;
     this.attackHitResolved = false;
     this.attackFacing.copy(this.facing);
+    const moving = this.body.velocity.lengthSq() > 16;
+    this.attackAnimationState = this.dodgeChainRemaining > 0 ? "runAttack" : moving ? "walkAttack" : "attack";
+    this.dodgeChainRemaining = 0;
     this.scene.audio?.beep("attack");
     return true;
   }
@@ -134,10 +157,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.attackElapsed = 0;
     this.attackHitWindow = false;
     this.attackHitResolved = true;
+    this.hurtAnimationRemaining = this.health > 0 ? 230 : 0;
     this.scene.runStats && (this.scene.runStats.damageTaken += dealt);
     this.scene.onPlayerDamaged?.(dealt);
     this.setTint(0xffffff);
     this.scene.time.delayedCall(90, () => this.active && this.clearTint());
+    playActorAnimation(this, this.assetId, this.health > 0 ? "hurt" : "death", this.facing, { restart: true });
+    if (this.health <= 0) this.deathAnimationPlayed = true;
     return true;
   }
 
@@ -162,12 +188,19 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   updateVisuals() {
-    this.setAlpha(this.invulnerableRemaining > 0 && Math.floor(this.scene.time.now / 70) % 2 === 0 ? 0.35 : 1);
+    this.setAlpha(this.health > 0 && this.invulnerableRemaining > 0 && Math.floor(this.scene.time.now / 70) % 2 === 0 ? 0.35 : 1);
     const visualFacing = this.isAttacking() ? this.attackFacing : this.facing;
-    if (this.attackStarted) playActorAnimation(this, "player", "attack", visualFacing, { restart: true });
+    if (this.health <= 0) {
+      if (!this.deathAnimationPlayed) {
+        playActorAnimation(this, this.assetId, "death", visualFacing, { restart: true });
+        this.deathAnimationPlayed = true;
+      }
+    } else if (this.hurtAnimationRemaining > 0) {
+      playActorAnimation(this, this.assetId, "hurt", visualFacing);
+    } else if (this.attackStarted) playActorAnimation(this, this.assetId, this.attackAnimationState, visualFacing, { restart: true });
     else if (!this.isAttacking()) {
       const moving = this.isDodging() || this.body.velocity.lengthSq() > 16;
-      playActorAnimation(this, "player", moving ? "walk" : "idle", visualFacing);
+      playActorAnimation(this, this.assetId, this.isDodging() ? "run" : moving ? "walk" : "idle", visualFacing);
     }
     this.shadow.setPosition(this.x, this.y + this.shadowOffsetY).setVisible(this.active);
     this.setDepth(10 + this.y / 10000);

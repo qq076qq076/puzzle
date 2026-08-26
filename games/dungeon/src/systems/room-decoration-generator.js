@@ -2,9 +2,11 @@ import {
   DEFAULT_DECORATION_PROFILE,
   FLOOR_PATCH_TEXTURES,
   PROP_DEFINITIONS,
+  ROOM_CHEST_VARIANTS,
   ROOM_DECORATION_CANDIDATE_POINTS,
   ROOM_DECORATION_PROFILES,
   ROOM_FIRE_PAIRS,
+  ROOM_LEVER_VARIANTS,
   WALL_ACCENT_DECORATIONS,
 } from "../data/room-decorations.js";
 import { pointWalkable } from "./room-validation.js";
@@ -144,7 +146,7 @@ function generateFloorProps(roomIndex, room, profile, rng, existing) {
     .filter(([x, y]) => pointWalkable(x, y, room.obstacles || [], 44))
     .filter((point) => farFrom(point, reservedPoints(room), 66))
     .filter((point) => farFrom(point, existing.map(({ x, y }) => [x, y]), 62));
-  const count = Math.min(candidates.length, profile.floorProps.length, rng.int(3, 5));
+  const count = Math.min(candidates.length, profile.floorProps.length, rng.int(5, 8));
   const props = [];
   const propTypes = [...profile.floorProps];
   while (candidates.length && props.length < count) {
@@ -152,6 +154,75 @@ function generateFloorProps(roomIndex, room, profile, rng, existing) {
     if (!farFrom(point, [...existing, ...props].map(({ x, y }) => [x, y]), 62)) continue;
     const definition = PROP_DEFINITIONS[takeRandom(rng, propTypes)];
     props.push(makeProp(roomIndex, existing.length + props.length, point, definition, "floor", rng));
+  }
+  return props;
+}
+
+function generateClutterProps(roomIndex, room, profile, rng, existing) {
+  const candidates = floorPatchCandidates(room)
+    .filter(([x, y]) => pointWalkable(x, y, room.obstacles || [], 28))
+    .filter((point) => farFrom(point, reservedPoints(room), 48))
+    .filter((point) => farFrom(point, existing.map(({ x, y }) => [x, y]), 38));
+  const propTypes = [...(profile.clutterProps || profile.floorProps)];
+  const count = Math.min(candidates.length, propTypes.length, rng.int(4, 8));
+  const props = [];
+  while (candidates.length && props.length < count) {
+    const point = takeRandom(rng, candidates);
+    if (!farFrom(point, [...existing, ...props].map(({ x, y }) => [x, y]), 34)) continue;
+    const definition = PROP_DEFINITIONS[rng.pick(propTypes)];
+    props.push(makeProp(roomIndex, existing.length + props.length, point, {
+      ...definition,
+      scale: definition.scale * rng.real(0.82, 1),
+    }, "clutter", rng, { kind: "clutter", depthOffset: 0.15 }));
+  }
+  return props;
+}
+
+function generateAnimatedProps(roomIndex, room, rng, existing) {
+  const candidates = ROOM_DECORATION_CANDIDATE_POINTS
+    .map((point) => [...point])
+    .filter(([x, y]) => pointWalkable(x, y, room.obstacles || [], 46))
+    .filter((point) => farFrom(point, reservedPoints(room), 82))
+    .filter((point) => farFrom(point, existing.map(({ x, y }) => [x, y]), 58));
+  if (!candidates.length) return [];
+
+  const direction = room.exitSide === "up" ? "up" : room.exitSide === "down" ? "down" : "side";
+  const chestVariant = rng.pick(ROOM_CHEST_VARIANTS);
+  const chestPoint = candidates
+    .sort((left, right) => Math.hypot(left[0] - room.exit[0], left[1] - room.exit[1])
+      - Math.hypot(right[0] - room.exit[0], right[1] - room.exit[1]))[0];
+  const props = [{
+    id: `room-${roomIndex + 1}-animated-chest`,
+    x: chestPoint[0],
+    y: chestPoint[1],
+    texture: `room-chest-${chestVariant}-${direction}`,
+    animation: `room-chest-${chestVariant}-${direction}-open`,
+    scale: 2.8,
+    flipX: room.exitSide === "left",
+    kind: "animated-prop",
+    placement: "floor",
+    activation: "room-clear",
+    finalFrame: 3,
+    collision: [38, 30],
+  }];
+
+  const leverCandidates = candidates.filter((point) => point !== chestPoint && farFrom(point, [chestPoint], 92));
+  if (leverCandidates.length && rng.next() < 0.78) {
+    const point = takeRandom(rng, leverCandidates);
+    const variant = rng.pick(ROOM_LEVER_VARIANTS);
+    props.push({
+      id: `room-${roomIndex + 1}-animated-lever`,
+      x: point[0],
+      y: point[1],
+      texture: `room-lever-${variant}`,
+      animation: `room-lever-${variant}-toggle`,
+      scale: 2.5,
+      flipX: rng.next() < 0.5,
+      kind: "animated-prop",
+      placement: "floor",
+      activation: "room-clear",
+      finalFrame: 3,
+    });
   }
   return props;
 }
@@ -181,6 +252,8 @@ export function generateRoomDecorations(runSeed, roomIndex, room) {
     ...generateFloorPatches(runSeed, roomIndex, room),
   ];
   const obstacleProps = generateObstacleProps(roomIndex, room, profile, rng);
-  const floorProps = generateFloorProps(roomIndex, room, profile, rng, obstacleProps);
-  return [...background, ...obstacleProps, ...floorProps];
+  const animatedProps = generateAnimatedProps(roomIndex, room, rng, obstacleProps);
+  const floorProps = generateFloorProps(roomIndex, room, profile, rng, [...obstacleProps, ...animatedProps]);
+  const clutterProps = generateClutterProps(roomIndex, room, profile, rng, [...obstacleProps, ...animatedProps, ...floorProps]);
+  return [...background, ...obstacleProps, ...floorProps, ...clutterProps, ...animatedProps];
 }

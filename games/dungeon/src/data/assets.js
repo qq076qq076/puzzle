@@ -13,9 +13,10 @@ export const CRAFTPIX_SOURCES = {
 
 const FANTASY_ROOT = "./roguelike-game-kit-pixel-art";
 const MACHINE_ROOT = "./shoot";
-const PLAYER_ROOT = "./player/PNG/Swordsman_lvl1/Without_shadow";
+const playerRoot = (level) => `./player/PNG/Swordsman_lvl${level}/Without_shadow`;
 const MAGIC_ROOT = "./water-and-fire-magic-sprite-vector-pack/Fire Ball/PNG";
 const OBJECT_ROOT = `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects`;
+const ANIMATED_OBJECT_ROOT = `${FANTASY_ROOT}/2 Dungeon Tileset/3 Animated objects`;
 const FIREBALL_FRAME_KEYS = Object.freeze(Array.from(
   { length: 8 },
   (_, index) => index === 0 ? "spell-projectile" : `spell-projectile-${String(index + 1).padStart(2, "0")}`,
@@ -25,16 +26,42 @@ const fireballImages = Object.fromEntries(FIREBALL_FRAME_KEYS.map((key, index) =
   `${MAGIC_ROOT}/Fire Ball_Frame_${String(index + 1).padStart(2, "0")}.png`,
 ]));
 
+function numberedImageSeries(keyPrefix, folder, count, excluded = []) {
+  const excludedNumbers = new Set(excluded);
+  return Object.fromEntries(Array.from({ length: count }, (_, index) => index + 1)
+    .filter((number) => !excludedNumbers.has(number))
+    .map((number) => [`${keyPrefix}-${number}`, `${OBJECT_ROOT}/${folder}/${number}.png`]));
+}
+
+const dungeonObjectImages = {
+  ...numberedImageSeries("dungeon-blockage", "Blockage", 8),
+  ...numberedImageSeries("dungeon-bookshelf", "Bookshelf", 12),
+  ...numberedImageSeries("dungeon-bookshelf-decor", "Bookshelf decor", 40),
+  ...numberedImageSeries("dungeon-box", "Boxes", 16),
+  ...numberedImageSeries("dungeon-chair", "Chairs", 14),
+  ...numberedImageSeries("dungeon-other", "Other", 44, [5, 6, 7, 8]),
+  ...numberedImageSeries("dungeon-table", "Tables", 8),
+  ...numberedImageSeries("dungeon-torch-mount", "Torches", 8),
+};
+
 function sheet(key, path, frameWidth, frameHeight, frameCount, frameRate, repeat = -1, options = {}) {
   return { key, path, frameWidth, frameHeight, frameCount, frameRate, repeat, ...options };
 }
 
-function swordsmanPlayer() {
+function swordsmanPlayer(level = 1) {
+  const texturePrefix = level === 1 ? "provided-player" : `provided-player-lvl${level}`;
+  const root = playerRoot(level);
+  const filePrefix = `Swordsman_lvl${level}`;
   const directions = { down: 0, left: 1, right: 2, up: 3 };
   const states = {
-    idle: { key: "provided-player", file: "Swordsman_lvl1_Idle_without_shadow.png", frames: 12, frameRate: 8, repeat: -1 },
-    walk: { key: "provided-player-walk", file: "Swordsman_lvl1_Walk_without_shadow.png", frames: 6, frameRate: 11, repeat: -1 },
-    attack: { key: "provided-player-attack", file: "Swordsman_lvl1_attack_without_shadow.png", frames: 8, frameRate: 36, repeat: 0 },
+    idle: { key: texturePrefix, file: `${filePrefix}_Idle_without_shadow.png`, frames: 12, frameRate: 8, repeat: -1 },
+    walk: { key: `${texturePrefix}-walk`, file: `${filePrefix}_Walk_without_shadow.png`, frames: 6, frameRate: 11, repeat: -1 },
+    run: { key: `${texturePrefix}-run`, file: `${filePrefix}_Run_without_shadow.png`, frames: 8, frameRate: 18, repeat: -1 },
+    attack: { key: `${texturePrefix}-attack`, file: `${filePrefix}_attack_without_shadow.png`, frames: 8, frameRate: 36, repeat: 0 },
+    walkAttack: { key: `${texturePrefix}-walk-attack`, file: `${filePrefix}_Walk_Attack_without_shadow.png`, frames: 6, frameRate: 28, repeat: 0 },
+    runAttack: { key: `${texturePrefix}-run-attack`, file: `${filePrefix}_Run_Attack_without_shadow.png`, frames: 8, frameRate: 36, repeat: 0 },
+    hurt: { key: `${texturePrefix}-hurt`, file: `${filePrefix}_Hurt_without_shadow.png`, frames: 5, frameRate: 22, repeat: 0 },
+    death: { key: `${texturePrefix}-death`, file: `${filePrefix}_Death_without_shadow.png`, frames: 7, frameRate: 12, repeat: 0 },
   };
   const actorStates = {};
   Object.entries(states).forEach(([state, animation]) => {
@@ -43,7 +70,7 @@ function swordsmanPlayer() {
       const start = row * animation.frames;
       actorStates[state][direction] = sheet(
         animation.key,
-        `${PLAYER_ROOT}/${animation.file}`,
+        `${root}/${animation.file}`,
         64,
         64,
         animation.frames,
@@ -53,7 +80,7 @@ function swordsmanPlayer() {
       );
     });
   });
-  return { baseTexture: "provided-player", directionalSides: true, states: actorStates };
+  return { baseTexture: texturePrefix, directionalSides: true, states: actorStates };
 }
 
 function fantasyActor(textureKey, folder, options = {}) {
@@ -125,7 +152,12 @@ const bossUp = sheet(
 );
 
 export const ACTOR_ASSETS = {
-  player: swordsmanPlayer(),
+  player: swordsmanPlayer(1),
+  player_lvl2: swordsmanPlayer(2),
+  player_lvl3: swordsmanPlayer(3),
+  tomb_scout: fantasyActor("provided-tomb-scout", "1 Characters/1", { sideFaces: "left" }),
+  crypt_archer: fantasyActor("provided-crypt-archer", "1 Characters/2", { sideFaces: "left" }),
+  void_knight: fantasyActor("provided-void-knight", "1 Characters/3", { sideFaces: "left" }),
   rat: fantasyActor("provided-rat", "3 Dungeon Enemies/1", { sideFaces: "left" }),
   goblin_bat: fantasyActor("provided-goblin-bat", "3 Dungeon Enemies/2", { sideFaces: "left" }),
   goblin_dagger: fantasyActor("provided-goblin-dagger", "3 Dungeon Enemies/3", { sideFaces: "left" }),
@@ -243,18 +275,63 @@ const environmentSpritesheets = [
   ),
   sheet(
     "room-fire",
-    `${FANTASY_ROOT}/2 Dungeon Tileset/3 Animated objects/Fire1.png`,
+    `${ANIMATED_OBJECT_ROOT}/Fire1.png`,
     16,
     16,
     8,
     10,
   ),
+  ...[1, 2].flatMap((variant) => ["down", "side", "up"].map((direction) => {
+    const suffix = direction === "down" ? "D" : direction === "up" ? "U" : "S";
+    return sheet(
+      `room-chest-${variant}-${direction}`,
+      `${ANIMATED_OBJECT_ROOT}/Chest${variant}_${suffix}.png`,
+      16,
+      24,
+      4,
+      10,
+      0,
+    );
+  })),
+  ...["down", "side", "up"].map((direction) => {
+    const suffix = direction === "down" ? "D" : direction === "up" ? "U" : "S";
+    return sheet(
+      `room-big-door-${direction}`,
+      `${ANIMATED_OBJECT_ROOT}/BigDoor_${suffix}.png`,
+      direction === "side" ? 45 : 54,
+      direction === "side" ? 42 : 36,
+      4,
+      10,
+      0,
+    );
+  }),
+  ...[1, 2].map((variant) => sheet(
+    `room-lever-${variant}`,
+    `${ANIMATED_OBJECT_ROOT}/Lever${variant}.png`,
+    16,
+    18,
+    4,
+    9,
+    0,
+  )),
+  ...["down", "side", "up"].map((direction) => {
+    const suffix = direction === "down" ? "D" : direction === "up" ? "U" : "S";
+    return sheet(
+      `room-trapdoor-${direction}`,
+      `${ANIMATED_OBJECT_ROOT}/Trapdoor_${suffix}.png`,
+      22,
+      32,
+      6,
+      12,
+      0,
+    );
+  }),
 ];
 
 export const PROVIDED_ASSETS = {
   localFilesAvailable: true,
   images: {
-    "provided-shadow": `${PLAYER_ROOT}/shadow_single.png`,
+    "provided-shadow": `${playerRoot(1)}/shadow_single.png`,
     "potion-icon": `${FANTASY_ROOT}/4 GUI/3 Icons/Icon_32.png`,
     "bottle-1": `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects/Other/5.png`,
     "bottle-2": `${FANTASY_ROOT}/2 Dungeon Tileset/2 Objects/Other/6.png`,
@@ -275,7 +352,9 @@ export const PROVIDED_ASSETS = {
     "reward-icon-heal": `${FANTASY_ROOT}/4 GUI/3 Icons/Icon_50.png`,
     "enemy-projectile": `${MACHINE_ROOT}/1 Main Character/2 Weapons/Projectiles/10.png`,
     "laser-projectile": `${MACHINE_ROOT}/1 Main Character/2 Weapons/Projectiles/15.png`,
+    "fantasy-arrow": `${FANTASY_ROOT}/1 Characters/Other/Arrow.png`,
     ...fireballImages,
+    ...dungeonObjectImages,
     "room-floor-fantasy": `${FANTASY_ROOT}/2 Dungeon Tileset/1 Tiles/Tile_20.png`,
     "room-floor-fantasy-alt": `${FANTASY_ROOT}/2 Dungeon Tileset/1 Tiles/Tile_21.png`,
     "room-floor-fantasy-stone": `${FANTASY_ROOT}/2 Dungeon Tileset/1 Tiles/Tile_22.png`,
@@ -327,6 +406,34 @@ export const PROVIDED_ASSETS = {
     { key: "spawn-marker-start", texture: "spawn-marker", frameCount: 6, frameRate: 10, repeat: 0 },
     { key: "hit-spark-burst", texture: "hit-spark", frameCount: 4, frameRate: 18, repeat: 0 },
     { key: "room-fire-idle", texture: "room-fire", frameCount: 8, frameRate: 10 },
+    ...[1, 2].flatMap((variant) => ["down", "side", "up"].map((direction) => ({
+      key: `room-chest-${variant}-${direction}-open`,
+      texture: `room-chest-${variant}-${direction}`,
+      frameCount: 4,
+      frameRate: 10,
+      repeat: 0,
+    }))),
+    ...["down", "side", "up"].map((direction) => ({
+      key: `room-big-door-${direction}-open`,
+      texture: `room-big-door-${direction}`,
+      frameCount: 4,
+      frameRate: 10,
+      repeat: 0,
+    })),
+    ...[1, 2].map((variant) => ({
+      key: `room-lever-${variant}-toggle`,
+      texture: `room-lever-${variant}`,
+      frameCount: 4,
+      frameRate: 9,
+      repeat: 0,
+    })),
+    ...["down", "side", "up"].map((direction) => ({
+      key: `room-trapdoor-${direction}-open`,
+      texture: `room-trapdoor-${direction}`,
+      frameCount: 6,
+      frameRate: 12,
+      repeat: 0,
+    })),
     { key: "spell-projectile-flight", frames: FIREBALL_FRAME_KEYS, frameRate: 18, repeat: -1 },
   ],
   credits: {

@@ -49,6 +49,22 @@ Vite 將 `games/dungeon/assets/` 當作 public directory。程式中的路徑從
 - 角色動畫通常是 32×32 單格：`Idle` 4 幀、`Walk` 6 幀、`Attack` 4 幀、`Hurt` 2 幀、`Death` 8 幀。
 - `Other/` 有血液、火球、箭與影子等輔助素材。
 
+### 奇幻角色／怪物的實際幀數
+
+每個角色或怪物資料夾實際有 16 張 PNG：1 張數字命名的預覽圖，加上 15 張三方向動作圖。動作圖的尺寸可直接換算幀數，單格固定為 32×32：
+
+| 動作 | 檔案尺寸 | 每方向幀數 | 適合在遊戲中的時機 |
+| --- | --- | ---: | --- |
+| `Idle` | 128×32 | 4 | 沒有移動、等待攻擊 |
+| `Walk` | 192×32 | 6 | 追擊、巡邏、受地形限制移動 |
+| `Attack` | 128×32 | 4 | 近戰攻擊的命中窗口 |
+| `Hurt` | 64×32 | 2 | 受擊閃爍與擊退 |
+| `Death` | 256×32 | 8 | 死亡後播放一次 |
+
+`D_Attack.png`、`S_Attack.png`、`U_Attack.png` 並沒有左右兩張側面圖；`S` 應視為一個側面來源，朝左時使用水平翻轉。四個 `3 Dungeon Enemies/1..4/` 資料夾的檔案集合與尺寸一致，因此可以共用動畫 manifest，只替換 texture key。
+
+資料夾內的 `1.png`、`2.png`、`3.png`、`4.png` 是 256×480 的角色預覽／展示圖，不是 32×32 動畫 spritesheet，不應拿來當戰鬥角色的 runtime texture。
+
 ### 地板、牆壁與房間元素
 
 - `2 Dungeon Tileset/1 Tiles/`：16×16 地板、牆壁與轉角 tile。房間牆壁應依照方向選用不同的橫牆、豎牆與四個轉角素材，不能用同一張圖硬套所有方向。
@@ -61,6 +77,53 @@ Vite 將 `games/dungeon/assets/` 當作 public directory。程式中的路徑從
 ### GUI
 
 `4 GUI/` 分為 `Interface`、`Buttons`、`Icons`、`Bars`、`Scrolling`、`Logo`，適合生命條、獎勵選擇框、buff icon、按鈕與遊戲介面。數字命名的 icon 必須先用預覽或實機確認語意，不應只依檔名猜用途。
+
+### 奇幻 Tileset 的結構與限制
+
+- `1 Tiles/` 有 83 張 16×16 單 tile，以及 `Tileset.png`（304×176）總覽圖。單 tile 適合程式化鋪房間；`Tileset.png` 適合美術查找，不應整張當成地板。
+- `2 Objects/` 有 160 張分類物件圖，以及 `Objects.png`（336×192）物件總覽圖。物件尺寸不是固定 16×16，家具、書櫃和門常會超過一格，碰撞框必須另行定義。
+- 物件分類有 `Blockage`、`Bookshelf`、`Bookshelf decor`、`Boxes`、`Chairs`、`Doors`、`Other`、`Tables`、`Torches`、`Trapdoors`；其中 `Bookshelf decor` 是小型裝飾，不應誤設成可阻擋的大型書櫃。
+- `3 Animated objects/` 的檔案不是同一種大小：門、寶箱、火焰、尖刺、拉桿與活板門各自有不同單格尺寸，必須在 manifest 中為每一種 sheet 指定獨立的 frameWidth、frameHeight 與 frameCount。
+
+目前已確認的動畫尺寸如下：
+
+| 素材 | 整張尺寸 | 單格尺寸 | 幀數 |
+| --- | --- | --- | ---: |
+| `Door_S.png` | 56×26 | 14×26 | 4 |
+| `Door_U/D.png` | 80×20 | 20×20 | 4 |
+| `BigDoor_S.png` | 180×42 | 45×42 | 4 |
+| `BigDoor_U/D.png` | 216×36 | 54×36 | 4 |
+| `Chest1/2_S/U/D.png` | 64×24 | 16×24 | 4 |
+| `Fire1.png` | 128×16 | 16×16 | 8 |
+| `Lever1/2.png` | 64×18 | 約 16×18 | 4 |
+| `Spikes.png` | 102×17 | 17×17 | 6 |
+| `Trapdoor_S/U/D.png` | 132×32 | 22×32 | 6 |
+
+### 奇幻牆體與房間生成的使用建議
+
+`Tile_15`、`Tile_16`、`Tile_31` 是一般牆面／裂紋候選；目前 Dungeon 另為房間框架指定八個方向素材：
+
+| 位置 | 目前使用的檔案 |
+| --- | --- |
+| 上水平牆 | `Tile_59.png` |
+| 下水平牆 | `Tile_98.png` |
+| 左垂直牆 | `Tile_87.png` |
+| 右垂直牆 | `Tile_88.png` |
+| 左上、右上角 | `Tile_57.png`、`Tile_61.png` |
+| 左下、右下角 | `Tile_91.png`、`Tile_93.png` |
+
+這八張都是 16×16，應以 tile 的實際可見邊緣對齊。門洞不能只把門 sprite 疊在完整牆上；生成房間時需要先切開相應方向的牆碰撞與牆視覺，再放置門動畫，否則會出現門旁空氣牆或角色被擋在門外的問題。`wall-fantasy-cracked` 與 `wall-fantasy-alt` 目前都指向 `Tile_31.png`，是同一張圖的兩個語意 key，不是兩個不同外觀。
+
+### 奇幻包的可用元素與碰撞分類
+
+| 分類 | 遊戲用途 | 碰撞／傷害建議 |
+| --- | --- | --- |
+| `Blockage` | 石堆、障礙牆、房間內掩體 | 建立矩形阻擋，視覺中心要對齊障礙矩形 |
+| `Boxes`、`Tables`、`Bookshelf` | 家具、箱子、書櫃 | 大型物件阻擋；小型箱子可作裝飾或可破壞物 |
+| `Chairs`、`Other` | 地面散落物、瓶子、骨頭、武器、蠟燭 | 多數只作非阻擋裝飾，瓶子另掛可破壞與掉落邏輯 |
+| `Torches`、`Fire1` | 牆上火把與火焰 | 火焰要播放 8 幀；牆上火把不應成為角色可穿越的地面障礙 |
+| `Spikes` | 地板陷阱 | 播放升降動畫，傷害玩家與怪物，傷害區不可只跟最後一幀綁定 |
+| `Doors`、`Trapdoors` | 出入口、機關或特殊房間 | 動畫狀態與碰撞狀態同步，關閉時阻擋、開啟後移除阻擋 |
 
 ## 2. shoot：機械與科幻素材
 
@@ -90,17 +153,54 @@ Vite 將 `games/dungeon/assets/` 當作 public directory。程式中的路徑從
 - `Idle`、`Walk`、`Attack`、`Walk_Attack`、`Run`、`Run_Attack`、`Death`、`Hurt`。
 - `With_shadow`、`Without_shadow`、`Parts` 等變體。
 - 每個動作都有 `front`、`back`、`side_left`、`side_right` 四個方向。
-- `Without_shadow` 的玩家 spritesheet 使用 64×64 單格，四個方向依序是下、左、右、上；目前 manifest 使用 `Swordsman_lvl1` 的 `Idle`、`Walk`、`attack`。
+- `Without_shadow` 的玩家 spritesheet 使用 64×64 單格，四個方向依序是下、左、右、上；目前 manifest 已登記三個等級的全部八種動作。
 - `Idle` 每方向 12 幀、`Walk` 每方向 6 幀、`attack` 每方向 8 幀。載入時需依行偏移選正確方向，不能把整張四方向圖當成單一動畫播放。
 - `ASEPRITE/` 與 `PSD/` 是可編輯的原始來源，`Tiled_files/` 含分件圖與 TMX；這些不應直接由瀏覽器載入。
 
-目前 runtime 路徑：
+目前 runtime 路徑會依房間進度使用：
 
 ```text
 ./player/PNG/Swordsman_lvl1/Without_shadow/
+./player/PNG/Swordsman_lvl2/Without_shadow/
+./player/PNG/Swordsman_lvl3/Without_shadow/
 ```
 
 玩家影子使用同一包的 `shadow_single.png`，角色本體與影子應保持接近，避免產生浮空感。
+
+### 玩家 PNG 的完整動作表
+
+`PNG/Swordsman_lvl1`、`PNG/Swordsman_lvl2`、`PNG/Swordsman_lvl3` 的主體圖都是 64×64 單格、4 列方向（下、左、右、上）。同一動作的整張寬度可直接換算每方向幀數：
+
+| 動作 | 主要檔案 | 整張尺寸 | 每方向幀數 | 說明 |
+| --- | --- | --- | ---: | --- |
+| Idle | `*_Idle_without_shadow.png` | 768×256 | 12 | 待機循環 |
+| Walk | `*_Walk_without_shadow.png` | 384×256 | 6 | 一般移動循環 |
+| Walk Attack | `*_Walk_Attack_without_shadow.png` | 384×256 | 6 | 移動中揮刀 |
+| Run | `*_Run_without_shadow.png` | 512×256 | 8 | 高速移動／閃避可用的視覺基礎 |
+| Run Attack | `*_Run_Attack_without_shadow.png` | 512×256 | 8 | 移動中攻擊 |
+| Attack | `*_attack_without_shadow.png` | 512×256 | 8 | 近戰攻擊主動畫 |
+| Hurt | `*_Hurt_without_shadow.png` | 320×256 | 5 | 受傷與擊退反饋 |
+| Death | `*_Death_without_shadow.png` | 448×256 | 7 | 死亡一次性動畫 |
+
+`With_shadow` 是已經把影子合成進每一幀的版本；目前遊戲採用 `Without_shadow`，再以 `shadow_single.png` 獨立放置影子，方便調整腳底位置。`shadow_death.png` 是死亡狀態的影子，不應與一般移動影子混用。
+
+### 玩家 Parts、方向與可替換性
+
+- 每個等級的 `Parts/` 目標是 48 張分件圖，包含 body、head、sword、shadow、swing 等層，可用於需要單獨換武器或做受傷染紅的情況。
+- `With_shadow/` 與 `Without_shadow/` 適合直接播放；`Parts/` 適合需要分層組合的客製化角色，不應與完整合成圖同時疊加，否則會出現兩把劍或兩個影子。
+- `ASEPRITE/` 每個等級有 8 個動作、每個動作 4 個方向，共 96 個來源檔；`PSD/` 每個等級有 8 個動作來源；`Tiled_files/` 是分件圖與 TMX 編輯資料。
+- 玩家四方向的行順序必須固定使用下、左、右、上。左右不能靠把「下」或「上」的素材旋轉來代替；側面圖應使用對應的 `side_left`、`side_right`。
+
+### 玩家素材盤點時發現的來源一致性問題
+
+目前 `PNG/Swordsman_lvl3/Parts/` 有 5 張檔名仍是 `Swordsman_lvl2_Death_*.png`，而且相對應的 `Swordsman_lvl3_Hurt_body/head/red/sword/sword_back.png` 未出現在該資料夾。這不影響目前使用的完整 `Without_shadow` runtime 圖，但若未來改用 lvl3 的 Parts 組合，會載入錯誤或缺圖；建議先在素材整理階段確認來源包，再決定是否重新命名或補齊，不應在程式中靜默以 lvl2 素材代替。
+
+### 玩家素材的選擇建議
+
+1. 玩家已使用 `lvl1`、`lvl2`、`lvl3` 的完整 `Without_shadow` 合成圖，並依房間進度切換外觀。
+2. 閃避播放 `Run_without_shadow`，閃避後立即攻擊播放 `Run_Attack_without_shadow`；無敵時間與位移仍由遊戲邏輯獨立控制。
+3. 待機、行走、移動攻擊、跑步、跑步攻擊、原地攻擊、受傷與死亡均已接到對應動畫；換用 Parts 前仍必須先處理 lvl3 的來源一致性問題。
+4. 攻擊不要同時播放 `attack_without_shadow` 與 `attack_swing`。前者是完整角色動畫，後者是 Parts 中的揮刀分件；二者只能擇一，否則會產生重複武器或錯位。
 
 ## 4. water-and-fire-magic-sprite-vector-pack：法術特效
 
@@ -122,14 +222,15 @@ Vite 將 `games/dungeon/assets/` 當作 public directory。程式中的路徑從
 
 | 遊戲用途 | 使用素材 |
 | --- | --- |
-| 玩家 | `player/PNG/Swordsman_lvl1/Without_shadow/` 的四方向 Idle、Walk、Attack |
-| 巨鼠、哥布林、法師 | `roguelike-game-kit-pixel-art/3 Dungeon Enemies/1..4/` |
+| 玩家 | `player/PNG/Swordsman_lvl1..3/Without_shadow/` 的四方向八種完整動作，依進度升級外觀 |
+| 巨鼠、哥布林、法師 | `roguelike-game-kit-pixel-art/3 Dungeon Enemies/1..4/` 的 Idle、Walk、Attack、Hurt、Death |
+| 墓穴斥候、墓室弓手、虛空騎士 | `roguelike-game-kit-pixel-art/1 Characters/1..3/`，分別使用衝刺、箭矢與重型近戰行為 |
 | 奇幻房間地板 | `roguelike-game-kit-pixel-art/2 Dungeon Tileset/1 Tiles/Tile_20.png`、`Tile_21.png`、`Tile_22.png` |
 | 奇幻房間牆壁 | `Tile_15.png`、`Tile_16.png`、`Tile_31.png` 與 `Tile_57/59/61/87/88/91/93/98.png` |
-| 房間門 | `2 Dungeon Tileset/3 Animated objects/Door_S/U/D.png` |
-| 陷阱 | `2 Dungeon Tileset/3 Animated objects/Spikes.png` |
-| 火把／火焰 | `2 Dungeon Tileset/3 Animated objects/Fire1.png` |
-| 寶箱與家具 | `2 Dungeon Tileset/2 Objects/Boxes`、`Tables`、`Chairs`、`Other` |
+| 房間門 | `2 Dungeon Tileset/3 Animated objects/Door_S/U/D.png` 與 `BigDoor_S/U/D.png` |
+| 陷阱 | `2 Dungeon Tileset/3 Animated objects/Spikes.png` 與三方向 `Trapdoor` |
+| 火把／火焰 | `2 Dungeon Tileset/3 Animated objects/Fire1.png`，搭配 8 種火把座 |
+| 寶箱、機關與家具 | 動畫 `Chest1/2`、`Lever1/2`，以及 Blockages、Bookshelves、Bookshelf decor、Boxes、Chairs、Other、Tables 的可用 PNG |
 | 機器人與 Boss | `shoot/3 Enemies/` 與 `shoot/1 Main Character/1 Character/` |
 | 機械房間元素 | `shoot/2 Location/` |
 | 一般投射物與雷射 | `shoot/1 Main Character/2 Weapons/Projectiles/10.png`、`15.png` |
@@ -149,9 +250,9 @@ Vite 將 `games/dungeon/assets/` 當作 public directory。程式中的路徑從
 
 ## 可用於後續擴充的素材
 
-- 玩家 `Swordsman_lvl2`、`Swordsman_lvl3`，可作為解鎖角色或升級外觀。
-- 奇幻包的 `BigDoor`、`Chest1/2`、`Trapdoor`、`Lever`，可用於特殊房間、機關與 Boss 房。
-- 奇幻包的其他家具、書櫃、桌椅、障礙物與瓶子，可擴充房間主題。
+- 玩家 Parts 可用於未來的武器分層換裝，但必須先修正 lvl3 的來源檔一致性。
+- 動畫寶箱、拉桿、活板門與大門目前已用於一般房間；後續可再加入實際機關連鎖或特殊房解謎邏輯。
+- 已納入房間候選池的家具仍可依房型增加語意規則，例如書櫃成排、桌椅成組或障礙物形成掩體。
 - Shoot 包的 `Portal2`、`Altar`、`Boom`、`DropPod`、`Target` 與三組角色死亡圖。
 - Shoot 包的其他投射物、武器與三幀效果，可增加機器人與 Boss 攻擊模式。
 - 法術包的 Water Ball、Water Spell、Fire Arrow，可作為 buff、法術分支或 Boss 技能。

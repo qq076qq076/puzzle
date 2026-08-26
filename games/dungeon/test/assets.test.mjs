@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { ACTOR_ASSETS, PROVIDED_ASSETS } from "../src/data/assets.js";
-import { ROOM_BACKGROUND_TEXTURES, ROOM_DECORATION_TEXTURES } from "../src/data/room-decorations.js";
+import { PROP_GROUPS, ROOM_ANIMATED_TEXTURES, ROOM_BACKGROUND_TEXTURES, ROOM_DECORATION_TEXTURES } from "../src/data/room-decorations.js";
 import { FANTASY_WALL_TEXTURE_KEYS } from "../src/data/wall-art.js";
 import { getActorOrientation } from "../src/systems/actor-animations.js";
 
@@ -84,6 +84,9 @@ test("world effects are mapped to supplied CraftPix files without generated fall
   ROOM_DECORATION_TEXTURES.forEach((texture) => {
     assert.match(PROVIDED_ASSETS.images[texture], /roguelike-game-kit-pixel-art\/2 Dungeon Tileset\/2 Objects\//);
   });
+  ROOM_ANIMATED_TEXTURES.forEach((texture) => {
+    assert.match(spritesheets.get(texture), /roguelike-game-kit-pixel-art\/2 Dungeon Tileset\/3 Animated objects\//);
+  });
   ROOM_BACKGROUND_TEXTURES.forEach((texture) => {
     assert.match(PROVIDED_ASSETS.images[texture], /roguelike-game-kit-pixel-art\/2 Dungeon Tileset\/1 Tiles\//);
   });
@@ -103,11 +106,30 @@ test("world effects are mapped to supplied CraftPix files without generated fall
   assert.match(roomScene, /playEnvironmentAnimation\(flame, "room-fire-idle"\)/);
 });
 
-test("player melee feedback relies on the supplied attack animation without a drawn sweep", async () => {
+test("the complete usable dungeon object catalog and animated room features are registered", () => {
+  assert.equal(PROP_GROUPS.blockages.length, 8);
+  assert.equal(PROP_GROUPS.bookshelves.length, 12);
+  assert.equal(PROP_GROUPS.shelfDecor.length, 40);
+  assert.equal(PROP_GROUPS.boxes.length, 16);
+  assert.equal(PROP_GROUPS.chairs.length, 14);
+  assert.equal(PROP_GROUPS.other.length, 40);
+  assert.equal(PROP_GROUPS.tables.length, 8);
+  Object.values(PROP_GROUPS).flat().forEach((texture) => assert.ok(PROVIDED_ASSETS.images[texture]));
+
+  const spritesheets = new Map(PROVIDED_ASSETS.spritesheets.map((definition) => [definition.key, definition]));
+  for (const texture of ROOM_ANIMATED_TEXTURES) assert.ok(spritesheets.has(texture), texture);
+  for (const direction of ["down", "side", "up"]) {
+    assert.equal(spritesheets.get(`room-trapdoor-${direction}`).frameCount, 6);
+    assert.equal(spritesheets.get(`room-big-door-${direction}`).frameCount, 4);
+  }
+});
+
+test("player melee feedback uses supplied standing, moving, and dodge-chain attacks without a drawn sweep", async () => {
   const source = await readFile(path.join(sourceRoot, "entities/Player.js"), "utf8");
   assert.doesNotMatch(source, /add\.graphics\(\)|showAttackEffect|attackEffects/);
   assert.doesNotMatch(source, /player-weapon-swing|player-attack-effect|spawnProjectile/);
-  assert.match(source, /playActorAnimation\(this, "player", "attack"/);
+  assert.match(source, /this\.attackAnimationState = this\.dodgeChainRemaining > 0 \? "runAttack" : moving \? "walkAttack" : "attack"/);
+  assert.match(source, /playActorAnimation\(this, this\.assetId, this\.attackAnimationState/);
 });
 
 test("player and fantasy enemies provide their supplied directional actions", () => {
@@ -115,7 +137,25 @@ test("player and fantasy enemies provide their supplied directional actions", ()
   assert.match(ACTOR_ASSETS.player.states.idle.down.path, /player\/PNG\/Swordsman_lvl1\/Without_shadow\/Swordsman_lvl1_Idle_without_shadow\.png$/);
   assert.match(ACTOR_ASSETS.player.states.walk.down.path, /Swordsman_lvl1_Walk_without_shadow\.png$/);
   assert.match(ACTOR_ASSETS.player.states.attack.down.path, /Swordsman_lvl1_attack_without_shadow\.png$/);
-  for (const actorId of ["rat", "goblin_bat", "goblin_dagger", "plague_mage"]) {
+  assert.deepEqual(Object.keys(ACTOR_ASSETS.player.states).sort(), [
+    "attack", "death", "hurt", "idle", "run", "runAttack", "walk", "walkAttack",
+  ]);
+  assert.equal(ACTOR_ASSETS.player.states.run.down.frameCount, 8);
+  assert.equal(ACTOR_ASSETS.player.states.walkAttack.down.frameCount, 6);
+  assert.equal(ACTOR_ASSETS.player.states.runAttack.down.frameCount, 8);
+  assert.equal(ACTOR_ASSETS.player.states.hurt.down.frameCount, 5);
+  assert.equal(ACTOR_ASSETS.player.states.death.down.frameCount, 7);
+  assert.match(ACTOR_ASSETS.player_lvl2.states.idle.down.path, /Swordsman_lvl2\/Without_shadow\/Swordsman_lvl2_Idle_without_shadow\.png$/);
+  assert.match(ACTOR_ASSETS.player_lvl3.states.death.down.path, /Swordsman_lvl3\/Without_shadow\/Swordsman_lvl3_Death_without_shadow\.png$/);
+  for (const actorId of [
+    "rat",
+    "goblin_bat",
+    "goblin_dagger",
+    "plague_mage",
+    "tomb_scout",
+    "crypt_archer",
+    "void_knight",
+  ]) {
     const actor = ACTOR_ASSETS[actorId];
     for (const state of ["idle", "walk", "attack", "hurt", "death"]) {
       assert.deepEqual(Object.keys(actor.states[state]).sort(), ["down", "side", "up"], `${actorId} ${state}`);
@@ -142,6 +182,8 @@ test("actor orientation follows each source sprite's modeled direction", () => {
   assert.equal(getActorOrientation("rat", { x: -1, y: 0 }).flipX, false);
   assert.equal(getActorOrientation("goblin_bat", { x: 1, y: 0 }).flipX, true);
   assert.equal(getActorOrientation("goblin_bat", { x: -1, y: 0 }).flipX, false);
+  assert.equal(getActorOrientation("tomb_scout", { x: 1, y: 0 }).flipX, true);
+  assert.equal(getActorOrientation("crypt_archer", { x: -1, y: 0 }).flipX, false);
   assert.equal(getActorOrientation("steel_spider", { x: 1, y: 0 }).rotation, Math.PI / 2);
   assert.equal(getActorOrientation("steel_spider", { x: 0, y: -1 }).rotation, Math.PI);
   assert.equal(getActorOrientation("robot_gunner", { x: -1, y: 0 }).flipX, false);
