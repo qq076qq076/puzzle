@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" width="240" height="160">
+  <defs>
+    <radialGradient id="bodyGrad" cx="50%" cy="32%" r="78%">
+      <stop offset="0%" stop-color="#ffb066"/>
+      <stop offset="55%" stop-color="#f97e20"/>
+      <stop offset="100%" stop-color="#d95b10"/>
+    </radialGradient>
+    <linearGradient id="finGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffa04a"/>
+      <stop offset="100%" stop-color="#e06414"/>
+    </linearGradient>
+    <clipPath id="bodyClip">
+      <path d="M58 80 C74 50,110 32,146 35 C184 39,212 58,221 76 C224 80,224 84,221 88 C210 104,182 124,146 126 C110 129,74 110,58 80 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- 尾鰭 -->
+  <path d="M64 80 C44 52,26 42,10 36 C20 66,20 94,10 124 C26 118,44 108,64 80 Z"
+        fill="url(#finGrad)" stroke="#7a3208" stroke-width="4" stroke-linejoin="round"/>
+
+  <!-- 背鰭 -->
+  <path d="M102 56 Q112 18,138 12 Q154 24,160 44 Q130 34,102 56 Z"
+        fill="url(#finGrad)" stroke="#7a3208" stroke-width="4" stroke-linejoin="round"/>
+
+  <!-- 腹鰭 -->
+  <path d="M104 112 Q112 116,116 126 Q110 140,98 144 Q106 128,104 112 Z"
+        fill="url(#finGrad)" stroke="#7a3208" stroke-width="4" stroke-linejoin="round"/>
+
+  <!-- 臀鰭 -->
+  <path d="M82 106 Q88 110,90 120 Q84 130,74 132 Q80 118,82 106 Z"
+        fill="url(#finGrad)" stroke="#7a3208" stroke-width="4" stroke-linejoin="round"/>
+
+  <!-- 身體 -->
+  <path d="M58 80 C74 50,110 32,146 35 C184 39,212 58,221 76 C224 80,224 84,221 88 C210 104,182 124,146 126 C110 129,74 110,58 80 Z"
+        fill="url(#bodyGrad)"/>
+
+  <g clip-path="url(#bodyClip)">
+    <!-- 白紋：尾柄（窄） -->
+    <path d="M66 28 L82 28 L78 134 L60 134 Z"
+          fill="#fff8ef" stroke="#3a2410" stroke-width="3" stroke-linejoin="round"/>
+    <!-- 白紋：身體中帶 -->
+    <path d="M116 22 L138 22 L132 140 L108 140 Z"
+          fill="#fff8ef" stroke="#3a2410" stroke-width="3" stroke-linejoin="round"/>
+    <!-- 白紋：頭後 -->
+    <path d="M166 24 L184 24 L180 138 L158 138 Z"
+          fill="#fff8ef" stroke="#3a2410" stroke-width="3" stroke-linejoin="round"/>
+    <!-- 腹部亮面與背部陰影 -->
+    <ellipse cx="122" cy="128" rx="84" ry="16" fill="#ffffff" opacity="0.22"/>
+    <path d="M70 42 C110 28,170 30,206 56 C178 42,120 38,70 42 Z" fill="#8a3c08" opacity="0.35"/>
+  </g>
+
+  <!-- 身體描邊 -->
+  <path d="M58 80 C74 50,110 32,146 35 C184 39,212 58,221 76 C224 80,224 84,221 88 C210 104,182 124,146 126 C110 129,74 110,58 80 Z"
+        fill="none" stroke="#7a3208" stroke-width="4" stroke-linejoin="round"/>
+
+  <!-- 胸鰭 -->
+  <path d="M146 84 C156 86,162 94,161 104 C152 101,145 94,143 86 Z"
+        fill="url(#finGrad)" stroke="#7a3208" stroke-width="3" stroke-linejoin="round"/>
+
+  <!-- 眼睛 -->
+  <circle cx="202" cy="61" r="10" fill="#ffffff" stroke="#3a2410" stroke-width="2.5"/>
+  <circle cx="205" cy="62" r="5" fill="#231207"/>
+  <circle cx="206.5" cy="59.5" r="1.6" fill="#ffffff"/>
+
+  <!-- 嘴巴 -->
+  <path d="M219 89 Q211 96,202 93" fill="none" stroke="#7a3208" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- 腮線 -->
+  <path d="M192 46 Q199 66,193 90" fill="none" stroke="#c25512" stroke-width="2.5" opacity="0.65"/>
+</svg>
