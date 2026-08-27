@@ -1,0 +1,39 @@
+{
+  "version": 2,
+  "frameSize": 64,
+  "frameCount": 4,
+  "direction": "right",
+  "atlas": {
+    "filePattern": "fish/{id}/{id}-states.png",
+    "width": 256,
+    "height": 384,
+    "columns": 4,
+    "rows": 6,
+    "idle": { "row": 0, "frame": 0 }
+  },
+  "states": {
+    "idle": { "row": 0, "frame": 0, "frames": 1, "mode": "hold" },
+    "swim": { "row": 0, "frames": 4, "fps": 9, "mode": "loop" },
+    "hungry": { "row": 1, "frames": 4, "fps": 6, "mode": "loop" },
+    "eat": { "row": 2, "frames": 4, "fps": 9, "mode": "once" },
+    "sick": { "row": 3, "frames": 4, "fps": 5, "mode": "loop" },
+    "death": { "row": 4, "frames": 4, "fps": 5, "mode": "once-hold-last" },
+    "bubble": { "row": 5, "frames": 4, "fps": 8, "mode": "once-or-short-loop" }
+  },
+  "species": [
+    { "id": "goby", "name": "小蝦虎", "phase": 2 },
+    { "id": "guppy", "name": "孔雀魚", "phase": 2 },
+    { "id": "anglerfish", "name": "燈籠魚", "phase": 3 },
+    { "id": "golden-koi", "name": "黃金錦鯉", "phase": 3 },
+    { "id": "zebrafish", "name": "斑馬魚", "phase": 3 },
+    { "id": "clownfish", "name": "小丑魚", "phase": 0, "legacyRootCopies": true },
+    { "id": "blue-devil", "name": "藍魔鬼", "phase": 3 },
+    { "id": "angelfish", "name": "神仙魚", "phase": 4 },
+    { "id": "lionfish", "name": "獅子魚", "phase": 4 },
+    { "id": "moonfish", "name": "月光魚", "phase": 4 },
+    { "id": "arowana", "name": "龍魚", "phase": 4 },
+    { "id": "electric-eel", "name": "電鰻", "phase": 4 },
+    { "id": "stingray", "name": "魟魚", "phase": 4 },
+    { "id": "rainbow-mermaid", "name": "彩虹美人魚", "phase": 4 }
+  ]
+}

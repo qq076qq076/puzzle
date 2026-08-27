@@ -1,6 +1,35 @@
 # 快樂水族箱素材
 
-## Runtime PNG（比照 Dungeon 素材格式）
+## 正式目錄
+
+| 目錄 | 內容 |
+| --- | --- |
+| `fish/<species-id>/` | 14 種魚；每種一張固定 4×6 狀態圖集 |
+| `helpers/<helper-id>/` | 蘋果螺、清潔蝦、清道夫魚的 idle／work／hungry |
+| `devices/<device-id>/` | 餵食器、過濾器、UV、氣泡石、暖燈的狀態動畫 |
+| `objects/` | 孵化、餵食、藥水、寶箱、漂流瓶等互動動畫 |
+| `decorations/` | 30 種 `64×64` 靜態裝飾 |
+| `ui/` | 16 種 `64×64` 資源與操作圖示 |
+| `source/` | 高解析生成母表與提示詞紀錄，不供 runtime 直接載入 |
+
+魚種與播放規格見 `manifest.json`；其他素材索引見 `catalog.json`。
+所有正式檔名與資料夾 ID 一律使用英文 kebab-case。
+
+魚類正式執行期檔案：
+
+```text
+fish/<id>/<id>-states.png     # 256×384，4 欄 × 6 列，每格 64×64
+```
+
+欄由左至右為動畫第 0～3 幀；列由上至下固定為 `swim`、`hungry`、
+`eat`、`sick`、`death`、`bubble`。`idle` 共用 `swim` 第 0 幀。
+每種魚只需載入一次；實際列號、FPS 與播放模式以 `manifest.json` 為準。
+
+舊的分狀態檔已移至 `source/legacy-runtime-split/<id>/`，只供比對與回溯，
+不得由遊戲載入。根目錄的 `clownfish*.png` 仍是舊程式相容副本；新程式請載入
+`fish/clownfish/clownfish-states.png`。
+
+## 小丑魚舊路徑說明
 
 ### `clownfish.png`
 
@@ -41,18 +70,27 @@
 - `source/clownfish-idle-generated.png`：單幀高解析生成來源。
 - `source/clownfish-swim-generated.png`：4 幀游泳高解析生成來源。
 - `source/clownfish-*-transparent.png`：各狀態的真透明高解析來源。
-- `source/raw-checkerboard/`：背景抽離前的生成中間稿，不可作為 runtime 素材。
+- `source/fish/<species-id>/`：各魚種高解析狀態母表。
+- `source/fish/goby/goby-idle-generated.png`：第一階段小蝦虎單幀母圖。
+- `source/fish/guppy/guppy-idle-transparent.png`：第一階段孔雀魚單幀母圖。
+- `source/phase-01-prompts.md`：第一階段完整提示詞、輸出與透明度驗證紀錄。
+- `source/GENERATION-PROMPTS.md`：完整批次提示詞與物種設計差異。
+- 各來源資料夾的 `raw-checkerboard/`：背景抽離前中間稿，不可作 runtime。
 - Runtime PNG 已移除外圍半透明暈光，並以最近鄰縮放保留清晰像素邊緣。
 
-Canvas spritesheet 載入範例：
+後續素材的分階段製作順序與共同驗收基準見 `PHASES.md`。
+
+Canvas 狀態圖集載入範例：
 
 ```js
 const frameSize = 64;
 const frame = Math.floor(elapsedMs / 100) % 4;
+const stateRows = { swim: 0, hungry: 1, eat: 2, sick: 3, death: 4, bubble: 5 };
+const row = stateRows[state];
 ctx.drawImage(
-  clownfishSwim,
+  clownfishStates,
   frame * frameSize,
-  0,
+  row * frameSize,
   frameSize,
   frameSize,
   x,
@@ -82,5 +120,11 @@ img.src = "assets/clownfish.svg";
 
 ### 後續素材慣例
 
-- 其餘魚種比照此風格：粗深棕描邊（`#7a3208`）、橘系漸層、白紋帶細黑邊。
-- 檔名以魚種 id 命名（見 `遊戲機制.md` §6），例如 `clownfish.svg`、`blueTang.svg`。
+- 全素材比照此風格：粗深棕描邊（`#7a3208`）、清楚塊面明暗與高辨識輪廓。
+- 魚種 ID、狀態順序、FPS 與播放模式一律以 `manifest.json` 為準。
+- 重建正式魚類圖集時執行 `./tools/build-fish-state-atlases.ps1 -Force`；工具會按透明像素辨識完整物件後置入固定格位，避免直接等分母表造成跨列裁切。
+- 新增非魚類素材時同步更新 `catalog.json`，並執行：
+
+```powershell
+./tools/validate-assets.ps1
+```

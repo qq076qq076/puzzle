@@ -1,0 +1,37 @@
+{
+  "helpers": [
+    { "id": "apple-snail", "states": ["idle", "work", "hungry"] },
+    { "id": "cleaner-shrimp", "states": ["idle", "work", "hungry"] },
+    { "id": "pleco", "states": ["idle", "work", "hungry"] }
+  ],
+  "devices": [
+    { "id": "basic-feeder", "states": ["active", "empty"] },
+    { "id": "advanced-feeder", "states": ["active", "empty"] },
+    { "id": "hang-on-filter", "states": ["active", "expired"] },
+    { "id": "uv-sterilizer", "states": ["active", "off"] },
+    { "id": "bubble-stone", "states": ["active", "off"] },
+    { "id": "warm-lamp", "states": ["active", "off"] }
+  ],
+  "objects": [
+    "fish-egg-hatch",
+    "fish-food-fall",
+    "algae-wafer-fall",
+    "medicine-use",
+    "treasure-chest-open",
+    "drift-bottle-bob"
+  ],
+  "decorations": [
+    "anubias-plant", "java-fern", "vallisneria-grass", "moss-ball", "red-seaweed",
+    "pink-branch-coral", "blue-fan-coral", "brain-coral", "shell-cluster", "starfish",
+    "driftwood-arch", "rock-arch", "pebble-cave", "aquarium-castle", "temple-ruins",
+    "pirate-shipwreck", "decorative-treasure-chest", "diver-helmet", "rusty-anchor", "ceramic-vase",
+    "bubble-conch", "lighthouse", "moon-statue", "rainbow-crystal", "pearl-clam",
+    "string-lights", "warm-lamp", "mirror-backdrop", "toy-submarine", "coral-gate"
+  ],
+  "ui": [
+    "coin", "gem", "exp-star", "fish-food",
+    "algae-wafer", "medicine", "cleaning-brush", "filter-cartridge",
+    "fertilizer-shard", "decoration-shard", "fish-egg", "visitor-ticket",
+    "heart", "clock", "inventory-crate", "quest-scroll"
+  ]
+}
