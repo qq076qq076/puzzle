@@ -23,7 +23,8 @@ service cloud.firestore {
         'duquan',
         'gravity-planet',
         'dice-tower-defense',
-        'harvest-clicker'
+        'harvest-clicker',
+        'happy-aquarium'
       ];
     }
 

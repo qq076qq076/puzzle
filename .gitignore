@@ -1,1 +1,4 @@
 *Zone.Identifier
+.pnpm-store/
+games/happy-aquarium/node_modules/
+games/happy-aquarium/dist/

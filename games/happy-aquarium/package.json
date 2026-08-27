@@ -1,0 +1,20 @@
+{
+  "name": "happy-aquarium",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@11.19.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "test": "node --test",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "pnpm test && pnpm build"
+  },
+  "dependencies": {
+    "phaser": "4.2.1"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0"
+  }
+}

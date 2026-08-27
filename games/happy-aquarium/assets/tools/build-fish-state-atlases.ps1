@@ -235,7 +235,7 @@ Add-Type -TypeDefinition $source -ReferencedAssemblies $drawingAssemblies
 
 $results = foreach ($species in $manifest.species) {
     $speciesId = [string]$species.id
-    $fishDirectory = Join-Path $root (Join-Path 'fish' $speciesId)
+    $fishDirectory = Join-Path $root (Join-Path 'runtime/fish' $speciesId)
     $outputPath = Join-Path $fishDirectory "$speciesId-states.png"
     [System.IO.Directory]::CreateDirectory($fishDirectory) | Out-Null
 

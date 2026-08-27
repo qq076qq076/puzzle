@@ -1,7 +1,13 @@
 # 素材生成提示詞規格
 
-執行方式：Codex 內建 imagegen。所有輸出先保存高解析母表，再由
-`tools/build-fish-atlas.ps1` 做邊界 flood-fill 去除假透明格紋、最近鄰縮放與切片。
+下列工具與輸出路徑均以 `games/happy-aquarium/assets/` 為基準。
+
+執行方式：Codex 內建 imagegen。所有輸出先保存為 `source/` 高解析母表，不得直接覆蓋 `runtime/`。魚類管線分兩步：
+
+1. 新產生的單一高解析母表先交給 `tools/build-fish-atlas.ps1`，做邊界 flood-fill、去除假透明格紋、最近鄰縮放，產生透明母表或高解析狀態列中間稿。
+2. 再執行 `tools/build-fish-state-atlases.ps1 -Force`，依 `manifest.json` 將全部物種內容辨識重排為唯一正式檔 `runtime/fish/<id>/<id>-states.png`。
+
+最後執行 `tools/validate-assets.ps1`。只有第二步產生的固定 `256×384`、4×6、每格 `64×64` 檔案可供 Phaser 以 `spritesheet` 載入；第一步的切片與母表一律留在 `source/`。
 
 ## 魚類共同提示詞
 
@@ -57,6 +63,6 @@ Constraints: genuine transparent alpha; no backdrop, checkerboard, glow, shadow,
 
 ## 裝飾與 UI
 
-- 裝飾：5×6、共 30 格，順序與檔名見 `../../catalog.json`。
-- UI：4×4、共 16 格，順序與檔名見 `../../catalog.json`。
+- 裝飾：5×6、共 30 格，順序與檔名見 `../catalog.json`。
+- UI：4×4、共 16 格，順序與檔名見 `../catalog.json`。
 - 每格單一主體、透明背景、無格線與標籤，輸出為 `64×64`。

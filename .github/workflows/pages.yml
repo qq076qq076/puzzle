@@ -44,6 +44,21 @@ jobs:
         working-directory: games/dungeon
         run: npm run build
 
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Install Happy Aquarium dependencies
+        working-directory: games/happy-aquarium
+        run: pnpm install --frozen-lockfile
+
+      - name: Test Happy Aquarium
+        working-directory: games/happy-aquarium
+        run: pnpm test
+
+      - name: Build Happy Aquarium
+        working-directory: games/happy-aquarium
+        run: pnpm build
+
       - name: Configure Pages
         uses: actions/configure-pages@v6
 
@@ -55,6 +70,9 @@ jobs:
           rm -rf _site/games/dungeon
           mkdir -p _site/games/dungeon
           cp -R games/dungeon/dist/. _site/games/dungeon/
+          rm -rf _site/games/happy-aquarium
+          mkdir -p _site/games/happy-aquarium
+          cp -R games/happy-aquarium/dist/. _site/games/happy-aquarium/
 
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v5

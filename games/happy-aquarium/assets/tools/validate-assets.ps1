@@ -7,6 +7,7 @@ $root = [System.IO.Path]::GetFullPath($AssetRoot)
 Add-Type -AssemblyName System.Drawing
 
 $checked = 0
+$runtimeRoot = Join-Path $root 'runtime'
 
 function Assert-Image {
     param([string]$Path, [int]$Width, [int]$Height)
@@ -70,7 +71,7 @@ function Assert-FishAtlasCells {
     }
 }
 
-$manifest = Get-Content -Raw -LiteralPath (Join-Path $root 'manifest.json') | ConvertFrom-Json
+$manifest = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $root 'manifest.json') | ConvertFrom-Json
 $fishStates = @('swim', 'hungry', 'eat', 'sick', 'death', 'bubble')
 if ($manifest.atlas.columns -ne 4 -or $manifest.atlas.rows -ne 6 -or $manifest.atlas.width -ne 256 -or $manifest.atlas.height -ne 384) {
     throw 'manifest.json fish atlas geometry must be 4 columns, 6 rows, and 256x384.'
@@ -82,7 +83,7 @@ for ($row = 0; $row -lt $fishStates.Count; $row++) {
     }
 }
 foreach ($species in $manifest.species) {
-    $dir = Join-Path $root (Join-Path 'fish' $species.id)
+    $dir = Join-Path $runtimeRoot (Join-Path 'fish' $species.id)
     $atlasPath = Join-Path $dir "$($species.id)-states.png"
     $runtimePngs = @(Get-ChildItem -LiteralPath $dir -File -Filter '*.png')
     if ($runtimePngs.Count -ne 1 -or $runtimePngs[0].Name -ne "$($species.id)-states.png") {
@@ -92,28 +93,47 @@ foreach ($species in $manifest.species) {
     Assert-FishAtlasCells $atlasPath
 }
 
-$catalog = Get-Content -Raw -LiteralPath (Join-Path $root 'catalog.json') | ConvertFrom-Json
+$catalog = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $root 'catalog.json') | ConvertFrom-Json
 foreach ($helper in $catalog.helpers) {
-    $dir = Join-Path $root (Join-Path 'helpers' $helper.id)
+    $dir = Join-Path $runtimeRoot (Join-Path 'helpers' $helper.id)
     foreach ($state in $helper.states) {
         $width = if ($state -eq 'idle') { 64 } else { 256 }
         Assert-Image (Join-Path $dir "$($helper.id)-$state.png") $width 64
     }
 }
 foreach ($device in $catalog.devices) {
-    $dir = Join-Path $root (Join-Path 'devices' $device.id)
+    $dir = Join-Path $runtimeRoot (Join-Path 'devices' $device.id)
     foreach ($state in $device.states) {
         Assert-Image (Join-Path $dir "$($device.id)-$state.png") 256 64
     }
 }
 foreach ($name in $catalog.objects) {
-    Assert-Image (Join-Path $root "objects/$name.png") 256 64
+    Assert-Image (Join-Path $runtimeRoot "objects/$name.png") 256 64
 }
 foreach ($name in $catalog.decorations) {
-    Assert-Image (Join-Path $root "decorations/$name.png") 64 64
+    Assert-Image (Join-Path $runtimeRoot "decorations/$name.png") 64 64
 }
 foreach ($name in $catalog.ui) {
-    Assert-Image (Join-Path $root "ui/$name.png") 64 64
+    Assert-Image (Join-Path $runtimeRoot "ui/$name.png") 64 64
 }
+
+function Assert-Classification {
+    param($Groups, [string[]]$Expected, [string]$Category)
+
+    $actual = @($Groups.PSObject.Properties | ForEach-Object { $_.Value })
+    $duplicates = @($actual | Group-Object | Where-Object Count -gt 1 | ForEach-Object Name)
+    $missing = @($Expected | Where-Object { $_ -notin $actual })
+    $unknown = @($actual | Where-Object { $_ -notin $Expected })
+    if ($duplicates.Count -or $missing.Count -or $unknown.Count) {
+        throw "Invalid $Category classification. Duplicates=[$($duplicates -join ', ')]; Missing=[$($missing -join ', ')]; Unknown=[$($unknown -join ', ')]."
+    }
+}
+
+Assert-Classification $catalog.classification.fish @($manifest.species.id) 'fish'
+Assert-Classification $catalog.classification.helpers @($catalog.helpers.id) 'helpers'
+Assert-Classification $catalog.classification.devices @($catalog.devices.id) 'devices'
+Assert-Classification $catalog.classification.objects @($catalog.objects) 'objects'
+Assert-Classification $catalog.classification.decorations @($catalog.decorations) 'decorations'
+Assert-Classification $catalog.classification.ui @($catalog.ui) 'ui'
 
 Write-Output "Validated $checked runtime PNG assets."

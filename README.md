@@ -20,6 +20,7 @@
 - `games/gravity-planet/`：Three.js 重力星球生存遊戲，吸收碎石、進化成 10 階星體並躲避大型星體。
 - `games/dice-tower-defense/`：骰塔守境骰子塔防遊戲，包含 15 波敵人、6 種骰塔、骰面充能、合成與首領波；規格與實作補充文件位於遊戲資料夾內。
 - `games/dungeon/`：Phaser/Vite 俯視角 Roguelite 原型，包含 5 間隨機普通房、第 6 間三階段 Boss 房、近戰、閃避與 Buff；GitHub Pages 部署前會自動測試並編譯。
+- `games/happy-aquarium/`：Phaser WebGL 水族箱與 DOM 管理介面的混合式養成遊戲，包含 14 種魚、清潔生物、設備、裝飾、離線模擬與雲端存檔；規格依用途拆分於遊戲資料夾內。
 - `games/rock-paper-scissors/`：使用 WebRTC DataChannel 的雙人 P2P 剪刀石頭布，以邀請網址 QR Code／複製網址配對，並使用 commit-reveal 驗證出拳。
 - `games/harvest-clicker/`：15×15 Canvas 點擊農場，包含 25 塊土地、農具游標、3×3 種植、自動收割、灑水、肥料及離線結算。
 
@@ -35,7 +36,7 @@ python3 -m http.server 8000
 
 ## Firebase 雲端存檔與分享
 
-目前 11 款遊戲已接上共用 Firebase 存檔層；剪刀石頭布使用 P2P 連線，`dungeon` 為獨立的 Phaser 原型，兩者未接入這層。未設定 Firebase 時，遊戲會自動退回原本的 `localStorage`；設定完成後，未登入時使用匿名 Authentication，登入 Google／Facebook 後即可跨裝置恢復進度，Email 登入則可按需展開。存檔寫入：
+目前 12 款遊戲已接上共用 Firebase 存檔層；剪刀石頭布使用 P2P 連線，`dungeon` 為獨立的 Phaser 原型，兩者未接入這層。未設定 Firebase 時，遊戲會自動退回原本的 `localStorage`；設定完成後，未登入時使用匿名 Authentication，登入 Google／Facebook 後即可跨裝置恢復進度，Email 登入則可按需展開。存檔寫入：
 
 ```text
 users/{uid}/saves/{gameId}

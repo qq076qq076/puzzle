@@ -15,7 +15,8 @@
     "duquan",
     "gravity-planet",
     "dice-tower-defense",
-    "harvest-clicker"
+    "harvest-clicker",
+    "happy-aquarium"
   ];
   const SHARE_KEYS = new Set(["harvest-clicker"]);
   const SHARE_REVISION_FIELD = "__shareSourceRevision";
@@ -343,7 +344,7 @@
       }).catch(function (error) {
         notify("error", "雲端寫入失敗，保留本機存檔");
         console.warn("[PuzzleFirebase] Cannot save save", gameKey, error);
-        return { accepted: false, checkpoint: null };
+        return null;
       });
     });
   }

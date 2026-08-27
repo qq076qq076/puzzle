@@ -4,7 +4,7 @@
   "frameCount": 4,
   "direction": "right",
   "atlas": {
-    "filePattern": "fish/{id}/{id}-states.png",
+    "filePattern": "runtime/fish/{id}/{id}-states.png",
     "width": 256,
     "height": 384,
     "columns": 4,
@@ -26,7 +26,7 @@
     { "id": "anglerfish", "name": "燈籠魚", "phase": 3 },
     { "id": "golden-koi", "name": "黃金錦鯉", "phase": 3 },
     { "id": "zebrafish", "name": "斑馬魚", "phase": 3 },
-    { "id": "clownfish", "name": "小丑魚", "phase": 0, "legacyRootCopies": true },
+    { "id": "clownfish", "name": "小丑魚", "phase": 0, "legacyRootCopies": false, "legacyArchive": "source/legacy-root-copies/clownfish" },
     { "id": "blue-devil", "name": "藍魔鬼", "phase": 3 },
     { "id": "angelfish", "name": "神仙魚", "phase": 4 },
     { "id": "lionfish", "name": "獅子魚", "phase": 4 },

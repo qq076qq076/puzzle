@@ -33,5 +33,40 @@
     "algae-wafer", "medicine", "cleaning-brush", "filter-cartridge",
     "fertilizer-shard", "decoration-shard", "fish-egg", "visitor-ticket",
     "heart", "clock", "inventory-crate", "quest-scroll"
-  ]
+  ],
+  "classification": {
+    "fish": {
+      "early-game": ["goby", "guppy", "anglerfish", "golden-koi", "zebrafish", "clownfish", "blue-devil"],
+      "mid-game": ["angelfish", "lionfish", "moonfish", "arowana", "electric-eel"],
+      "late-and-legendary": ["stingray", "rainbow-mermaid"]
+    },
+    "helpers": {
+      "cleaning-creatures": ["apple-snail", "cleaner-shrimp", "pleco"]
+    },
+    "devices": {
+      "feeding": ["basic-feeder", "advanced-feeder"],
+      "water-quality": ["hang-on-filter", "uv-sterilizer"],
+      "environment": ["bubble-stone", "warm-lamp"]
+    },
+    "objects": {
+      "feeding": ["fish-food-fall", "algae-wafer-fall"],
+      "care-and-growth": ["fish-egg-hatch", "medicine-use"],
+      "rewards-and-events": ["treasure-chest-open", "drift-bottle-bob"]
+    },
+    "decorations": {
+      "aquatic-plants": ["anubias-plant", "java-fern", "vallisneria-grass", "moss-ball", "red-seaweed"],
+      "corals-and-shells": ["pink-branch-coral", "blue-fan-coral", "brain-coral", "shell-cluster", "starfish", "pearl-clam"],
+      "natural-hardscape": ["driftwood-arch", "rock-arch", "pebble-cave"],
+      "ruins-and-shipwrecks": ["aquarium-castle", "temple-ruins", "pirate-shipwreck"],
+      "aquarium-props": ["decorative-treasure-chest", "diver-helmet", "rusty-anchor", "ceramic-vase"],
+      "themed-and-special": ["bubble-conch", "lighthouse", "moon-statue", "rainbow-crystal", "string-lights", "warm-lamp", "mirror-backdrop", "toy-submarine", "coral-gate"]
+    },
+    "ui": {
+      "currency": ["coin", "gem"],
+      "progress-and-status": ["exp-star", "heart", "clock"],
+      "care-items": ["fish-food", "algae-wafer", "medicine", "cleaning-brush"],
+      "parts-and-eggs": ["filter-cartridge", "fertilizer-shard", "decoration-shard", "fish-egg"],
+      "navigation-and-quests": ["visitor-ticket", "inventory-crate", "quest-scroll"]
+    }
+  }
 }

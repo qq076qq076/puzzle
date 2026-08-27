@@ -130,7 +130,17 @@
     }
 
     function recordCloudResult(checkpoint, result) {
-      if (!result || !result.accepted || !result.checkpoint) return;
+      if (!result) return;
+      if (!result.accepted) {
+        active = false;
+        window.clearInterval(intervalId);
+        cloudPending = null;
+        if (typeof options.onConflict === "function") {
+          try { options.onConflict(result.checkpoint || null); } catch (error) { console.warn("[PuzzleSave] Conflict handler failed", error); }
+        }
+        return;
+      }
+      if (!result.checkpoint) return;
       const current = readCheckpoint();
       if (!current || current.revision !== checkpoint.revision || current.clientSavedAt !== checkpoint.clientSavedAt) return;
       const remote = result.checkpoint;

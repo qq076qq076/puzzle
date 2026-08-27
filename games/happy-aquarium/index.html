@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#073d57" />
+    <meta name="description" content="快樂水族箱：孵化、餵養、清潔與收藏魚群的單人養成遊戲。" />
+    <title>快樂水族箱 · Happy Aquarium</title>
+  </head>
+  <body>
+    <main class="aquarium-page">
+      <header class="topbar">
+        <a class="back-link" href="../../index.html" aria-label="回到所有遊戲">← 所有遊戲</a>
+        <div class="brand">
+          <span class="eyebrow">HAPPY AQUARIUM</span>
+          <h1>快樂水族箱<span>.</span></h1>
+        </div>
+        <div class="resources" aria-live="polite">
+          <span><img id="icon-coin" alt="" /><small>金幣</small><strong id="coins-value">0</strong></span>
+          <span><img id="icon-gem" alt="" /><small>寶石</small><strong id="gems-value">0</strong></span>
+          <span><img id="icon-exp" alt="" /><small>等級</small><strong id="level-value">1</strong></span>
+        </div>
+      </header>
+
+      <section class="game-layout">
+        <section class="tank-column">
+          <div class="tank-status">
+            <label>EXP <progress id="exp-progress" value="0" max="100"></progress><span id="exp-label">0 / 100</span></label>
+            <label>清潔度 <progress id="clean-progress" value="100" max="100"></progress><span id="clean-label">100</span></label>
+            <span id="capacity-label">0 / 15 隻</span>
+            <span id="save-status">本機存檔</span>
+          </div>
+          <div id="aquarium-stage" class="aquarium-stage" tabindex="0" role="application" aria-label="水族箱。選擇魚糧後點擊水面餵食；點擊魚可查看狀態。"></div>
+          <div class="tool-row" aria-label="照護工具">
+            <button type="button" data-action="feed">🍘 撒魚糧</button>
+            <button type="button" data-action="clean">🧽 擦藻</button>
+            <button type="button" data-action="wafer">🟢 藻錠 <span id="wafer-count">0</span></button>
+            <button type="button" data-action="medicine">🧪 藥水 <span id="medicine-count">0</span></button>
+            <button type="button" data-action="reward">🎁 漂流禮物</button>
+          </div>
+        </section>
+
+        <aside class="panel-column" aria-label="水族箱管理">
+          <nav class="tabs" aria-label="管理分類">
+            <button class="is-active" type="button" data-tab="fish">魚卵</button>
+            <button type="button" data-tab="helpers">幫手</button>
+            <button type="button" data-tab="devices">設備</button>
+            <button type="button" data-tab="decorations">裝飾</button>
+          </nav>
+          <section id="shop-panel" class="shop-panel" aria-live="polite"></section>
+          <section id="selection-panel" class="selection-panel" hidden></section>
+          <footer class="panel-footer">
+            <button type="button" id="tank-name-button">魚缸：<span id="tank-name">我的第一缸</span></button>
+            <button type="button" id="settings-button">設定</button>
+            <a href="遊戲規格書.md">規格</a>
+          </footer>
+        </aside>
+      </section>
+    </main>
+
+    <dialog id="game-dialog"><form method="dialog"><div id="dialog-content"></div><div class="dialog-actions"><button value="cancel">取消</button><button id="dialog-confirm" value="default">確認</button></div></form></dialog>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <section id="offline-report" class="offline-report" hidden aria-live="polite"></section>
+    <section id="writer-block" class="writer-block" hidden><div><h2>遊戲已在另一個分頁開啟</h2><p>關閉另一個分頁後，這裡會自動重新嘗試。</p></div></section>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

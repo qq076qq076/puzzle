@@ -1,5 +1,7 @@
 # 快樂水族箱素材分階段製作
 
+本文路徑均以 `games/happy-aquarium/assets/` 為基準。
+
 ## 共同風格基準
 
 - 參考：`source/clownfish-idle-generated.png`
@@ -11,7 +13,7 @@
 
 ## 資料夾與命名規則
 
-- 每種魚獨立放在 `fish/<species-id>/`，`species-id` 一律使用英文 kebab-case。
+- 每種魚獨立放在 `runtime/fish/<species-id>/`，`species-id` 一律使用英文 kebab-case。
 - 每個正式資料夾固定只包含 `<species-id>-states.png`。
 - 狀態圖集固定為 `256×384`、4 欄 × 6 列、每格 `64×64`、魚頭預設朝右。
 - 欄由左至右為動畫第 0～3 幀；列由上至下固定為 `swim`、`hungry`、`eat`、`sick`、`death`、`bubble`。
@@ -19,7 +21,7 @@
 - 每格內容四周必須保留至少 1 px 透明邊界；禁止直接按高解析母表等分裁切，應使用 `tools/build-fish-state-atlases.ps1` 的內容辨識重排。
 - 高解析母表放在 `source/fish/<species-id>/`；假透明中間稿放在該資料夾的 `raw-checkerboard/`。
 - 魚種、狀態順序與播放速度的機器可讀規格以 `manifest.json` 為準。
-- 舊分片移至 `source/legacy-runtime-split/<species-id>/`；根目錄既有 `clownfish-*.png` 暫時保留為相容檔。新程式只載入 `fish/clownfish/clownfish-states.png`。
+- 舊分片移至 `source/legacy-runtime-split/<species-id>/`；早期根目錄相容檔歸檔於 `source/legacy-root-copies/clownfish/`。新程式只載入 `runtime/fish/clownfish/clownfish-states.png`。
 
 ## 階段
 
