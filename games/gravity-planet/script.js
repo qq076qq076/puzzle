@@ -174,9 +174,11 @@ const worldGroup = new THREE.Group();
 const bodyGroup = new THREE.Group();
 const playerRoot = new THREE.Group();
 const effectGroup = new THREE.Group();
-scene.add(worldGroup, bodyGroup, playerRoot, effectGroup);
+const stageSceneryGroup = new THREE.Group();
+scene.add(worldGroup, stageSceneryGroup, bodyGroup, playerRoot, effectGroup);
 
 const infiniteWorld = { gridGroup: null, gridTiles: [], gridDivisions: null, starfield: null, chunkX: null, chunkZ: null };
+const stageScenery = { stageIndex: null, endless: false, anchorX: null, anchorZ: null };
 
 const state = {
   status: "ready",
@@ -819,6 +821,165 @@ function createStars() {
   infiniteWorld.gridGroup = gridGroup;
   infiniteWorld.gridDivisions = gridDivisions;
   worldGroup.add(gridGroup);
+}
+
+function sceneryMaterial(color, opacity = 0.24) {
+  return new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+}
+
+function addSceneryRing(group, radius, tube, color, opacity, position, rotation, spin = 0.025, arc = Math.PI * 2) {
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(radius, tube, 8, 96, arc), sceneryMaterial(color, opacity));
+  ring.position.copy(position);
+  ring.rotation.set(rotation.x, rotation.y, rotation.z);
+  ring.userData.scenerySpin = spin;
+  group.add(ring);
+  return ring;
+}
+
+function addSceneryParticles(group, color, count, radius, height = 5, opacity = 0.5) {
+  const positions = new Float32Array(count * 3);
+  for (let index = 0; index < count; index += 1) {
+    const angle = rand(0, Math.PI * 2);
+    const distance = Math.sqrt(Math.random()) * radius;
+    positions[index * 3] = Math.cos(angle) * distance;
+    positions[index * 3 + 1] = rand(-height, height);
+    positions[index * 3 + 2] = Math.sin(angle) * distance;
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  const particles = new THREE.Points(geometry, new THREE.PointsMaterial({
+    color,
+    size: 0.34,
+    map: glowTexture,
+    transparent: true,
+    opacity,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  }));
+  particles.userData.scenerySpin = 0.012;
+  group.add(particles);
+  return particles;
+}
+
+function addSceneryCrystal(group, position, color, scale = 1) {
+  const crystal = new THREE.Mesh(new THREE.ConeGeometry(0.8 * scale, 5.2 * scale, 5), sceneryMaterial(color, 0.28));
+  crystal.position.copy(position);
+  crystal.rotation.set(rand(-0.45, 0.45), rand(0, Math.PI), rand(-0.35, 0.35));
+  crystal.userData.sceneryPulse = rand(0, Math.PI * 2);
+  crystal.userData.sceneryBaseOpacity = crystal.material.opacity;
+  group.add(crystal);
+  return crystal;
+}
+
+function clearStageScenery() {
+  stageSceneryGroup.traverse((object) => {
+    if (object.geometry) object.geometry.dispose();
+    if (object.material) {
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      materials.forEach((material) => material.dispose());
+    }
+  });
+  stageSceneryGroup.clear();
+}
+
+function buildStageScenery() {
+  clearStageScenery();
+  const stageIndex = state.endlessChallenge ? STAGES.length - 1 : state.stage.index;
+  const group = stageSceneryGroup;
+  const center = new THREE.Vector3(0, -1.6, 0);
+
+  if (stageIndex === 0) {
+    addSceneryParticles(group, 0x86baff, 180, 58, 3.5, 0.32);
+    addSceneryRing(group, 32, 0.035, 0x62e6ff, 0.12, center, new THREE.Euler(Math.PI / 2, 0, 0.18));
+  } else if (stageIndex === 1) {
+    addSceneryParticles(group, 0xffd77c, 260, 62, 5, 0.42);
+    [18, 29, 43].forEach((radius, index) => addSceneryRing(group, radius, 0.06, index % 2 ? 0x62e6ff : 0xffd77c, 0.2, center, new THREE.Euler(Math.PI / 2 + index * 0.08, 0, index * 0.19), index % 2 ? -0.02 : 0.025, Math.PI * 1.55));
+  } else if (stageIndex === 2) {
+    const moon = new THREE.Mesh(new THREE.SphereGeometry(8, 28, 20), new THREE.MeshBasicMaterial({ color: 0x11152e, transparent: true, opacity: 0.72, depthWrite: false }));
+    moon.position.set(-31, 8, -28);
+    group.add(moon);
+    moon.add(makeSprite(0x8f9de8, 22, 0.08));
+    [15, 23, 33].forEach((radius, index) => addSceneryRing(group, radius, 0.08, 0xa997ff, 0.17 - index * 0.025, new THREE.Vector3(-16, -1, -12), new THREE.Euler(Math.PI / 2, 0.12, -0.35), 0.018 + index * 0.006, Math.PI * 1.45));
+  } else if (stageIndex === 3) {
+    for (let index = 0; index < 18; index += 1) {
+      const side = index % 2 ? 1 : -1;
+      addSceneryCrystal(group, new THREE.Vector3(side * rand(20, 47), rand(-2, 2), rand(-48, 48)), index % 3 ? 0xff7d4f : 0xffc260, rand(0.7, 1.8));
+    }
+    addSceneryRing(group, 38, 0.18, 0xff734f, 0.16, center, new THREE.Euler(Math.PI / 2, 0, 0.62), 0.018, Math.PI * 1.2);
+  } else if (stageIndex === 4) {
+    [[-34, 7, -20, 28], [38, 2, 8, 34], [4, 11, -48, 24]].forEach(([x, y, z, size], index) => {
+      const cloud = makeSprite(index % 2 ? 0xc58cff : 0x71bfff, size, 0.08);
+      cloud.position.set(x, y, z);
+      cloud.userData.sceneryPulse = index * 1.7;
+      cloud.userData.sceneryBaseOpacity = cloud.material.opacity;
+      group.add(cloud);
+    });
+    addSceneryParticles(group, 0xd6b1ff, 220, 65, 10, 0.28);
+  } else if (stageIndex === 5) {
+    addSceneryParticles(group, 0xffd6a1, 330, 64, 3.2, 0.48);
+    [16, 23, 31, 40, 51].forEach((radius, index) => {
+      addSceneryRing(group, radius, index === 2 ? 0.22 : 0.07, index % 2 ? 0x9deeff : 0xffd39d, 0.27 - index * 0.025, center, new THREE.Euler(Math.PI / 2 + 0.48, 0.15, -0.52 + index * 0.08), index % 2 ? -0.032 : 0.025);
+    });
+  } else if (stageIndex === 6) {
+    for (let index = 0; index < 24; index += 1) {
+      const angle = (index / 24) * Math.PI * 2;
+      addSceneryCrystal(group, new THREE.Vector3(Math.cos(angle) * rand(24, 55), rand(-3, 5), Math.sin(angle) * rand(24, 55)), index % 2 ? 0xa9efff : 0x9e9cff, rand(0.5, 1.45));
+    }
+    addSceneryParticles(group, 0xbcefff, 190, 60, 8, 0.36);
+  } else if (stageIndex === 7) {
+    [19, 27, 36, 47].forEach((radius, index) => {
+      addSceneryRing(group, radius, 0.085, index % 2 ? 0xc58cff : 0xff965c, 0.24, center, new THREE.Euler(index % 2 ? 0.18 : Math.PI / 2, index * 0.35, index * 0.24), index % 2 ? -0.045 : 0.04);
+    });
+    addSceneryParticles(group, 0xff9e62, 240, 62, 9, 0.34);
+  } else if (stageIndex === 8) {
+    const star = makeSprite(0xffa63d, 38, 0.2);
+    star.position.set(-44, 12, -52);
+    star.userData.sceneryPulse = 0;
+    star.userData.sceneryBaseOpacity = star.material.opacity;
+    group.add(star);
+    [12, 18, 25].forEach((radius, index) => addSceneryRing(group, radius, 0.12, index % 2 ? 0xffd77c : 0xff744f, 0.24, new THREE.Vector3(-35, 4, -38), new THREE.Euler(Math.PI / 2 + index * 0.16, 0, 0.2), 0.04 + index * 0.012, Math.PI * 1.3));
+    addSceneryParticles(group, 0xffc77e, 280, 68, 12, 0.42);
+  } else {
+    const lensCenter = new THREE.Vector3(34, 5, -42);
+    const voidCore = new THREE.Mesh(new THREE.SphereGeometry(6.5, 32, 24), new THREE.MeshBasicMaterial({ color: 0x010106, transparent: true, opacity: 0.92, depthWrite: false }));
+    voidCore.position.copy(lensCenter);
+    group.add(voidCore);
+    [9, 13, 18, 26].forEach((radius, index) => addSceneryRing(group, radius, index < 2 ? 0.5 : 0.11, index % 2 ? 0xb86aff : 0xff9b5c, 0.36 - index * 0.055, lensCenter, new THREE.Euler(Math.PI / 2 + 0.28, 0, -0.24), index % 2 ? -0.055 : 0.048));
+    const lensGlow = makeSprite(0x8e6cff, 35, 0.13);
+    lensGlow.position.copy(lensCenter);
+    group.add(lensGlow);
+    addSceneryParticles(group, 0xffb87d, 320, 72, 13, 0.4);
+  }
+
+  stageScenery.stageIndex = state.stage.index;
+  stageScenery.endless = state.endlessChallenge;
+  stageScenery.anchorX = null;
+  stageScenery.anchorZ = null;
+}
+
+function updateStageScenery(delta) {
+  if (stageScenery.stageIndex !== state.stage.index || stageScenery.endless !== state.endlessChallenge) buildStageScenery();
+  const anchorX = Math.round(state.player.position.x / WORLD.gridTileSize) * WORLD.gridTileSize;
+  const anchorZ = Math.round(state.player.position.z / WORLD.gridTileSize) * WORLD.gridTileSize;
+  if (anchorX !== stageScenery.anchorX || anchorZ !== stageScenery.anchorZ) {
+    stageScenery.anchorX = anchorX;
+    stageScenery.anchorZ = anchorZ;
+    stageSceneryGroup.position.set(anchorX, 0, anchorZ);
+  }
+  stageSceneryGroup.rotation.y += delta * 0.006;
+  stageSceneryGroup.traverse((object) => {
+    if (object.userData.scenerySpin) object.rotation.z += object.userData.scenerySpin * delta;
+    if (object.userData.sceneryPulse !== undefined && object.material) {
+      const pulse = 0.88 + Math.sin(state.time * 0.75 + object.userData.sceneryPulse) * 0.12;
+      object.material.opacity = (object.userData.sceneryBaseOpacity || 0.2) * pulse;
+    }
+  });
 }
 
 function currentGridDivisions() {
@@ -2530,6 +2691,7 @@ function animate() {
     updateCamera(delta);
   }
   updateModel(state.player.model, state.time, delta);
+  updateStageScenery(delta);
   updateEffects(delta);
   updateUi();
   renderer.render(scene, camera);
