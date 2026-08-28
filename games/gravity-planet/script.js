@@ -118,6 +118,7 @@ const NATURAL_SPAWN_TANGENT_BIAS = 0.68;
 const NATURAL_SPAWN_CLEARANCE = 1.2;
 const NATURAL_SPAWN_MAX_SPEED = 3;
 const COMET_TAIL_MIN_SPEED = 2.6;
+const CELESTIAL_PARTICLE_SCALE = window.matchMedia("(max-width: 760px)").matches ? 0.55 : 1;
 const COMET_TAIL_AXIS = new THREE.Vector3(0, 1, 0);
 const COSMIC_EVENT_FIRST_DELAY = 18;
 const COSMIC_EVENT_COOLDOWN = 17;
@@ -149,6 +150,8 @@ const ui = {
   evolutionName: document.querySelector("#evolution-name"),
   evolutionDescription: document.querySelector("#evolution-description"),
   evolutionContinue: document.querySelector("#evolution-continue"),
+  evolutionBanner: document.querySelector("#evolution-banner"),
+  evolutionBannerName: document.querySelector("#evolution-banner-name"),
   dangerAlert: document.querySelector("#danger-alert"),
   dangerName: document.querySelector("#danger-name"),
   dangerDistance: document.querySelector("#danger-distance"),
@@ -802,6 +805,7 @@ function addRing(group, radius, tube, color, opacity, tilt = 0.18, rotationSpeed
 }
 
 function addParticleBelt(group, radius, count, color, spread = 0.25) {
+  count = Math.max(8, Math.round(count * CELESTIAL_PARTICLE_SCALE));
   const positions = new Float32Array(count * 3);
   for (let index = 0; index < count; index += 1) {
     const angle = (index / count) * Math.PI * 2 + rand(-0.08, 0.08);
@@ -835,10 +839,12 @@ function addCrater(group, radius, position, scale = 1) {
 function createCelestialModel(level, isPlayer = false) {
   const data = LEVELS[level - 1];
   const modelLevel = Math.ceil(level / 2);
+  const advanced = data.variant === "advanced";
   const group = new THREE.Group();
   group.userData.rotationSpeed = data.spin * (isPlayer ? 1.15 : 1);
   group.userData.phase = rand(0, Math.PI * 2);
   group.userData.level = level;
+  group.userData.form = data.name;
 
   if (!glowTexture) glowTexture = makeGlowTexture();
   if (!planetBandTexture) planetBandTexture = makeBandTexture();
@@ -856,21 +862,39 @@ function createCelestialModel(level, isPlayer = false) {
 
   let core;
   if (modelLevel === 1) {
-    core = new THREE.Mesh(new THREE.IcosahedronGeometry(radius, 1), material);
+    core = new THREE.Mesh(new THREE.IcosahedronGeometry(radius, advanced ? 1 : 0), material);
+    core.scale.set(1.08, advanced ? 0.92 : 0.78, advanced ? 1.02 : 0.86);
+    if (advanced) {
+      addRing(group, radius * 1.08, radius * 0.018, data.accent, 0.2, 0.4, 0.2);
+      for (let index = 0; index < 2; index += 1) {
+        const scar = new THREE.Mesh(
+          new THREE.TorusGeometry(radius * (0.3 + index * 0.1), radius * 0.015, 4, 14, 1.5),
+          new THREE.MeshBasicMaterial({ color: data.accent, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending }),
+        );
+        scar.rotation.set(index * 1.3, index * 0.7, index * 0.9);
+        group.add(scar);
+      }
+    }
   } else if (modelLevel === 2) {
-    core = new THREE.Mesh(new THREE.IcosahedronGeometry(radius, 2), material);
+    core = new THREE.Mesh(new THREE.IcosahedronGeometry(radius, advanced ? 2 : 1), material);
     core.scale.set(1.15, 0.9, 1.05);
-    [[0.5, 0.4, 0.6], [-0.7, 0.1, 0.35], [0.1, -0.8, 0.3], [-0.4, 0.65, -0.5]].forEach((point, index) => {
+    const craters = [[0.5, 0.4, 0.6], [-0.7, 0.1, 0.35], [0.1, -0.8, 0.3], [-0.4, 0.65, -0.5]];
+    craters.slice(0, advanced ? 4 : 2).forEach((point, index) => {
       addCrater(group, radius, new THREE.Vector3(...point), index % 2 ? 0.7 : 1);
     });
-    addRing(group, radius * 1.08, radius * 0.02, data.accent, 0.25, 0.35, 0.18);
+    if (advanced) {
+      addRing(group, radius * 1.08, radius * 0.02, data.accent, 0.3, 0.35, 0.18);
+      addParticleBelt(group, radius * 1.12, 28, data.accent, radius * 0.08);
+    }
   } else if (modelLevel === 3) {
-    core = new THREE.Mesh(new THREE.SphereGeometry(radius, 24, 16), material);
-    [[0.4, 0.6, 0.7], [-0.7, 0.2, 0.45], [0.1, -0.8, 0.3], [-0.5, -0.5, -0.65], [0.65, -0.1, -0.4]].forEach((point, index) => addCrater(group, radius, new THREE.Vector3(...point), index % 3 === 0 ? 1.2 : 0.75));
-    addRing(group, radius * 1.11, radius * 0.016, data.accent, 0.32, 0.2, 0.13);
+    core = new THREE.Mesh(new THREE.SphereGeometry(radius, advanced ? 24 : 18, advanced ? 16 : 12), material);
+    const craters = [[0.4, 0.6, 0.7], [-0.7, 0.2, 0.45], [0.1, -0.8, 0.3], [-0.5, -0.5, -0.65], [0.65, -0.1, -0.4]];
+    craters.slice(0, advanced ? 5 : 3).forEach((point, index) => addCrater(group, radius, new THREE.Vector3(...point), index % 3 === 0 ? 1.2 : 0.75));
+    if (advanced) addRing(group, radius * 1.11, radius * 0.016, data.accent, 0.32, 0.2, 0.13);
+    else group.add(makeSprite(data.accent, radius * 1.9, 0.045));
   } else if (modelLevel === 4) {
-    core = new THREE.Mesh(new THREE.IcosahedronGeometry(radius, 3), material);
-    for (let index = 0; index < 4; index += 1) {
+    core = new THREE.Mesh(new THREE.IcosahedronGeometry(radius, advanced ? 3 : 2), material);
+    for (let index = 0; index < (advanced ? 4 : 2); index += 1) {
       const crack = new THREE.Mesh(
         new THREE.TorusGeometry(radius * rand(0.26, 0.52), radius * 0.018, 5, 20, rand(1.1, 2.3)),
         new THREE.MeshBasicMaterial({ color: data.accent, transparent: true, opacity: 0.82, blending: THREE.AdditiveBlending }),
@@ -878,9 +902,16 @@ function createCelestialModel(level, isPlayer = false) {
       crack.rotation.set(rand(0, Math.PI), rand(0, Math.PI), rand(0, Math.PI));
       group.add(crack);
     }
-    group.add(makeSprite(data.accent, radius * 2.7, 0.09));
+    group.add(makeSprite(data.accent, radius * (advanced ? 2.7 : 2.2), advanced ? 0.11 : 0.065));
+    if (advanced) addParticleBelt(group, radius * 1.08, 42, data.accent, radius * 0.08);
   } else if (modelLevel === 5) {
-    core = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 20), material);
+    core = new THREE.Mesh(new THREE.SphereGeometry(radius, advanced ? 32 : 24, advanced ? 20 : 16), material);
+    const atmosphere = new THREE.Mesh(
+      new THREE.SphereGeometry(radius * 1.035, 24, 16),
+      new THREE.MeshBasicMaterial({ color: data.accent, transparent: true, opacity: advanced ? 0.12 : 0.08, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
+    group.add(atmosphere);
+    if (advanced) {
     const cloud = new THREE.Mesh(
       new THREE.SphereGeometry(radius * 1.025, 32, 20),
       new THREE.MeshStandardMaterial({ color: 0x9be7ec, transparent: true, opacity: 0.29, roughness: 1, depthWrite: false }),
@@ -888,54 +919,79 @@ function createCelestialModel(level, isPlayer = false) {
     cloud.userData.spinSpeed = -0.16;
     group.add(cloud);
     addRing(group, radius * 1.12, radius * 0.018, data.accent, 0.25, 0.72, 0.11);
-    group.add(makeSprite(data.accent, radius * 2.5, 0.07));
+    }
+    group.add(makeSprite(data.accent, radius * (advanced ? 2.5 : 2.1), advanced ? 0.08 : 0.045));
   } else if (modelLevel === 6) {
     const stripedMaterial = material.clone();
     stripedMaterial.map = planetBandTexture;
     stripedMaterial.color.setHex(0xffffff);
     stripedMaterial.emissive.setHex(0x391f49);
     stripedMaterial.emissiveIntensity = 0.18;
-    core = new THREE.Mesh(new THREE.SphereGeometry(radius, 36, 24), stripedMaterial);
-    addRing(group, radius * 1.38, radius * 0.07, 0xffd39d, 0.42, 0.38, 0.12);
-    addRing(group, radius * 1.48, radius * 0.018, 0x90b8ff, 0.35, 0.38, -0.16);
-    const storm = makeSprite(0xffb3bd, radius * 0.75, 0.18);
-    storm.position.set(radius * 0.45, radius * 0.25, radius * 0.76);
-    group.add(storm);
+    core = new THREE.Mesh(new THREE.SphereGeometry(radius, advanced ? 36 : 26, advanced ? 24 : 18), stripedMaterial);
+    addRing(group, radius * (advanced ? 1.38 : 1.22), radius * (advanced ? 0.07 : 0.035), 0xffd39d, advanced ? 0.42 : 0.25, 0.38, 0.12);
+    if (advanced) {
+      addRing(group, radius * 1.48, radius * 0.018, 0x90b8ff, 0.35, 0.38, -0.16);
+      addParticleBelt(group, radius * 1.43, 72, 0xffd5ad, radius * 0.1);
+      const storm = makeSprite(0xffb3bd, radius * 0.75, 0.18);
+      storm.position.set(radius * 0.45, radius * 0.25, radius * 0.76);
+      group.add(storm);
+    }
   } else if (modelLevel === 7) {
-    core = new THREE.Mesh(new THREE.SphereGeometry(radius, 36, 24), material);
+    core = new THREE.Mesh(new THREE.SphereGeometry(radius, advanced ? 36 : 26, advanced ? 24 : 18), material);
     const iceShell = new THREE.Mesh(
       new THREE.SphereGeometry(radius * 1.035, 32, 20),
       new THREE.MeshBasicMaterial({ color: 0x9fe9ff, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false }),
     );
     group.add(iceShell);
-    addRing(group, radius * 1.28, radius * 0.055, 0x9deeff, 0.5, 0.58, 0.11);
-    addRing(group, radius * 1.43, radius * 0.016, 0xb495ff, 0.52, 0.58, -0.13);
-    addParticleBelt(group, radius * 1.36, 90, 0xbdf7ff, 0.13);
-    for (let index = 0; index < 3; index += 1) {
-      const aurora = makeSprite(index % 2 ? 0x90a5ff : 0x78f2ff, radius * 1.8, 0.08);
-      aurora.position.set(Math.cos(index * 2.1) * radius * 0.8, 0, Math.sin(index * 2.1) * radius * 0.8);
-      group.add(aurora);
+    addRing(group, radius * 1.28, radius * (advanced ? 0.055 : 0.028), 0x9deeff, advanced ? 0.5 : 0.28, 0.58, 0.11);
+    if (advanced) {
+      addRing(group, radius * 1.43, radius * 0.016, 0xb495ff, 0.52, 0.58, -0.13);
+      addParticleBelt(group, radius * 1.36, 90, 0xbdf7ff, 0.13);
+      for (let index = 0; index < 3; index += 1) {
+        const aurora = makeSprite(index % 2 ? 0x90a5ff : 0x78f2ff, radius * 1.8, 0.08);
+        aurora.position.set(Math.cos(index * 2.1) * radius * 0.8, 0, Math.sin(index * 2.1) * radius * 0.8);
+        group.add(aurora);
+      }
     }
   } else if (modelLevel === 8) {
-    core = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 20), material);
+    core = new THREE.Mesh(new THREE.SphereGeometry(radius, advanced ? 32 : 26, advanced ? 20 : 18), material);
     core.material.emissive.setHex(0x7b2c19);
-    core.material.emissiveIntensity = 0.5;
-    addRing(group, radius * 1.02, radius * 0.07, 0xff964c, 0.62, 0.2, 0.1);
-    addRing(group, radius * 1.2, radius * 0.025, 0xb36bff, 0.52, 0.2, -0.2);
-    addParticleBelt(group, radius * 1.16, 140, 0xffb26a, 0.28);
-    group.add(makeSprite(0xff9f52, radius * 2.9, 0.13));
+    core.material.emissiveIntensity = advanced ? 0.5 : 0.3;
+    addRing(group, radius * 1.02, radius * (advanced ? 0.07 : 0.035), 0xff964c, advanced ? 0.62 : 0.35, 0.2, 0.1);
+    if (advanced) {
+      addRing(group, radius * 1.2, radius * 0.025, 0xb36bff, 0.52, 0.2, -0.2);
+      addParticleBelt(group, radius * 1.16, 140, 0xffb26a, 0.28);
+    }
+    group.add(makeSprite(0xff9f52, radius * (advanced ? 2.9 : 2.45), advanced ? 0.13 : 0.08));
   } else if (modelLevel === 9) {
-    core = new THREE.Mesh(new THREE.SphereGeometry(radius, 36, 24), new THREE.MeshBasicMaterial({ color: 0xffb62e }));
+    core = new THREE.Mesh(new THREE.SphereGeometry(radius, advanced ? 36 : 28, advanced ? 24 : 18), new THREE.MeshBasicMaterial({ color: data.color }));
     const corona = new THREE.Mesh(
       new THREE.SphereGeometry(radius * 1.08, 32, 20),
-      new THREE.MeshBasicMaterial({ color: 0xff8d30, transparent: true, opacity: 0.24, blending: THREE.AdditiveBlending, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: data.accent, transparent: true, opacity: advanced ? 0.24 : 0.16, blending: THREE.AdditiveBlending, depthWrite: false }),
     );
     group.add(corona);
-    group.add(makeSprite(0xffac37, radius * 3.25, 0.28));
-    addParticleBelt(group, radius * 1.2, 170, 0xffd78c, 0.32);
-    for (let index = 0; index < 5; index += 1) {
+    group.add(makeSprite(data.accent, radius * (advanced ? 3.25 : 2.8), advanced ? 0.28 : 0.19));
+    addParticleBelt(group, radius * 1.2, advanced ? 170 : 64, data.accent, 0.32);
+    for (let index = 0; index < (advanced ? 5 : 2); index += 1) {
       const flare = makeSprite(index % 2 ? 0xffe4a7 : 0xff852f, radius * rand(0.65, 1.15), 0.25);
       flare.position.set(Math.cos(index * 1.25) * radius * 0.75, Math.sin(index * 1.7) * radius * 0.65, Math.sin(index * 1.25) * radius * 0.75);
+      group.add(flare);
+    }
+  } else if (!advanced) {
+    core = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 22), new THREE.MeshBasicMaterial({ color: data.color }));
+    for (let shellIndex = 0; shellIndex < 2; shellIndex += 1) {
+      const shell = new THREE.Mesh(
+        new THREE.SphereGeometry(radius * (1.06 + shellIndex * 0.075), 28, 18),
+        new THREE.MeshBasicMaterial({ color: shellIndex ? data.accent : 0xff633f, transparent: true, opacity: 0.16 - shellIndex * 0.045, blending: THREE.AdditiveBlending, depthWrite: false, wireframe: shellIndex === 1 }),
+      );
+      shell.userData.spinSpeed = shellIndex ? -0.08 : 0.06;
+      group.add(shell);
+    }
+    group.add(makeSprite(data.accent, radius * 3.45, 0.3));
+    addParticleBelt(group, radius * 1.26, 120, data.accent, radius * 0.12);
+    for (let index = 0; index < 6; index += 1) {
+      const flare = makeSprite(index % 2 ? 0xffd28c : 0xff7655, radius * rand(0.72, 1.3), 0.22);
+      flare.position.set(Math.cos(index * 1.04) * radius * 0.8, Math.sin(index * 1.63) * radius * 0.55, Math.sin(index * 1.04) * radius * 0.8);
       group.add(flare);
     }
   } else {
@@ -981,6 +1037,11 @@ function createCelestialModel(level, isPlayer = false) {
       light.position.y = 1.2;
       group.add(light);
     }
+  } else {
+    group.userData.lodObjects = group.children
+      .filter((child) => child !== core)
+      .map((child) => ({ child, minBand: child.isPoints || child.isSprite ? 2 : 1 }));
+    group.userData.lodBand = 2;
   }
   return group;
 }
@@ -1559,11 +1620,30 @@ function removeCometTail(body) {
   body.cometTail = null;
 }
 
+function disposeObject3D(root) {
+  if (!root) return;
+  root.traverse((object) => {
+    object.geometry?.dispose?.();
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    materials.filter(Boolean).forEach((material) => material.dispose?.());
+  });
+}
+
 function removeBody(body) {
   removeCometTail(body);
   bodyGroup.remove(body.group);
+  disposeObject3D(body.group);
   const index = state.bodies.indexOf(body);
   if (index >= 0) state.bodies.splice(index, 1);
+}
+
+function updateBodyLod(body, distance) {
+  const lodObjects = body.group.userData.lodObjects;
+  if (!lodObjects?.length) return;
+  const band = distance > 52 ? 0 : distance > 28 ? 1 : 2;
+  if (body.group.userData.lodBand === band) return;
+  body.group.userData.lodBand = band;
+  lodObjects.forEach(({ child, minBand }) => { child.visible = band >= minBand; });
 }
 
 function createBurst(position, color, count = 24, power = 2.4) {
@@ -1871,6 +1951,7 @@ function applyPlayerCosmetic() {
 function rebuildPlayerModel() {
   state.evolutionAnimation = null;
   clearPlayerCosmetic();
+  disposeObject3D(state.player.model);
   playerRoot.clear();
   state.player.model = createCelestialModel(state.player.level, true);
   state.player.field = createGravityField();
@@ -1986,11 +2067,13 @@ function chooseEvolutionPerk(index) {
 }
 
 function triggerEvolution(nextLevel) {
+  const levelsGained = nextLevel - state.player.level;
+  const majorEvolution = nextLevel % 2 === 0 || levelsGained > 1;
   state.status = "evolving";
   state.player.level = nextLevel;
   updateMissionAbsolute("reach-level", nextLevel);
   updateStageProgress("level", nextLevel);
-  state.player.shield = Math.min(state.player.shieldMax, state.player.shield + 1);
+  if (majorEvolution) state.player.shield = Math.min(state.player.shieldMax, state.player.shield + 1);
   state.highLevel = Math.max(state.highLevel, nextLevel);
   const data = LEVELS[nextLevel - 1];
   const oldModel = state.player.model;
@@ -2006,8 +2089,12 @@ function triggerEvolution(nextLevel) {
   updateAllBodyScales();
   updateGridDensity();
   ui.evolutionName.textContent = data.name;
-  ui.evolutionDescription.textContent = data.description;
+  ui.evolutionDescription.textContent = levelsGained > 1
+    ? `連續進化 +${levelsGained} 階。${data.description}`
+    : data.description;
   ui.evolutionPopup.hidden = true;
+  ui.evolutionBanner.hidden = majorEvolution;
+  ui.evolutionBannerName.textContent = levelsGained > 1 ? `${data.name} · +${levelsGained} 階` : data.name;
   if (ui.evolutionChoices) ui.evolutionChoices.innerHTML = "";
   state.evolutionAnimation = {
     oldModel,
@@ -2016,10 +2103,12 @@ function triggerEvolution(nextLevel) {
     newScale,
     accent: data.accent,
     elapsed: 0,
-    duration: 1.2,
+    duration: majorEvolution ? 1.2 : 0.65,
+    majorEvolution,
+    levelsGained,
     finalBurst: false,
   };
-  addToast(`進化中 · ${data.name}`, "#d6fbff");
+  addToast(`${majorEvolution ? "進化中" : "快速進化"} · ${data.name}`, "#d6fbff");
   ui.canvasFrame.classList.add("evolving-flash");
   window.setTimeout(() => ui.canvasFrame.classList.remove("evolving-flash"), 500);
 }
@@ -2044,11 +2133,18 @@ function updateEvolutionAnimation(delta) {
   }
   if (progress < 1) return;
   playerRoot.remove(animation.oldModel);
+  disposeObject3D(animation.oldModel);
   animation.newModel.scale.setScalar(animation.newScale);
   state.evolutionAnimation = null;
   updatePlayerVisual();
-  renderEvolutionChoices();
-  ui.evolutionPopup.hidden = false;
+  if (animation.majorEvolution) {
+    renderEvolutionChoices();
+    ui.evolutionPopup.hidden = false;
+  } else {
+    ui.evolutionBanner.hidden = true;
+    state.status = "playing";
+    updateInfiniteWorld();
+  }
   addToast(`進化完成 · ${LEVELS[state.player.level - 1].name}`, "#d6fbff");
 }
 
@@ -2057,6 +2153,7 @@ function continueAfterEvolution() {
   if (!state.evolutionChoice) chooseEvolutionPerk(0);
   state.status = "playing";
   ui.evolutionPopup.hidden = true;
+  ui.evolutionBanner.hidden = true;
   updateInfiniteWorld();
 }
 
@@ -2193,6 +2290,7 @@ function updateBodies(delta) {
     updateBossVisual(body, delta);
 
     const distance = body.position.distanceTo(state.player.position);
+    updateBodyLod(body, distance);
     if (distance > WORLD.recycleRadius) {
       if (body.isBoss) defeatBoss(body, true);
       else toRemove.push(body);
@@ -2778,6 +2876,7 @@ function restartGame() {
   ui.pauseCover.hidden = true;
   ui.gameoverCover.hidden = true;
   ui.evolutionPopup.hidden = true;
+  ui.evolutionBanner.hidden = true;
   ui.stageClearPopup.hidden = true;
   ui.codexPopup.hidden = true;
   ui.comboPill.hidden = true;

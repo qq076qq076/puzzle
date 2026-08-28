@@ -327,6 +327,10 @@ h1 span { color: var(--cyan); }
 .combo-pill strong { margin-left: 5px; font-size: 0.94rem; }
 .scene-toast { position: absolute; z-index: 4; top: 128px; left: 50%; color: #eafbff; font-size: 0.82rem; font-weight: 800; text-shadow: 0 0 20px rgba(98, 230, 255, 0.85); transform: translateX(-50%); pointer-events: none; }
 .toast-item { margin-top: 5px; animation: toast-rise 900ms ease-out forwards; white-space: nowrap; }
+.evolution-banner { position: absolute; z-index: 6; top: 46%; left: 50%; min-width: 210px; padding: 12px 22px; border: 1px solid rgba(98, 230, 255, 0.38); border-radius: 999px; color: var(--text); background: linear-gradient(90deg, rgba(18, 35, 77, 0.18), rgba(20, 46, 91, 0.9), rgba(18, 35, 77, 0.18)); box-shadow: 0 0 42px rgba(98, 230, 255, 0.18); pointer-events: none; text-align: center; transform: translate(-50%, -50%); animation: quick-evolution 650ms ease-out both; }
+.evolution-banner span, .evolution-banner strong { display: block; }
+.evolution-banner span { color: var(--cyan); font-size: 0.5rem; font-weight: 900; letter-spacing: 0.18em; }
+.evolution-banner strong { margin-top: 4px; font-size: 1.08rem; letter-spacing: -0.035em; text-shadow: 0 0 18px rgba(98, 230, 255, 0.6); }
 
 .evolution-popup {
   position: absolute;
@@ -469,6 +473,7 @@ button.codex-item:hover { border-color: var(--cosmetic-color); background: color
 @keyframes toast-rise { from { opacity: 0; transform: translateY(10px) scale(0.92); } 18% { opacity: 1; } to { opacity: 0; transform: translateY(-28px) scale(1.03); } }
 @keyframes evolution-pop { from { opacity: 0; transform: translateY(16px) scale(0.92); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes evolution-flash { from { opacity: 0.9; } to { opacity: 0; } }
+@keyframes quick-evolution { from { opacity: 0; transform: translate(-50%, -30%) scale(0.88); } 24% { opacity: 1; } 72% { opacity: 1; } to { opacity: 0; transform: translate(-50%, -68%) scale(1.04); } }
 @keyframes spark-pulse { from { transform: scale(0.84) rotate(-12deg); } to { transform: scale(1.16) rotate(12deg); } }
 
 @media (max-width: 920px) {
