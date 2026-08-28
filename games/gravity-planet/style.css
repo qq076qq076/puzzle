@@ -345,7 +345,9 @@ h1 span { color: var(--cyan); }
 
 .evolution-card {
   width: min(410px, 100%);
+  max-height: calc(100% - 16px);
   padding: 30px 30px 27px;
+  overflow-y: auto;
   border: 1px solid rgba(98, 230, 255, 0.34);
   border-radius: 21px;
   background: linear-gradient(145deg, rgba(20, 39, 81, 0.96), rgba(16, 22, 59, 0.96));
@@ -505,6 +507,8 @@ button.codex-item:hover { border-color: var(--cosmetic-color); background: color
   .stage-results { gap: 4px; }
   .stage-clear-popup { align-items: start; padding: 12px; }
   .stage-clear-card { margin: auto 0; padding: 20px 16px; }
+  .evolution-popup { align-items: start; padding: 12px; }
+  .evolution-card { margin: auto 0; padding: 22px 17px 19px; }
   .stage-reward-choices { grid-template-columns: 1fr; }
   .codex-popup { align-items: start; padding: 12px; }
   .codex-card { margin: auto 0; padding: 18px 14px; }

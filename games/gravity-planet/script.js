@@ -102,7 +102,8 @@ const MISSIONS = [
   { id: "boss", title: "巨物倖存者", description: "完成 1 次 Boss 遭遇", target: 1, reward: 45, format: (value, target) => `${value}/${target}` },
 ];
 
-const WORLD = { maxBodies: 90, recycleRadius: 96, spawnRadius: 72, gridTileSize: 70 };
+const IS_MOBILE_LAYOUT = window.matchMedia("(max-width: 760px)").matches;
+const WORLD = { maxBodies: IS_MOBILE_LAYOUT ? 68 : 90, recycleRadius: 96, spawnRadius: 72, gridTileSize: 70 };
 const VIEWPORT_SPAWN_MARGIN = 0.24;
 const PLAYER_RADIUS = 1.25;
 const GRAVITY_CONSTANT = 32;
@@ -118,7 +119,7 @@ const NATURAL_SPAWN_TANGENT_BIAS = 0.68;
 const NATURAL_SPAWN_CLEARANCE = 1.2;
 const NATURAL_SPAWN_MAX_SPEED = 3;
 const COMET_TAIL_MIN_SPEED = 2.6;
-const CELESTIAL_PARTICLE_SCALE = window.matchMedia("(max-width: 760px)").matches ? 0.55 : 1;
+const CELESTIAL_PARTICLE_SCALE = IS_MOBILE_LAYOUT ? 0.55 : 1;
 const COMET_TAIL_AXIS = new THREE.Vector3(0, 1, 0);
 const COSMIC_EVENT_FIRST_DELAY = 18;
 const COSMIC_EVENT_COOLDOWN = 17;
@@ -197,7 +198,7 @@ const ui = {
 };
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, IS_MOBILE_LAYOUT ? 1.5 : 2));
 renderer.setClearColor(0x06091b, 1);
 if ("outputColorSpace" in renderer && THREE.SRGBColorSpace) renderer.outputColorSpace = THREE.SRGBColorSpace;
 else if ("outputEncoding" in renderer && THREE.sRGBEncoding) renderer.outputEncoding = THREE.sRGBEncoding;
@@ -2732,12 +2733,14 @@ function updateStageUi() {
   }
   const stage = currentStage();
   const progress = clamp(state.stage.progress / stage.objective.target, 0, 1);
+  const recommendedLevel = stage.recommendedLevel?.completion;
+  const levelHint = recommendedLevel && state.player.level < recommendedLevel ? ` · 建議 LV ${recommendedLevel}` : "";
   ui.stageNumber.textContent = `SECTOR ${String(state.stage.index + 1).padStart(2, "0")} / ${STAGES.length}`;
   ui.stageName.textContent = stage.name;
   const stabilizationRemaining = Math.max(0, (stage.minimumDuration || 0) - stageElapsed());
   ui.stageObjective.textContent = progress >= 1 && stabilizationRemaining > 0
     ? `目標完成 · 航道穩定 ${Math.ceil(stabilizationRemaining)}s`
-    : `${stage.objective.text} · ${objectiveResultText(stage.objective, state.stage.progress)}`;
+    : `${stage.objective.text} · ${objectiveResultText(stage.objective, state.stage.progress)}${levelHint}`;
   ui.stageProgressFill.style.transform = `scaleX(${progress})`;
   ui.stageProgress.setAttribute("aria-valuenow", String(Math.round(progress * 100)));
 }
