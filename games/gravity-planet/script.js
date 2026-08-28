@@ -48,6 +48,19 @@ const BOSSES = [
   { id: "binary-warden", name: "雙星守門者", description: "雙重引力核心形成擺動路徑，碰撞時會釋放強烈反作用力。", color: 0x9deeff, duration: 30, gravityMultiplier: 1.5, sizeScale: 1.28, health: 5 },
 ];
 
+const STAGES = [
+  { id: "debris-launch", name: "碎石出港", description: "在安全碎石區建立第一個穩定核心。", objective: { type: "absorb", target: 10, text: "吸收 10 個星體" }, bonus: { type: "combo", target: 4, text: "達成 4 連擊" }, hidden: { type: "anomaly", target: 1, text: "發現 1 個異常星體" }, reward: 8, threatLimit: 0, events: [], modifiers: { gravity: 0.92, drift: 0.94, anomaly: 0.01 } },
+  { id: "orbital-debris", name: "軌道碎片帶", description: "利用星體互撞製造可吸收的連鎖軌道。", objective: { type: "chain", target: 3, text: "觸發 3 次碰撞連鎖" }, bonus: { type: "absorb", target: 15, text: "額外吸收 15 個星體" }, hidden: { type: "meteor", target: 1, text: "完成 1 次流星雨" }, reward: 10, minimumDuration: 20, threatLimit: 1, events: ["meteor"], introEventDelay: 8, modifiers: { gravity: 1, drift: 1.05, anomaly: 0.02 } },
+  { id: "lunar-tide", name: "月影潮汐", description: "在逐漸增強的潮汐力中保持核心完整。", objective: { type: "survive", target: 45, text: "在潮汐中存活 45 秒", absolute: true }, bonus: { type: "region", target: 2, text: "穿越 2 個不同星域" }, hidden: { type: "near-miss", target: 1, text: "從高兩階威脅旁脫身" }, reward: 12, threatLimit: 2, events: ["gravity-storm", "anti-gravity"], introEventDelay: 18, modifiers: { gravity: 1.16, drift: 0.96, anomaly: 0.02 } },
+  { id: "lava-rift", name: "熔岩裂谷", description: "利用碰撞裂變，在高熱碎片中補充質量。", objective: { type: "fragment", target: 8, text: "吸收 8 個碰撞碎星" }, bonus: { type: "chain", target: 6, text: "累積 6 次碰撞連鎖" }, hidden: { type: "combo", target: 6, text: "達成 6 連擊" }, reward: 15, minimumDuration: 25, threatLimit: 2, events: ["meteor", "solar-flare"], introEventDelay: 16, modifiers: { gravity: 1.08, drift: 1.08, anomaly: 0.03, fractureBias: 0.14 } },
+  { id: "cloud-giant", name: "雲海巨行星", description: "穿梭濃密雲海，建立不間斷的吸收節奏。", objective: { type: "combo", target: 8, text: "達成 8 連擊", absolute: true }, bonus: { type: "boss", target: 1, text: "完成 1 次 Boss 遭遇" }, hidden: { type: "anomaly", target: 2, text: "吸收 2 個異常星體" }, reward: 18, minimumDuration: 40, threatLimit: 2, events: ["meteor", "solar-flare"], introEventDelay: 15, bossDelay: 12, modifiers: { gravity: 1.02, drift: 1.12, anomaly: 0.05 } },
+  { id: "tilted-rings", name: "傾斜星環", description: "沿切線速度穿越多層星環與不同星域。", objective: { type: "region", target: 3, text: "穿越 3 個不同星域" }, bonus: { type: "chain", target: 8, text: "累積 8 次碰撞連鎖" }, hidden: { type: "meteor", target: 1, text: "在星環中完成流星雨" }, reward: 21, minimumDuration: 30, threatLimit: 2, events: ["anti-gravity", "gravity-storm", "meteor"], introEventDelay: 14, modifiers: { gravity: 0.96, drift: 1.2, anomaly: 0.04, tangent: 0.12 } },
+  { id: "frozen-drift", name: "冰封迷航", description: "低引力與高速漂移會讓每次轉向都更難預測。", objective: { type: "anomaly", target: 3, text: "吸收 3 個異常星體" }, bonus: { type: "survive", target: 90, text: "本星域存活 90 秒", absolute: true }, hidden: { type: "combo", target: 9, text: "達成 9 連擊", absolute: true }, reward: 24, minimumDuration: 35, threatLimit: 2, events: ["anti-gravity", "meteor"], introEventDelay: 13, modifiers: { gravity: 0.76, drift: 1.32, anomaly: 0.13 } },
+  { id: "brown-storm", name: "棕矮磁暴", description: "磁暴反覆扭曲航線，必須讀懂重力方向。", objective: { type: "gravity-storm", target: 2, text: "完成 2 次重力風暴" }, bonus: { type: "boss", target: 1, text: "完成 1 次強化 Boss 遭遇" }, hidden: { type: "fragment", target: 12, text: "吸收 12 個碰撞碎星" }, reward: 28, minimumDuration: 45, threatLimit: 2, events: ["gravity-storm"], introEventDelay: 7, eventCooldown: 8, bossDelay: 15, modifiers: { gravity: 1.24, drift: 1.12, anomaly: 0.07 } },
+  { id: "stellar-flare", name: "恆星耀斑", description: "多種宇宙事件接連發生，航線不再長時間穩定。", objective: { type: "event", target: 3, text: "完成 3 次宇宙事件" }, bonus: { type: "anomaly", target: 4, text: "吸收 4 個異常星體" }, hidden: { type: "boss", target: 1, text: "在事件期間完成 Boss 遭遇" }, reward: 34, minimumDuration: 45, threatLimit: 2, events: ["meteor", "gravity-storm", "solar-flare", "anti-gravity"], introEventDelay: 6, eventCooldown: 7, bossDelay: 14, modifiers: { gravity: 1.12, drift: 1.2, anomaly: 0.12 } },
+  { id: "black-hole-edge", name: "黑洞邊界", description: "穩定最終核心，完成從碎石到黑洞的旅程。", objective: { type: "level", target: 10, text: "進化為黑洞", absolute: true }, bonus: { type: "event", target: 4, text: "完成 4 次宇宙事件" }, hidden: { type: "boss", target: 2, text: "完成 2 次 Boss 遭遇" }, reward: 45, minimumDuration: 60, threatLimit: 2, events: ["meteor", "gravity-storm", "solar-flare", "anti-gravity"], introEventDelay: 5, eventCooldown: 6, bossDelay: 10, modifiers: { gravity: 1.2, drift: 1.22, anomaly: 0.15 } },
+];
+
 const MISSIONS = [
   { id: "absorb", title: "星塵採集者", description: "吸收 30 個星體", target: 30, reward: 10, format: (value, target) => `${value}/${target}` },
   { id: "reach-level", title: "跨越天體", description: "進化到第 5 階", target: 5, reward: 20, format: (value, target) => `LV ${value}/${target}` },
@@ -112,6 +125,23 @@ const ui = {
   missionTracker: document.querySelector("#mission-tracker"),
   missionName: document.querySelector("#mission-name"),
   missionProgress: document.querySelector("#mission-progress"),
+  stageHud: document.querySelector("#stage-hud"),
+  stageNumber: document.querySelector("#stage-number"),
+  stageName: document.querySelector("#stage-name"),
+  stageObjective: document.querySelector("#stage-objective"),
+  stageProgress: document.querySelector(".stage-progress"),
+  stageProgressFill: document.querySelector("#stage-progress-fill"),
+  stageClearPopup: document.querySelector("#stage-clear-popup"),
+  stageClearName: document.querySelector("#stage-clear-name"),
+  stageClearDescription: document.querySelector("#stage-clear-description"),
+  stageMainResult: document.querySelector("#stage-main-result"),
+  stageBonusResult: document.querySelector("#stage-bonus-result"),
+  stageHiddenResult: document.querySelector("#stage-hidden-result"),
+  stageRewardCopy: document.querySelector("#stage-reward-copy"),
+  stageRewardChoices: document.querySelector("#stage-reward-choices"),
+  stageRouteGroup: document.querySelector("#stage-route-group"),
+  stageClearNote: document.querySelector("#stage-clear-note"),
+  stageContinue: document.querySelector("#stage-continue"),
   evolutionChoices: document.querySelector("#evolution-choices"),
   evolutionNote: document.querySelector("#evolution-note"),
   sceneToast: document.querySelector("#scene-toast"),
@@ -158,6 +188,20 @@ const state = {
   regionKey: null,
   cosmicEvent: { event: null, remaining: 0, cooldown: COSMIC_EVENT_FIRST_DELAY, spawnTimer: 0 },
   bossCooldown: BOSS_FIRST_DELAY,
+  endlessChallenge: false,
+  stage: {
+    index: 0,
+    startedAt: 0,
+    progress: 0,
+    bonusProgress: 0,
+    hiddenProgress: 0,
+    visitedRegions: [],
+    route: "safe",
+    selectedRoute: null,
+    rewardChoices: [],
+    selectedReward: null,
+    rewardApplied: false,
+  },
   evolutionChoice: null,
   missions: Object.fromEntries(MISSIONS.map((mission) => [mission.id, { progress: 0, completed: false }])),
   chainCombo: 0,
@@ -238,9 +282,171 @@ function activeBossData(body) {
   return body?.bossType ? dataForId(BOSSES, body.bossType) : null;
 }
 
+function currentStage() {
+  return STAGES[clamp(state.stage.index, 0, STAGES.length - 1)];
+}
+
+function stageElapsed() {
+  return Math.max(0, state.time - state.stage.startedAt);
+}
+
+function routeRewardMultiplier() {
+  return state.stage.route === "risk" ? 1.35 : 1;
+}
+
+function objectiveProgressValue(objective, current, type, amount) {
+  if (!objective || objective.type !== type) return current;
+  const value = objective.absolute ? Math.max(current, amount) : current + amount;
+  return Math.min(objective.target, value);
+}
+
+function updateStageProgress(type, amount = 1, metadata = {}) {
+  if (state.endlessChallenge || state.status === "stage-clear") return;
+  if (type === "region") {
+    if (!metadata.id || state.stage.visitedRegions.includes(metadata.id)) return;
+    state.stage.visitedRegions.push(metadata.id);
+  }
+  const stage = currentStage();
+  state.stage.progress = objectiveProgressValue(stage.objective, state.stage.progress, type, amount);
+  state.stage.bonusProgress = objectiveProgressValue(stage.bonus, state.stage.bonusProgress, type, amount);
+  state.stage.hiddenProgress = objectiveProgressValue(stage.hidden, state.stage.hiddenProgress, type, amount);
+}
+
+function objectiveResultText(objective, progress) {
+  if (!objective) return "—";
+  if (objective.type === "survive") return `${formatTime(progress)} / ${formatTime(objective.target)}`;
+  if (objective.type === "level") return `LV ${Math.floor(progress)} / ${objective.target}`;
+  return `${Math.floor(progress)} / ${objective.target}`;
+}
+
+function renderStageRewardChoices() {
+  if (!ui.stageRewardChoices) return;
+  ui.stageRewardChoices.innerHTML = "";
+  state.stage.rewardChoices.forEach((perk, index) => {
+    const button = document.createElement("button");
+    const nextRank = (state.player.perks[perk.id] || 0) + 1;
+    button.type = "button";
+    button.className = "stage-reward-choice";
+    button.innerHTML = `<strong>${perk.name} · ${nextRank}</strong><small>${perk.description}</small>`;
+    button.classList.toggle("selected", state.stage.selectedReward === perk.id);
+    button.disabled = Boolean(state.stage.selectedReward && state.stage.selectedReward !== perk.id);
+    button.addEventListener("click", () => chooseStageReward(index));
+    ui.stageRewardChoices.appendChild(button);
+  });
+}
+
+function chooseStageReward(index) {
+  if (state.status !== "stage-clear" || state.stage.selectedReward) return;
+  const perk = state.stage.rewardChoices[index];
+  if (!perk) return;
+  state.stage.selectedReward = perk.id;
+  state.player.perks[perk.id] = (state.player.perks[perk.id] || 0) + 1;
+  if (perk.id === "shield") {
+    state.player.shieldMax += 1;
+    state.player.shield = Math.min(state.player.shieldMax, state.player.shield + 1);
+  }
+  ui.stageRewardChoices.querySelectorAll("button").forEach((button, buttonIndex) => {
+    button.classList.toggle("selected", buttonIndex === index);
+    button.disabled = buttonIndex !== index;
+  });
+  updatePlayerVisual();
+}
+
+function chooseStageRoute(route) {
+  if (state.status !== "stage-clear" || !["safe", "risk"].includes(route)) return;
+  state.stage.selectedRoute = route;
+  document.querySelectorAll(".stage-route-choice").forEach((button) => {
+    button.classList.toggle("selected", button.dataset.route === route);
+  });
+}
+
+function showStageClear() {
+  if (state.status !== "playing" || state.endlessChallenge) return;
+  const stage = currentStage();
+  state.status = "stage-clear";
+  input.clear();
+  resetJoystick();
+  if (!state.stage.rewardApplied) {
+    const bonusReward = state.stage.bonusProgress >= stage.bonus.target ? Math.ceil(stage.reward * 0.5) : 0;
+    const hiddenReward = state.stage.hiddenProgress >= stage.hidden.target ? stage.reward : 0;
+    const energyReward = Math.round((stage.reward + bonusReward + hiddenReward) * routeRewardMultiplier());
+    state.player.energy += energyReward;
+    state.player.shield = Math.min(state.player.shieldMax, state.player.shield + 1);
+    state.stage.rewardApplied = true;
+    state.stage.rewardChoices = evolutionChoicesForLevel();
+    state.stage.rewardText = `護盾 +1 · 星能 +${energyReward}${bonusReward ? " · 額外目標獎勵" : ""}${hiddenReward ? " · 隱藏獎勵" : ""}${state.stage.route === "risk" ? " · 風險加成" : ""}`;
+  }
+  ui.stageRewardCopy.textContent = state.stage.rewardText || "護盾 +1 · 階段補給已領取";
+  const stageLabel = state.stage.index === STAGES.length - 1 ? "最終星域" : `第 ${state.stage.index + 1} 星域`;
+  ui.stageClearName.textContent = `${stageLabel} · ${stage.name}`;
+  ui.stageClearDescription.textContent = stage.description;
+  ui.stageMainResult.textContent = `完成 · ${stage.objective.text}`;
+  ui.stageBonusResult.textContent = state.stage.bonusProgress >= stage.bonus.target ? `完成 · ${stage.bonus.text}` : `未完成 · ${objectiveResultText(stage.bonus, state.stage.bonusProgress)}`;
+  ui.stageHiddenResult.textContent = state.stage.hiddenProgress >= stage.hidden.target ? `發現 · ${stage.hidden.text}` : "尚未發現";
+  ui.stageRouteGroup.hidden = state.stage.index === STAGES.length - 1;
+  ui.stageContinue.innerHTML = state.stage.index === STAGES.length - 1 ? "進入無盡挑戰 <span aria-hidden=\"true\">↗</span>" : "前往下一星域 <span aria-hidden=\"true\">↗</span>";
+  ui.stageClearNote.textContent = state.stage.index === STAGES.length - 1
+    ? "選擇最後一項強化，之後將進入無盡挑戰。"
+    : "請選擇強化與航線；空白鍵會採用第一項強化與穩定航線。";
+  renderStageRewardChoices();
+  document.querySelectorAll(".stage-route-choice").forEach((button) => {
+    button.classList.toggle("selected", button.dataset.route === state.stage.selectedRoute);
+  });
+  updateUi(true);
+  ui.stageClearPopup.hidden = false;
+  addToast(`星域完成 · ${stage.name}`, "#ffd77c");
+}
+
+function continueAfterStageClear() {
+  if (state.status !== "stage-clear") return;
+  if (!state.stage.selectedReward) chooseStageReward(0);
+  if (state.stage.index === STAGES.length - 1) {
+    state.endlessChallenge = true;
+    state.status = "playing";
+    ui.stageClearPopup.hidden = true;
+    addToast("無盡挑戰開始 · 所有事件與威脅已開放", "#ffd77c");
+    return;
+  }
+  if (!state.stage.selectedRoute) chooseStageRoute("safe");
+  const nextRoute = state.stage.selectedRoute;
+  state.stage = {
+    index: state.stage.index + 1,
+    startedAt: state.time,
+    progress: 0,
+    bonusProgress: 0,
+    hiddenProgress: 0,
+    visitedRegions: [],
+    route: nextRoute,
+    selectedRoute: null,
+    rewardChoices: [],
+    selectedReward: null,
+    rewardApplied: false,
+    nearMissActive: false,
+  };
+  state.cosmicEvent.event = null;
+  state.cosmicEvent.remaining = 0;
+  state.cosmicEvent.cooldown = currentStage().introEventDelay ?? COSMIC_EVENT_COOLDOWN;
+  state.bossCooldown = currentStage().bossDelay ?? BOSS_COOLDOWN;
+  state.status = "playing";
+  ui.stageClearPopup.hidden = true;
+  updateStageProgress("level", state.player.level);
+  addToast(`進入第 ${state.stage.index + 1} 星域 · ${currentStage().name}`, "#a8f4ff");
+  updateUi(true);
+}
+
+function updateStageSystem() {
+  if (state.endlessChallenge || state.status !== "playing") return;
+  updateStageProgress("survive", stageElapsed());
+  updateStageProgress("level", state.player.level);
+  const stage = currentStage();
+  if (state.stage.progress >= stage.objective.target && stageElapsed() >= (stage.minimumDuration || 0)) showStageClear();
+}
+
 function randomAnomalyForLevel(level, forced = false) {
   const event = activeCosmicEvent();
-  const chance = forced ? 1 : 0.055 + (state.region?.anomalyBonus || 0) + (event?.anomalyBonus || 0);
+  const routeBonus = state.stage.route === "risk" ? 0.07 : -0.01;
+  const stageBonus = currentStage()?.modifiers?.anomaly || 0;
+  const chance = forced ? 1 : 0.055 + (state.region?.anomalyBonus || 0) + (event?.anomalyBonus || 0) + routeBonus + stageBonus;
   if (!forced && Math.random() > chance) return null;
   const available = ANOMALIES.filter((anomaly) => anomaly.id !== "unstable" || level >= 3);
   return available[Math.floor(Math.random() * available.length)].id;
@@ -674,6 +880,7 @@ function updateRegionForPosition(chunkX, chunkZ) {
   state.region = regionForChunk(chunkX, chunkZ);
   updateRegionVisuals();
   if (previous && previous.id !== state.region.id) {
+    updateStageProgress("region", 1, { id: state.region.id });
     addToast(`進入 ${state.region.name} · ${state.region.description}`, `#${state.region.color.toString(16).padStart(6, "0")}`);
   }
 }
@@ -756,6 +963,7 @@ function createBody(level, forcedPosition = null, options = {}) {
     bossType: options.bossType ?? null,
     bossHealth: options.bossHealth ?? 0,
     bossTimer: 0,
+    isFragment: options.isFragment ?? false,
     position,
     velocity: initialVelocity,
     phase: rand(0, Math.PI * 2),
@@ -1136,7 +1344,8 @@ function applyGravityPair(first, second, delta) {
   ) * accelerationResponseFor(second);
   const regionMultiplier = state.region?.gravityMultiplier || 1;
   const eventMultiplier = activeCosmicEvent()?.gravityMultiplier || 1;
-  const combinedMultiplier = regionMultiplier * eventMultiplier;
+  const stageMultiplier = currentStage()?.modifiers?.gravity || 1;
+  const combinedMultiplier = regionMultiplier * eventMultiplier * stageMultiplier;
   firstAcceleration *= combinedMultiplier;
   secondAcceleration *= combinedMultiplier;
   first.velocity.addScaledVector(direction, firstAcceleration * delta);
@@ -1220,9 +1429,12 @@ function absorbBody(body) {
   createBurst(body.position, LEVELS[body.level - 1].accent, 18, 2.4);
   addToast(`+${formatNumber(gain)} 質量`, anomaly ? `#${anomaly.color.toString(16).padStart(6, "0")}` : "#a8f4ff");
   updateMission("absorb");
+  updateStageProgress("absorb");
+  if (body.isFragment) updateStageProgress("fragment");
   if (anomaly) {
     state.player.comboTimer += anomaly.comboBonus || 0;
     updateMission("anomaly");
+    updateStageProgress("anomaly");
     addToast(`${anomaly.name} · 星能 +${anomaly.energyBonus || 0}`, `#${anomaly.color.toString(16).padStart(6, "0")}`);
   }
   if (state.player.combo >= 3) {
@@ -1231,6 +1443,7 @@ function absorbBody(body) {
     ui.comboPill.hidden = false;
     addToast(`連擊 ×${state.player.combo}  ·  星能 +1`, "#ffd77c");
   }
+  updateStageProgress("combo", state.player.combo);
   maybeAutoUpgrade();
   const nextLevel = levelForMass(state.player.mass);
   if (nextLevel > oldLevel) {
@@ -1300,6 +1513,7 @@ function triggerEvolution(nextLevel) {
   state.status = "evolving";
   state.player.level = nextLevel;
   updateMissionAbsolute("reach-level", nextLevel);
+  updateStageProgress("level", nextLevel);
   state.player.shield = Math.min(state.player.shieldMax, state.player.shield + 1);
   state.highLevel = Math.max(state.highLevel, nextLevel);
   const data = LEVELS[nextLevel - 1];
@@ -1443,7 +1657,10 @@ function updatePlayer(delta) {
     ui.dangerAlert.hidden = false;
     ui.dangerName.textContent = `${LEVELS[nearestDanger.body.level - 1].name}靠近`;
     ui.dangerDistance.textContent = `距離 ${nearestDanger.distance.toFixed(1)} · 立即逃離`;
+    if (nearestDanger.body.level >= player.level + 2) state.stage.nearMissActive = true;
   } else {
+    if (state.stage.nearMissActive) updateStageProgress("near-miss");
+    state.stage.nearMissActive = false;
     ui.dangerAlert.hidden = true;
   }
 }
@@ -1485,7 +1702,9 @@ function updateBodies(delta) {
     }
     const driftResponse = accelerationResponseFor(body);
     const drift = body.velocity.clone();
-    const driftMultiplier = (state.region?.bodyDriftMultiplier || 1) * (activeCosmicEvent()?.bodyDriftMultiplier || 1);
+    const driftMultiplier = (state.region?.bodyDriftMultiplier || 1)
+      * (activeCosmicEvent()?.bodyDriftMultiplier || 1)
+      * (currentStage()?.modifiers?.drift || 1);
     drift.x += Math.sin(state.time * 0.36 + body.phase) * 0.12 * driftResponse * driftMultiplier;
     drift.z += Math.cos(state.time * 0.31 + body.phase * 1.3) * 0.12 * driftResponse * driftMultiplier;
     body.position.addScaledVector(drift, delta);
@@ -1524,6 +1743,7 @@ function registerChainCollision(position, level) {
   state.chainCombo = Math.min(12, state.chainCombo + 1);
   state.chainTimer = 2.6;
   updateMission("chain");
+  updateStageProgress("chain");
   if (state.chainCombo > previousCombo && state.chainCombo >= 2 && (state.chainCombo === 2 || state.chainCombo % 2 === 0)) {
     const reward = Math.min(5, 1 + Math.floor(state.chainCombo / 4));
     state.player.energy += reward;
@@ -1534,7 +1754,7 @@ function registerChainCollision(position, level) {
 }
 
 function spawnBoss() {
-  if (state.bodies.some((body) => body.isBoss) || state.player.level < 3) return;
+  if (state.bodies.some((body) => body.isBoss) || (!state.endlessChallenge && state.stage.index < 4)) return;
   const boss = BOSSES[Math.floor(Math.random() * BOSSES.length)];
   const level = clamp(state.player.level + 2, 3, 10);
   const position = randomBodyPosition(level);
@@ -1557,10 +1777,12 @@ function defeatBoss(body, escaped = false) {
   const boss = activeBossData(body);
   const position = body.position.clone();
   removeBody(body);
-  state.player.energy += escaped ? 18 : 26;
+  const reward = Math.round((escaped ? 18 : 26) * routeRewardMultiplier());
+  state.player.energy += reward;
   updateMission("boss");
+  updateStageProgress("boss");
   createBurst(position, boss?.color || 0xffd77c, escaped ? 48 : 76, escaped ? 4.6 : 6.2);
-  addToast(`${boss?.name || "Boss"} ${escaped ? "離開" : "崩解"} · 星能 +${escaped ? 18 : 26}`, `#${(boss?.color || 0xffd77c).toString(16).padStart(6, "0")}`);
+  addToast(`${boss?.name || "Boss"} ${escaped ? "離開" : "崩解"} · 星能 +${reward}`, `#${(boss?.color || 0xffd77c).toString(16).padStart(6, "0")}`);
 }
 
 function damageBoss(body, position, fromPlayer = true) {
@@ -1584,17 +1806,20 @@ function resolveBossBodyCollision(boss, other, collision) {
 
 function updateBossSystem(delta) {
   state.bossCooldown = Math.max(0, state.bossCooldown - delta);
-  if (state.time < BOSS_FIRST_DELAY || state.player.level < 3) return;
+  if (!state.endlessChallenge && state.stage.index < 4) return;
   if (state.bodies.some((body) => body.isBoss) || state.bossCooldown > 0) return;
   spawnBoss();
   state.bossCooldown = BOSS_COOLDOWN;
 }
 
-function startCosmicEvent() {
+function startCosmicEvent(forcedId = null) {
   if (activeCosmicEvent()) return;
   const previousId = state.cosmicEvent.lastEventId;
-  const available = COSMIC_EVENTS.filter((event) => event.id !== previousId);
-  const event = available[Math.floor(Math.random() * available.length)];
+  const allowedIds = state.endlessChallenge ? COSMIC_EVENTS.map((event) => event.id) : currentStage().events;
+  const available = COSMIC_EVENTS.filter((event) => allowedIds.includes(event.id) && (event.id !== previousId || allowedIds.length === 1));
+  if (!available.length) return;
+  const forced = forcedId ? available.find((event) => event.id === forcedId) : null;
+  const event = forced || available[Math.floor(Math.random() * available.length)];
   state.cosmicEvent.event = event.id;
   state.cosmicEvent.lastEventId = event.id;
   state.cosmicEvent.remaining = event.duration;
@@ -1605,10 +1830,12 @@ function startCosmicEvent() {
 function endCosmicEvent() {
   const event = activeCosmicEvent();
   if (!event) return;
+  updateStageProgress("event");
+  updateStageProgress(event.id);
   addToast(`${event.name} 結束 · 宇宙恢復穩定`, "#a8f4ff");
   state.cosmicEvent.event = null;
   state.cosmicEvent.remaining = 0;
-  state.cosmicEvent.cooldown = COSMIC_EVENT_COOLDOWN;
+  state.cosmicEvent.cooldown = currentStage()?.eventCooldown ?? COSMIC_EVENT_COOLDOWN;
 }
 
 function spawnMeteorDuringEvent() {
@@ -1637,8 +1864,9 @@ function updateCosmicEvents(delta) {
     if (state.cosmicEvent.remaining <= 0) endCosmicEvent();
     return;
   }
+  if (!state.endlessChallenge && currentStage().events.length === 0) return;
   state.cosmicEvent.cooldown -= delta;
-  if (state.time >= COSMIC_EVENT_FIRST_DELAY && state.cosmicEvent.cooldown <= 0) startCosmicEvent();
+  if (state.cosmicEvent.cooldown <= 0) startCosmicEvent(currentStage().events.length === 1 ? currentStage().events[0] : null);
 }
 
 function absorbBodyIntoBody(larger, smaller, collision) {
@@ -1735,6 +1963,7 @@ function fractureBody(smaller, larger, collision) {
     createBody(fragmentLevel, fragmentPosition, {
       mass: fragmentMass,
       sizeScale: fragmentSizeScale,
+      isFragment: true,
       velocity: fragmentVelocity,
       collisionCooldown: FRAGMENT_GRAVITY_GRACE,
       gravityGrace: FRAGMENT_GRAVITY_GRACE,
@@ -1771,6 +2000,7 @@ function splitEqualBodies(first, second, collision) {
     velocity: firstVelocity,
     collisionCooldown: 0.55,
     gravityGrace: 0.45,
+    isFragment: true,
   });
   createBody(downgradedLevel, secondPosition, {
     mass: LEVELS[downgradedLevel - 1].bodyMass,
@@ -1778,6 +2008,7 @@ function splitEqualBodies(first, second, collision) {
     velocity: secondVelocity,
     collisionCooldown: 0.55,
     gravityGrace: 0.45,
+    isFragment: true,
   });
 
   createBurst(impactPosition, LEVELS[sourceLevel - 1].accent, 54, 4.8);
@@ -1789,6 +2020,7 @@ function splitEqualBodies(first, second, collision) {
       mass: LEVELS[fragmentLevel - 1].bodyMass,
       sizeScale: 0.84,
       anomaly: null,
+      isFragment: true,
       velocity: fragmentVelocity,
       collisionCooldown: FRAGMENT_GRAVITY_GRACE,
       gravityGrace: FRAGMENT_GRAVITY_GRACE,
@@ -1878,13 +2110,17 @@ function spawnMoreBodies() {
   const amount = Math.min(available, Math.random() < 0.45 ? 1 : Math.random() < 0.72 ? 2 : 3);
   for (let index = 0; index < amount; index += 1) {
     const roll = Math.random();
-    let difference;
-    if (roll < 0.55) difference = -Math.floor(rand(0, Math.min(3, playerLevel)));
-    else if (roll < 0.8) difference = -1;
-    else if (roll < 0.92) difference = 0;
-    else if (roll < 0.98) difference = 1;
-    else difference = 2;
-    const level = clamp(playerLevel + difference, 1, Math.min(10, playerLevel + 2));
+    const stage = currentStage();
+    const threatLimit = state.endlessChallenge ? 2 : stage.threatLimit;
+    const routeMultiplier = state.stage.route === "risk" ? 1.45 : 0.68;
+    const threatChance = threatLimit > 0
+      ? Math.min(0.34, (0.07 + (stage.modifiers?.fractureBias || 0)) * routeMultiplier)
+      : 0;
+    let difference = 0;
+    if (roll < threatChance) difference = threatLimit >= 2 && Math.random() < 0.22 ? 2 : 1;
+    else if (roll < threatChance + 0.28) difference = 0;
+    else difference = -Math.floor(rand(1, Math.min(4, playerLevel + 1)));
+    const level = clamp(playerLevel + difference, 1, Math.min(10, playerLevel + threatLimit));
     createBody(level);
   }
 }
@@ -1902,6 +2138,28 @@ function updateCamera(delta) {
   const desired = new THREE.Vector3(target.x, 33, target.z + 28);
   camera.position.lerp(desired, 1 - Math.pow(0.001, delta));
   camera.lookAt(target.x, 0, target.z);
+}
+
+function updateStageUi() {
+  if (!ui.stageHud) return;
+  if (state.endlessChallenge) {
+    ui.stageNumber.textContent = "ENDLESS SECTOR";
+    ui.stageName.textContent = "無盡挑戰";
+    ui.stageObjective.textContent = "持續成長，挑戰更高質量紀錄";
+    ui.stageProgressFill.style.transform = "scaleX(1)";
+    ui.stageProgress.setAttribute("aria-valuenow", "100");
+    return;
+  }
+  const stage = currentStage();
+  const progress = clamp(state.stage.progress / stage.objective.target, 0, 1);
+  ui.stageNumber.textContent = `SECTOR ${String(state.stage.index + 1).padStart(2, "0")} / ${STAGES.length}`;
+  ui.stageName.textContent = stage.name;
+  const stabilizationRemaining = Math.max(0, (stage.minimumDuration || 0) - stageElapsed());
+  ui.stageObjective.textContent = progress >= 1 && stabilizationRemaining > 0
+    ? `目標完成 · 航道穩定 ${Math.ceil(stabilizationRemaining)}s`
+    : `${stage.objective.text} · ${objectiveResultText(stage.objective, state.stage.progress)}`;
+  ui.stageProgressFill.style.transform = `scaleX(${progress})`;
+  ui.stageProgress.setAttribute("aria-valuenow", String(Math.round(progress * 100)));
 }
 
 function updateUi(force = false) {
@@ -1932,6 +2190,7 @@ function updateUi(force = false) {
     }
   }
   updateMissionUi();
+  updateStageUi();
 }
 
 function getBestMass() {
@@ -1962,7 +2221,7 @@ function endGame() {
 }
 
 function togglePause() {
-  if (state.status === "gameover" || state.status === "evolving") return;
+  if (state.status === "gameover" || state.status === "evolving" || state.status === "stage-clear") return;
   state.status = state.status === "paused" ? "playing" : "paused";
   ui.pauseCover.hidden = state.status !== "paused";
   updateUi(true);
@@ -1978,6 +2237,21 @@ function restartGame() {
   state.regionKey = null;
   state.cosmicEvent = { event: null, remaining: 0, cooldown: COSMIC_EVENT_FIRST_DELAY, spawnTimer: 0, lastEventId: null };
   state.bossCooldown = BOSS_FIRST_DELAY;
+  state.endlessChallenge = false;
+  state.stage = {
+    index: 0,
+    startedAt: 0,
+    progress: 0,
+    bonusProgress: 0,
+    hiddenProgress: 0,
+    visitedRegions: [],
+    route: "safe",
+    selectedRoute: null,
+    rewardChoices: [],
+    selectedReward: null,
+    rewardApplied: false,
+    nearMissActive: false,
+  };
   state.evolutionChoice = null;
   state.evolutionChoices = [];
   state.missions = Object.fromEntries(MISSIONS.map((mission) => [mission.id, { progress: 0, completed: false }]));
@@ -2009,13 +2283,12 @@ function restartGame() {
   camera.position.set(0, 33, 28);
   camera.lookAt(0, 0, 0);
   camera.updateMatrixWorld(true);
-  for (let index = 0; index < 8; index += 1) createBody(1, null, { insideViewport: true });
-  for (let index = 0; index < 4; index += 1) createBody(1);
-  createBody(2, null, { insideViewport: true });
-  createBody(2);
+  for (let index = 0; index < 10; index += 1) createBody(1, null, { insideViewport: true });
+  for (let index = 0; index < 5; index += 1) createBody(1);
   ui.pauseCover.hidden = true;
   ui.gameoverCover.hidden = true;
   ui.evolutionPopup.hidden = true;
+  ui.stageClearPopup.hidden = true;
   ui.comboPill.hidden = true;
   ui.dangerAlert.hidden = true;
   addToast("開始收集星塵", "#a8f4ff");
@@ -2048,6 +2321,13 @@ function getSavedGame() {
     chainCombo: state.chainCombo,
     chainTimer: state.chainTimer,
     bossCooldown: state.bossCooldown,
+    cosmicEvent: { ...state.cosmicEvent },
+    endlessChallenge: state.endlessChallenge,
+    stage: {
+      ...state.stage,
+      visitedRegions: [...state.stage.visitedRegions],
+      rewardChoices: state.stage.rewardChoices.map((perk) => ({ ...perk })),
+    },
     regionKey: state.regionKey,
     bodies: state.bodies.map((body) => ({
       level: body.level,
@@ -2058,6 +2338,7 @@ function getSavedGame() {
       bossType: body.bossType,
       bossHealth: body.bossHealth,
       bossTimer: body.bossTimer,
+      isFragment: body.isFragment,
       position: body.position.toArray(),
       velocity: body.velocity.toArray(),
       collisionCooldown: body.collisionCooldown,
@@ -2069,7 +2350,8 @@ function getSavedGame() {
 function restoreGame(saved) {
   restartGame();
   [...state.bodies].forEach(removeBody);
-  state.status = saved.status === "gameover" ? "gameover" : "playing";
+  const savedStatus = saved.status;
+  state.status = savedStatus === "gameover" ? "gameover" : "playing";
   state.time = saved.time;
   state.highMass = saved.highMass;
   state.highLevel = saved.highLevel;
@@ -2090,6 +2372,17 @@ function restoreGame(saved) {
   state.chainCombo = saved.chainCombo || 0;
   state.chainTimer = saved.chainTimer || 0;
   state.bossCooldown = saved.bossCooldown ?? BOSS_FIRST_DELAY;
+  state.cosmicEvent = saved.cosmicEvent || state.cosmicEvent;
+  state.endlessChallenge = saved.endlessChallenge ?? false;
+  if (saved.stage) {
+    state.stage = {
+      ...state.stage,
+      ...saved.stage,
+      index: clamp(saved.stage.index || 0, 0, STAGES.length - 1),
+      visitedRegions: Array.isArray(saved.stage.visitedRegions) ? saved.stage.visitedRegions : [],
+      rewardChoices: Array.isArray(saved.stage.rewardChoices) ? saved.stage.rewardChoices : [],
+    };
+  }
   state.regionKey = null;
   state.player.position.fromArray(saved.player.position);
   state.player.velocity.fromArray(saved.player.velocity);
@@ -2102,6 +2395,7 @@ function restoreGame(saved) {
       isBoss: body.isBoss ?? false,
       bossType: body.bossType ?? null,
       bossHealth: body.bossHealth ?? 0,
+      isFragment: body.isFragment ?? false,
       velocity: new THREE.Vector3().fromArray(body.velocity),
       collisionCooldown: body.collisionCooldown,
       gravityGrace: body.gravityGrace,
@@ -2113,6 +2407,7 @@ function restoreGame(saved) {
   updateInfiniteWorld();
   ui.pauseCover.hidden = true;
   ui.gameoverCover.hidden = state.status !== "gameover";
+  if (savedStatus === "stage-clear" && !state.endlessChallenge) showStageClear();
   addToast("已恢復上次的星球進度", "#a8f4ff");
   updateUi(true);
 }
@@ -2157,6 +2452,7 @@ function setupInput() {
       event.preventDefault();
       if (event.repeat) return;
       if (state.status === "evolving" && !ui.evolutionPopup.hidden) continueAfterEvolution();
+      else if (state.status === "stage-clear" && !ui.stageClearPopup.hidden) continueAfterStageClear();
       else togglePause();
     }
     if (event.key.toLowerCase() === "r") restartGame();
@@ -2228,6 +2524,7 @@ function animate() {
     updateCosmicEvents(delta);
     updateBossSystem(delta);
     updateSpawning(delta);
+    updateStageSystem();
   } else if (state.status === "evolving") {
     updateEvolutionAnimation(delta);
     updateCamera(delta);
@@ -2252,6 +2549,10 @@ function init() {
   ui.restartButton.addEventListener("click", restartGame);
   ui.gameoverRestart.addEventListener("click", restartGame);
   ui.evolutionContinue.addEventListener("click", continueAfterEvolution);
+  ui.stageContinue.addEventListener("click", continueAfterStageClear);
+  document.querySelectorAll(".stage-route-choice").forEach((button) => {
+    button.addEventListener("click", () => chooseStageRoute(button.dataset.route));
+  });
   window.addEventListener("resize", resize);
   resize();
   window.PuzzleSave.create({

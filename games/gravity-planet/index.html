@@ -51,6 +51,16 @@
             <strong id="mission-name">星塵採集者</strong>
             <small id="mission-progress">吸收 30 個星體 · 0/30</small>
           </div>
+          <div class="stage-hud" id="stage-hud">
+            <div class="stage-heading">
+              <span id="stage-number">SECTOR 01 / 10</span>
+              <strong id="stage-name">碎石出港</strong>
+            </div>
+            <small id="stage-objective">吸收 10 個星體</small>
+            <div class="stage-progress" role="progressbar" aria-label="關卡目標進度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              <div id="stage-progress-fill"></div>
+            </div>
+          </div>
           <div class="combo-pill" id="combo-pill" hidden>COMBO ×<strong id="combo-value">3</strong></div>
           <div class="scene-toast" id="scene-toast" aria-live="polite"></div>
           <div class="evolution-popup" id="evolution-popup" hidden>
@@ -61,6 +71,32 @@
               <div class="evolution-choices" id="evolution-choices"></div>
               <div class="evolution-note" id="evolution-note">選擇一項進化分支；按空白鍵會採用第一項並繼續探索。</div>
               <button class="button button-primary" id="evolution-continue" type="button">繼續探索 <span aria-hidden="true">↗</span></button>
+            </div>
+          </div>
+          <div class="stage-clear-popup" id="stage-clear-popup" hidden>
+            <div class="stage-clear-card">
+              <div class="evolution-kicker"><span class="evolution-spark" aria-hidden="true">✦</span> SECTOR COMPLETE</div>
+              <h2 id="stage-clear-name">碎石出港</h2>
+              <p id="stage-clear-description">航道已穩定，可以前往下一個星域。</p>
+              <div class="stage-results">
+                <div><span>主要目標</span><strong id="stage-main-result">已完成</strong></div>
+                <div><span>額外目標</span><strong id="stage-bonus-result">未完成</strong></div>
+                <div><span>隱藏目標</span><strong id="stage-hidden-result">尚未發現</strong></div>
+              </div>
+              <div class="stage-reward-copy" id="stage-reward-copy">護盾 +1 · 星能 +8</div>
+              <div class="stage-choice-group">
+                <span>選擇階段強化</span>
+                <div class="stage-reward-choices" id="stage-reward-choices"></div>
+              </div>
+              <div class="stage-choice-group" id="stage-route-group">
+                <span>下一段航線</span>
+                <div class="stage-route-choices">
+                  <button class="stage-route-choice" data-route="safe" type="button"><strong>穩定航線</strong><small>高階星體較少，適合穩定成長</small></button>
+                  <button class="stage-route-choice risk" data-route="risk" type="button"><strong>高風險航線</strong><small>威脅與異常體增加，獎勵提高</small></button>
+                </div>
+              </div>
+              <div class="evolution-note" id="stage-clear-note">請選擇強化與航線；空白鍵會採用第一項強化與穩定航線。</div>
+              <button class="button button-primary" id="stage-continue" type="button">前往下一星域 <span aria-hidden="true">↗</span></button>
             </div>
           </div>
           <div class="pause-cover" id="pause-cover" hidden>
