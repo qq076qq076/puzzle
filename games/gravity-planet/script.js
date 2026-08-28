@@ -121,6 +121,7 @@ const ui = {
   cosmicEventName: document.querySelector("#cosmic-event-name"),
   cosmicEventDescription: document.querySelector("#cosmic-event-description"),
   cosmicEventTime: document.querySelector("#cosmic-event-time"),
+  magneticPolarity: document.querySelector("#magnetic-polarity"),
   regionBadge: document.querySelector("#region-badge"),
   missionTracker: document.querySelector("#mission-tracker"),
   missionName: document.querySelector("#mission-name"),
@@ -189,6 +190,7 @@ const state = {
   region: REGIONS[0],
   regionKey: null,
   cosmicEvent: { event: null, remaining: 0, cooldown: COSMIC_EVENT_FIRST_DELAY, spawnTimer: 0 },
+  magneticStorm: { polarity: 1, timer: 3.8, flips: 0 },
   bossCooldown: BOSS_FIRST_DELAY,
   endlessChallenge: false,
   stage: {
@@ -254,6 +256,10 @@ function formatNumber(value) {
   return Math.round(value).toLocaleString("en-US");
 }
 
+function colorCss(value) {
+  return typeof value === "number" ? `#${value.toString(16).padStart(6, "0")}` : value;
+}
+
 function formatTime(seconds) {
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60).toString().padStart(2, "0");
@@ -278,6 +284,30 @@ function dataForId(collection, id) {
 
 function activeCosmicEvent() {
   return state.cosmicEvent.event ? dataForId(COSMIC_EVENTS, state.cosmicEvent.event) : null;
+}
+
+function magneticStormActive() {
+  return !state.endlessChallenge && state.stage.index === 7 && activeCosmicEvent()?.id === "gravity-storm";
+}
+
+function resetMagneticStorm() {
+  state.magneticStorm = { polarity: 1, timer: 3.8, flips: 0 };
+}
+
+function updateMagneticStorm(delta) {
+  if (!magneticStormActive()) {
+    if (state.magneticStorm.polarity !== 1 || state.magneticStorm.flips !== 0) resetMagneticStorm();
+    return;
+  }
+  state.magneticStorm.timer -= delta;
+  if (state.magneticStorm.timer > 0) return;
+  const repelling = state.magneticStorm.polarity > 0;
+  state.magneticStorm.polarity = repelling ? -0.72 : 1;
+  state.magneticStorm.timer = repelling ? 2.7 : 3.8;
+  state.magneticStorm.flips += 1;
+  const color = repelling ? 0xff7b8b : 0x62e6ff;
+  createBurst(state.player.position, color, 44, repelling ? 4.2 : 3.2);
+  addToast(`磁極反轉 · ${repelling ? "同極排斥" : "異極吸引"}`, repelling ? "#ff9ca8" : "#a8f4ff");
 }
 
 function activeBossData(body) {
@@ -428,6 +458,7 @@ function continueAfterStageClear() {
   state.cosmicEvent.event = null;
   state.cosmicEvent.remaining = 0;
   state.cosmicEvent.cooldown = currentStage().introEventDelay ?? COSMIC_EVENT_COOLDOWN;
+  resetMagneticStorm();
   state.bossCooldown = currentStage().bossDelay ?? BOSS_COOLDOWN;
   state.status = "playing";
   ui.stageClearPopup.hidden = true;
@@ -1506,7 +1537,8 @@ function applyGravityPair(first, second, delta) {
   const regionMultiplier = state.region?.gravityMultiplier || 1;
   const eventMultiplier = activeCosmicEvent()?.gravityMultiplier || 1;
   const stageMultiplier = currentStage()?.modifiers?.gravity || 1;
-  const combinedMultiplier = regionMultiplier * eventMultiplier * stageMultiplier;
+  const magneticPolarity = magneticStormActive() ? state.magneticStorm.polarity : 1;
+  const combinedMultiplier = regionMultiplier * eventMultiplier * stageMultiplier * magneticPolarity;
   firstAcceleration *= combinedMultiplier;
   secondAcceleration *= combinedMultiplier;
   first.velocity.addScaledVector(direction, firstAcceleration * delta);
@@ -1985,7 +2017,8 @@ function startCosmicEvent(forcedId = null) {
   state.cosmicEvent.lastEventId = event.id;
   state.cosmicEvent.remaining = event.duration;
   state.cosmicEvent.spawnTimer = 0;
-  addToast(`宇宙事件 · ${event.name}`, `#${event.color.toString(16).padStart(6, "0")}`);
+  resetMagneticStorm();
+  addToast(`宇宙事件 · ${event.name}`, colorCss(event.color));
 }
 
 function endCosmicEvent() {
@@ -1997,6 +2030,7 @@ function endCosmicEvent() {
   state.cosmicEvent.event = null;
   state.cosmicEvent.remaining = 0;
   state.cosmicEvent.cooldown = currentStage()?.eventCooldown ?? COSMIC_EVENT_COOLDOWN;
+  resetMagneticStorm();
 }
 
 function spawnMeteorDuringEvent() {
@@ -2347,8 +2381,15 @@ function updateUi(force = false) {
       ui.cosmicEventName.textContent = event.name;
       ui.cosmicEventDescription.textContent = event.description;
       ui.cosmicEventTime.textContent = `${Math.ceil(state.cosmicEvent.remaining)}s`;
-      ui.cosmicEvent.style.setProperty("--event-color", `#${event.color.toString(16).padStart(6, "0")}`);
+      ui.cosmicEvent.style.setProperty("--event-color", colorCss(event.color));
     }
+  }
+  if (ui.magneticPolarity) {
+    const magneticActive = magneticStormActive();
+    const repelling = state.magneticStorm.polarity < 0;
+    ui.magneticPolarity.hidden = !magneticActive;
+    ui.magneticPolarity.classList.toggle("repelling", magneticActive && repelling);
+    if (magneticActive) ui.magneticPolarity.textContent = `${repelling ? "排斥" : "吸引"} · ${Math.ceil(state.magneticStorm.timer)}s`;
   }
   updateMissionUi();
   updateStageUi();
@@ -2397,6 +2438,7 @@ function restartGame() {
   state.region = REGIONS[0];
   state.regionKey = null;
   state.cosmicEvent = { event: null, remaining: 0, cooldown: COSMIC_EVENT_FIRST_DELAY, spawnTimer: 0, lastEventId: null };
+  resetMagneticStorm();
   state.bossCooldown = BOSS_FIRST_DELAY;
   state.endlessChallenge = false;
   state.stage = {
@@ -2483,6 +2525,7 @@ function getSavedGame() {
     chainTimer: state.chainTimer,
     bossCooldown: state.bossCooldown,
     cosmicEvent: { ...state.cosmicEvent },
+    magneticStorm: { ...state.magneticStorm },
     endlessChallenge: state.endlessChallenge,
     stage: {
       ...state.stage,
@@ -2534,6 +2577,7 @@ function restoreGame(saved) {
   state.chainTimer = saved.chainTimer || 0;
   state.bossCooldown = saved.bossCooldown ?? BOSS_FIRST_DELAY;
   state.cosmicEvent = saved.cosmicEvent || state.cosmicEvent;
+  state.magneticStorm = saved.magneticStorm || state.magneticStorm;
   state.endlessChallenge = saved.endlessChallenge ?? false;
   if (saved.stage) {
     state.stage = {
@@ -2678,6 +2722,7 @@ function animate() {
   if (state.status === "playing") {
     state.time += delta;
     updatePlayer(delta);
+    updateMagneticStorm(delta);
     updateBodyGravity(delta);
     updateBodies(delta);
     updateBodyCollisions();

@@ -244,7 +244,10 @@ h1 span { color: var(--cyan); }
 .cosmic-event strong, .cosmic-event small { display: block; }
 .cosmic-event strong { font-size: 0.72rem; }
 .cosmic-event small { max-width: 230px; margin-top: 3px; color: var(--muted); font-size: 0.58rem; line-height: 1.35; }
+.magnetic-polarity { margin-left: auto; padding: 4px 7px; border: 1px solid currentColor; border-radius: 999px; color: var(--cyan); font-size: 0.52rem; letter-spacing: 0.06em; white-space: nowrap; }
+.magnetic-polarity.repelling { color: var(--coral); animation: danger-pulse 520ms ease-in-out infinite alternate; }
 .cosmic-event em { margin-left: auto; color: var(--text); font-size: 0.7rem; font-style: normal; font-weight: 850; }
+.magnetic-polarity:not([hidden]) + em { margin-left: 0; }
 
 .region-badge {
   --region-color: var(--cyan);
@@ -466,6 +469,7 @@ h1 span { color: var(--cyan); }
   .scene-toast { top: 174px; }
   .cosmic-event { top: 13px; min-width: 0; width: calc(100% - 116px); padding: 7px 9px; }
   .cosmic-event small { max-width: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .magnetic-polarity { padding: 3px 5px; font-size: 0.46rem; }
   .region-badge { top: 13px; right: 12px; font-size: 0.52rem; }
   .mission-tracker { top: 67px; left: 12px; width: min(188px, calc(100% - 24px)); padding: 8px 10px; }
   .stage-hud { bottom: 19px; left: 12px; width: min(185px, calc(100% - 170px)); padding: 8px 9px; }
