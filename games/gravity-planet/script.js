@@ -22,6 +22,9 @@ const LEVELS = [
 ];
 
 const SAVE_SCHEMA_VERSION = 2;
+const MAX_LEVEL = LEVELS.length;
+const NATURAL_MAX_LEVEL_ADVANTAGE = 2;
+const BOSS_MAX_LEVEL_ADVANTAGE = 4;
 
 const REGIONS = [
   { id: "debris", name: "碎石帶", description: "碎石密度提高，收集路線更容易形成連鎖。", color: 0x62e6ff, gridColor: 0x234c73, gravityMultiplier: 1, bodyDriftMultiplier: 1, playerAccelerationMultiplier: 1.04, anomalyBonus: 0.02 },
@@ -1302,7 +1305,7 @@ function updateModel(model, time, delta) {
     if (child.userData.spinSpeed) child.rotation.y += child.userData.spinSpeed * delta;
   });
   if (model.userData.glow) {
-    const baseOpacity = model.userData.level >= 9 ? 0.23 : 0.13;
+    const baseOpacity = Math.ceil(model.userData.level / 2) >= 9 ? 0.23 : 0.13;
     model.userData.glow.material.opacity = baseOpacity + Math.sin(time * 2.1 + model.userData.phase) * baseOpacity * 0.25;
   }
 }
@@ -1323,7 +1326,7 @@ function randomSpawnVelocity(level, position) {
   if (direction.lengthSq() < 0.0001) direction.copy(randomDirection);
   direction.normalize();
 
-  const minimumSpeed = 1.1 + (10 - level) * 0.08;
+  const minimumSpeed = 1.1 + (MAX_LEVEL - level) * 0.04;
   const speed = Math.min(NATURAL_SPAWN_MAX_SPEED, Math.max(minimumSpeed, data.drift * rand(1.15, 1.7)));
   return direction.multiplyScalar(speed);
 }
@@ -1589,14 +1592,14 @@ function createDamageFragments(position, impactDirection, level) {
   const fragmentMaterial = new THREE.MeshStandardMaterial({
     color: data.color,
     emissive: data.accent,
-    emissiveIntensity: level >= 4 ? 0.45 : 0.12,
+    emissiveIntensity: level >= 8 ? 0.45 : 0.12,
     roughness: 0.62,
     metalness: 0.08,
     transparent: true,
     opacity: 0.95,
   });
   for (let index = 0; index < 11; index += 1) {
-    const size = rand(0.08, 0.2) * (level >= 7 ? 1.2 : 1);
+    const size = rand(0.08, 0.2) * (level >= 14 ? 1.2 : 1);
     const fragment = new THREE.Mesh(new THREE.IcosahedronGeometry(size, 0), fragmentMaterial.clone());
     const direction = impactDirection.clone().multiplyScalar(rand(1.1, 2.2));
     direction.x += rand(-0.8, 0.8);
@@ -2230,13 +2233,13 @@ function registerChainCollision(position, level) {
 function spawnBoss() {
   if (state.bodies.some((body) => body.isBoss) || (!state.endlessChallenge && state.stage.index < 4)) return;
   const boss = BOSSES[Math.floor(Math.random() * BOSSES.length)];
-  const level = clamp(state.player.level + 2, 3, 10);
+  const level = clamp(state.player.level + BOSS_MAX_LEVEL_ADVANTAGE, 3, MAX_LEVEL);
   const position = randomBodyPosition(level);
   createBody(level, position, {
     isBoss: true,
     bossType: boss.id,
-    bossHealth: boss.health + Math.floor(state.player.level / 4),
-    mass: LEVELS[level - 1].bodyMass * (1.8 + state.player.level * 0.12),
+    bossHealth: boss.health + Math.floor(state.player.level / 8),
+    mass: LEVELS[level - 1].bodyMass * (1.8 + Math.ceil(state.player.level / 2) * 0.12),
     sizeScale: boss.sizeScale,
     anomaly: null,
     velocity: randomSpawnVelocity(level, position).multiplyScalar(0.48),
@@ -2316,7 +2319,7 @@ function endCosmicEvent() {
 
 function spawnMeteorDuringEvent() {
   if (state.bodies.length >= WORLD.maxBodies) return;
-  const level = clamp(state.player.level - (Math.random() < 0.72 ? 1 : 0), 1, 10);
+  const level = clamp(state.player.level - (Math.random() < 0.72 ? 1 : 0), 1, MAX_LEVEL);
   const position = randomBodyPosition(level);
   createBody(level, position, {
     anomaly: Math.random() < 0.15 ? "golden" : null,
@@ -2449,7 +2452,7 @@ function fractureBody(smaller, larger, collision) {
 
 function splitEqualBodies(first, second, collision) {
   if (!state.bodies.includes(first) || !state.bodies.includes(second)) return;
-  if (first.level !== second.level || first.level < 4) return;
+  if (first.level !== second.level || first.level < 8) return;
 
   const sourceLevel = first.level;
   const downgradedLevel = sourceLevel - 2;
@@ -2587,7 +2590,10 @@ function spawnMoreBodies() {
   for (let index = 0; index < amount; index += 1) {
     const roll = Math.random();
     const stage = currentStage();
-    const threatLimit = state.endlessChallenge ? 2 : stage.threatLimit;
+    const threatLimit = Math.min(
+      NATURAL_MAX_LEVEL_ADVANTAGE,
+      state.endlessChallenge ? NATURAL_MAX_LEVEL_ADVANTAGE : stage.threatLimit,
+    );
     const routeMultiplier = state.stage.route === "risk" ? 1.45 : 0.68;
     const threatChance = threatLimit > 0
       ? Math.min(0.34, (0.07 + (stage.modifiers?.fractureBias || 0)) * routeMultiplier)
@@ -2596,7 +2602,7 @@ function spawnMoreBodies() {
     if (roll < threatChance) difference = threatLimit >= 2 && Math.random() < 0.22 ? 2 : 1;
     else if (roll < threatChance + 0.28) difference = 0;
     else difference = -Math.floor(rand(1, Math.min(4, playerLevel + 1)));
-    const level = clamp(playerLevel + difference, 1, Math.min(10, playerLevel + threatLimit));
+    const level = clamp(playerLevel + difference, 1, Math.min(MAX_LEVEL, playerLevel + threatLimit));
     createBody(level);
   }
 }
