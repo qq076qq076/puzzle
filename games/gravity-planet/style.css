@@ -145,6 +145,7 @@ h1 span { color: var(--cyan); }
 }
 
 .button-quiet:hover { color: var(--text); border-color: rgba(184, 207, 255, 0.28); background: rgba(30, 43, 86, 0.8); }
+#codex-button span { margin-left: 7px; color: var(--cyan); font-size: 0.62rem; }
 
 .game-shell { position: relative; }
 
@@ -395,6 +396,27 @@ h1 span { color: var(--cyan); }
 .stage-clear-card .evolution-note { margin: 13px 0; }
 .stage-clear-card > .button { width: 100%; }
 
+.codex-popup { position: absolute; z-index: 11; inset: 0; display: grid; place-items: center; padding: 20px; overflow-y: auto; background: rgba(4, 7, 25, 0.7); backdrop-filter: blur(13px); }
+.codex-card { width: min(720px, 100%); max-height: 100%; padding: 24px; overflow-y: auto; border: 1px solid rgba(184, 207, 255, 0.22); border-radius: 21px; background: linear-gradient(145deg, rgba(18, 31, 69, 0.98), rgba(12, 18, 48, 0.98)); box-shadow: 0 25px 70px rgba(0, 0, 0, 0.5); }
+.codex-heading { display: flex; align-items: start; justify-content: space-between; gap: 18px; }
+.codex-heading h2 { margin-top: 7px; font-size: 2rem; letter-spacing: -0.06em; }
+.codex-heading p { margin-top: 7px; color: var(--muted); font-size: 0.72rem; line-height: 1.55; }
+.codex-close { display: grid; flex: 0 0 auto; width: 34px; height: 34px; place-items: center; border: 1px solid var(--line); border-radius: 50%; color: var(--muted); background: rgba(255, 255, 255, 0.035); cursor: pointer; font-size: 1.25rem; }
+.codex-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 18px; }
+.codex-item { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-width: 0; padding: 10px; border: 1px solid rgba(184, 207, 255, 0.13); border-radius: 12px; color: var(--text); background: rgba(255, 255, 255, 0.03); text-align: left; }
+button.codex-item { cursor: pointer; transition: border-color 140ms ease, background 140ms ease, transform 140ms ease; }
+button.codex-item:hover { border-color: var(--cosmetic-color); background: color-mix(in srgb, var(--cosmetic-color) 9%, rgba(255, 255, 255, 0.03)); transform: translateY(-1px); }
+.codex-item.selected { border-color: var(--cosmetic-color); background: color-mix(in srgb, var(--cosmetic-color) 13%, rgba(255, 255, 255, 0.03)); }
+.codex-item.locked { opacity: 0.52; filter: saturate(0.25); }
+.codex-swatch { display: grid; width: 36px; height: 36px; place-items: center; border: 1px solid color-mix(in srgb, var(--cosmetic-color) 55%, transparent); border-radius: 50%; color: var(--cosmetic-color); background: radial-gradient(circle, color-mix(in srgb, var(--cosmetic-color) 28%, transparent), transparent 68%); box-shadow: 0 0 18px color-mix(in srgb, var(--cosmetic-color) 14%, transparent); }
+.codex-copy { min-width: 0; }
+.codex-copy strong, .codex-copy small { display: block; }
+.codex-copy strong { overflow: hidden; font-size: 0.67rem; text-overflow: ellipsis; white-space: nowrap; }
+.codex-copy small { margin-top: 3px; overflow: hidden; color: var(--muted); font-size: 0.54rem; text-overflow: ellipsis; white-space: nowrap; }
+.codex-status { color: var(--soft); font-size: 0.5rem; font-weight: 850; letter-spacing: 0.07em; white-space: nowrap; }
+.codex-item.selected .codex-status { color: var(--cosmetic-color); }
+.codex-card .evolution-note { margin-bottom: 0; }
+
 .evolving-flash::after {
   position: absolute;
   z-index: 7;
@@ -479,6 +501,9 @@ h1 span { color: var(--cyan); }
   .stage-clear-popup { align-items: start; padding: 12px; }
   .stage-clear-card { margin: auto 0; padding: 20px 16px; }
   .stage-reward-choices { grid-template-columns: 1fr; }
+  .codex-popup { align-items: start; padding: 12px; }
+  .codex-card { margin: auto 0; padding: 18px 14px; }
+  .codex-grid { grid-template-columns: 1fr; }
   .game-controls { grid-template-columns: 1fr; }
   .record-card { grid-column: auto; }
   .control-card { min-height: 73px; }

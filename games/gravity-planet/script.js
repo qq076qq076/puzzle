@@ -61,6 +61,19 @@ const STAGES = [
   { id: "black-hole-edge", name: "黑洞邊界", description: "穩定最終核心，完成從碎石到黑洞的旅程。", objective: { type: "level", target: 10, text: "進化為黑洞", absolute: true }, bonus: { type: "event", target: 4, text: "完成 4 次宇宙事件" }, hidden: { type: "boss", target: 2, text: "完成 2 次 Boss 遭遇" }, reward: 45, minimumDuration: 60, threatLimit: 2, events: ["meteor", "gravity-storm", "solar-flare", "anti-gravity"], introEventDelay: 5, eventCooldown: 6, bossDelay: 10, modifiers: { gravity: 1.2, drift: 1.22, anomaly: 0.15 } },
 ];
 
+const COSMETICS = [
+  { id: "debris-launch", name: "星塵微光", description: "細小星塵沿核心外圍緩慢繞行。", color: "#9deeff", style: "halo" },
+  { id: "orbital-debris", name: "碎片軌道", description: "兩道殘缺軌道標記碰撞旅程。", color: "#ffd77c", style: "orbit" },
+  { id: "lunar-tide", name: "月影潮冠", description: "冷色潮汐弧在背光面浮現。", color: "#a997ff", style: "crescent" },
+  { id: "lava-rift", name: "熔核冠冕", description: "熔岩晶刺包圍高熱核心。", color: "#ff865c", style: "crown" },
+  { id: "cloud-giant", name: "雲海絲帶", description: "柔光雲帶以不同速度漂移。", color: "#89c8ff", style: "cloud" },
+  { id: "tilted-rings", name: "傾星之環", description: "三層高傾角星環交錯旋轉。", color: "#ffe0aa", style: "tilted-ring" },
+  { id: "frozen-drift", name: "冰晶稜鏡", description: "稜鏡冰晶折射藍紫星光。", color: "#bcefff", style: "prism" },
+  { id: "brown-storm", name: "雙極磁環", description: "橙紫磁力線隨核心脈動。", color: "#ff9b62", style: "magnetic" },
+  { id: "stellar-flare", name: "日冕耀斑", description: "明亮日冕與火舌環繞星體。", color: "#ffcf72", style: "corona" },
+  { id: "black-hole-edge", name: "虛空透鏡", description: "光線在暗核周圍形成透鏡環。", color: "#b98cff", style: "void" },
+];
+
 const MISSIONS = [
   { id: "absorb", title: "星塵採集者", description: "吸收 30 個星體", target: 30, reward: 10, format: (value, target) => `${value}/${target}` },
   { id: "reach-level", title: "跨越天體", description: "進化到第 5 階", target: 5, reward: 20, format: (value, target) => `LV ${value}/${target}` },
@@ -103,6 +116,11 @@ const ui = {
   joystickBase: document.querySelector("#joystick-base"),
   joystickStick: document.querySelector("#joystick-stick"),
   pauseButton: document.querySelector("#pause-button"),
+  codexButton: document.querySelector("#codex-button"),
+  codexCount: document.querySelector("#codex-count"),
+  codexPopup: document.querySelector("#codex-popup"),
+  codexClose: document.querySelector("#codex-close"),
+  codexGrid: document.querySelector("#codex-grid"),
   resumeButton: document.querySelector("#resume-button"),
   restartButton: document.querySelector("#restart-button"),
   gameoverRestart: document.querySelector("#gameover-restart"),
@@ -191,6 +209,8 @@ const state = {
   regionKey: null,
   cosmicEvent: { event: null, remaining: 0, cooldown: COSMIC_EVENT_FIRST_DELAY, spawnTimer: 0 },
   magneticStorm: { polarity: 1, timer: 3.8, flips: 0 },
+  cosmetics: { unlocked: [], selected: null },
+  codexReturnStatus: "playing",
   bossCooldown: BOSS_FIRST_DELAY,
   endlessChallenge: false,
   stage: {
@@ -258,6 +278,95 @@ function formatNumber(value) {
 
 function colorCss(value) {
   return typeof value === "number" ? `#${value.toString(16).padStart(6, "0")}` : value;
+}
+
+function loadCosmeticCollection() {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem("gravityPlanetCosmetics") || "{}");
+    const validIds = new Set(COSMETICS.map((cosmetic) => cosmetic.id));
+    state.cosmetics.unlocked = Array.isArray(saved.unlocked) ? saved.unlocked.filter((id) => validIds.has(id)) : [];
+    state.cosmetics.selected = validIds.has(saved.selected) && state.cosmetics.unlocked.includes(saved.selected) ? saved.selected : null;
+  } catch {
+    state.cosmetics = { unlocked: [], selected: null };
+  }
+}
+
+function saveCosmeticCollection() {
+  try {
+    window.localStorage.setItem("gravityPlanetCosmetics", JSON.stringify(state.cosmetics));
+  } catch {
+    // 本機儲存被限制時，外觀仍保留到本次頁面關閉為止。
+  }
+}
+
+function unlockCosmetic(id) {
+  const cosmetic = dataForId(COSMETICS, id);
+  if (!cosmetic || state.cosmetics.unlocked.includes(id)) return false;
+  state.cosmetics.unlocked.push(id);
+  saveCosmeticCollection();
+  renderCodex();
+  addToast(`隱藏外觀解鎖 · ${cosmetic.name}`, cosmetic.color);
+  return true;
+}
+
+function selectCosmetic(id) {
+  if (id && !state.cosmetics.unlocked.includes(id)) return;
+  state.cosmetics.selected = id || null;
+  saveCosmeticCollection();
+  applyPlayerCosmetic();
+  renderCodex();
+  const cosmetic = dataForId(COSMETICS, id);
+  addToast(cosmetic ? `已裝備 · ${cosmetic.name}` : "已恢復原始核心外觀", cosmetic?.color || "#a8f4ff");
+}
+
+function renderCodex() {
+  if (!ui.codexGrid) return;
+  ui.codexGrid.innerHTML = "";
+  const entries = [{ id: null, name: "原始核心", description: "不套用額外核心特效。", color: "#a8b8d8" }, ...COSMETICS];
+  entries.forEach((cosmetic, index) => {
+    const unlocked = cosmetic.id === null || state.cosmetics.unlocked.includes(cosmetic.id);
+    const selected = state.cosmetics.selected === cosmetic.id;
+    const item = document.createElement(unlocked ? "button" : "div");
+    if (unlocked) item.type = "button";
+    item.className = `codex-item${unlocked ? "" : " locked"}${selected ? " selected" : ""}`;
+    item.style.setProperty("--cosmetic-color", cosmetic.color);
+    const swatch = document.createElement("span");
+    swatch.className = "codex-swatch";
+    swatch.textContent = unlocked ? (index === 0 ? "○" : "✦") : "?";
+    const copy = document.createElement("span");
+    copy.className = "codex-copy";
+    const name = document.createElement("strong");
+    name.textContent = cosmetic.name;
+    const description = document.createElement("small");
+    description.textContent = unlocked ? cosmetic.description : `第 ${index} 航段隱藏目標`;
+    copy.append(name, description);
+    const status = document.createElement("span");
+    status.className = "codex-status";
+    status.textContent = selected ? "使用中" : unlocked ? "可裝備" : "未解鎖";
+    item.append(swatch, copy, status);
+    if (unlocked) item.addEventListener("click", () => selectCosmetic(cosmetic.id));
+    ui.codexGrid.appendChild(item);
+  });
+  if (ui.codexCount) ui.codexCount.textContent = `${state.cosmetics.unlocked.length}/${COSMETICS.length}`;
+}
+
+function openCodex() {
+  if (!["playing", "paused"].includes(state.status)) return;
+  state.codexReturnStatus = state.status;
+  state.status = "codex";
+  input.clear();
+  resetJoystick();
+  ui.pauseCover.hidden = true;
+  renderCodex();
+  ui.codexPopup.hidden = false;
+}
+
+function closeCodex() {
+  if (state.status !== "codex") return;
+  state.status = state.codexReturnStatus === "paused" ? "paused" : "playing";
+  ui.codexPopup.hidden = true;
+  ui.pauseCover.hidden = state.status !== "paused";
+  updateUi(true);
 }
 
 function formatTime(seconds) {
@@ -395,12 +504,14 @@ function chooseStageRoute(route) {
 function showStageClear() {
   if (state.status !== "playing" || state.endlessChallenge) return;
   const stage = currentStage();
+  const hiddenCompleted = state.stage.hiddenProgress >= stage.hidden.target;
+  const stageCosmetic = dataForId(COSMETICS, stage.id);
   state.status = "stage-clear";
   input.clear();
   resetJoystick();
   if (!state.stage.rewardApplied) {
     const bonusReward = state.stage.bonusProgress >= stage.bonus.target ? Math.ceil(stage.reward * 0.5) : 0;
-    const hiddenReward = state.stage.hiddenProgress >= stage.hidden.target ? stage.reward : 0;
+    const hiddenReward = hiddenCompleted ? stage.reward : 0;
     const energyReward = Math.round((stage.reward + bonusReward + hiddenReward) * routeRewardMultiplier());
     state.player.energy += energyReward;
     state.player.shield = Math.min(state.player.shieldMax, state.player.shield + 1);
@@ -408,13 +519,14 @@ function showStageClear() {
     state.stage.rewardChoices = evolutionChoicesForLevel();
     state.stage.rewardText = `護盾 +1 · 星能 +${energyReward}${bonusReward ? " · 額外目標獎勵" : ""}${hiddenReward ? " · 隱藏獎勵" : ""}${state.stage.route === "risk" ? " · 風險加成" : ""}`;
   }
+  if (hiddenCompleted) unlockCosmetic(stage.id);
   ui.stageRewardCopy.textContent = state.stage.rewardText || "護盾 +1 · 階段補給已領取";
   const stageLabel = state.stage.index === STAGES.length - 1 ? "最終星域" : `第 ${state.stage.index + 1} 星域`;
   ui.stageClearName.textContent = `${stageLabel} · ${stage.name}`;
   ui.stageClearDescription.textContent = stage.description;
   ui.stageMainResult.textContent = `完成 · ${stage.objective.text}`;
   ui.stageBonusResult.textContent = state.stage.bonusProgress >= stage.bonus.target ? `完成 · ${stage.bonus.text}` : `未完成 · ${objectiveResultText(stage.bonus, state.stage.bonusProgress)}`;
-  ui.stageHiddenResult.textContent = state.stage.hiddenProgress >= stage.hidden.target ? `發現 · ${stage.hidden.text}` : "尚未發現";
+  ui.stageHiddenResult.textContent = hiddenCompleted ? `解鎖 · ${stageCosmetic?.name || stage.hidden.text}` : "尚未發現";
   ui.stageRouteGroup.hidden = state.stage.index === STAGES.length - 1;
   ui.stageContinue.innerHTML = state.stage.index === STAGES.length - 1 ? "進入無盡挑戰 <span aria-hidden=\"true\">↗</span>" : "前往下一星域 <span aria-hidden=\"true\">↗</span>";
   ui.stageClearNote.textContent = state.stage.index === STAGES.length - 1
@@ -1587,12 +1699,98 @@ function resolveSolidCollision(first, second) {
   };
 }
 
+function clearPlayerCosmetic() {
+  const cosmeticGroup = state.player.model?.userData.cosmeticGroup;
+  if (!cosmeticGroup) return;
+  cosmeticGroup.traverse((object) => {
+    if (object.geometry) object.geometry.dispose();
+    if (object.material) {
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      materials.forEach((material) => material.dispose());
+    }
+  });
+  state.player.model.remove(cosmeticGroup);
+  state.player.model.userData.cosmeticGroup = null;
+}
+
+function applyPlayerCosmetic() {
+  const model = state.player.model;
+  if (!model) return;
+  clearPlayerCosmetic();
+  const cosmetic = dataForId(COSMETICS, state.cosmetics.selected);
+  if (!cosmetic || !state.cosmetics.unlocked.includes(cosmetic.id)) return;
+  const radius = LEVELS[state.player.level - 1].radius;
+  const color = new THREE.Color(cosmetic.color).getHex();
+  const group = new THREE.Group();
+
+  if (cosmetic.style === "halo") {
+    group.add(makeSprite(color, radius * 2.7, 0.13));
+    addParticleBelt(group, radius * 1.24, 54, color, radius * 0.12);
+  } else if (cosmetic.style === "orbit") {
+    addRing(group, radius * 1.25, Math.max(0.025, radius * 0.018), color, 0.62, 0.34, 0.3);
+    addRing(group, radius * 1.48, Math.max(0.018, radius * 0.012), 0x9deeff, 0.42, -0.28, -0.24);
+  } else if (cosmetic.style === "crescent") {
+    const crescent = new THREE.Mesh(new THREE.TorusGeometry(radius * 1.18, Math.max(0.04, radius * 0.055), 8, 56, Math.PI * 1.28), sceneryMaterial(color, 0.58));
+    crescent.rotation.set(Math.PI / 2 + 0.24, 0.18, -0.52);
+    crescent.userData.spinSpeed = 0.12;
+    group.add(crescent);
+    group.add(makeSprite(color, radius * 2.5, 0.08));
+  } else if (cosmetic.style === "crown") {
+    for (let index = 0; index < 7; index += 1) {
+      const angle = (index / 7) * Math.PI * 2;
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(radius * 0.08, radius * 0.48, 5), sceneryMaterial(index % 2 ? color : 0xffd77c, 0.68));
+      spike.position.set(Math.cos(angle) * radius * 1.08, radius * 0.12, Math.sin(angle) * radius * 1.08);
+      spike.rotation.z = -Math.cos(angle) * 0.85;
+      spike.rotation.x = Math.sin(angle) * 0.85;
+      group.add(spike);
+    }
+  } else if (cosmetic.style === "cloud") {
+    for (let index = 0; index < 4; index += 1) {
+      const cloud = makeSprite(index % 2 ? color : 0xc58cff, radius * (1.25 + index * 0.16), 0.055);
+      cloud.position.set(Math.cos(index * 1.7) * radius * 0.65, (index - 1.5) * radius * 0.18, Math.sin(index * 1.7) * radius * 0.65);
+      group.add(cloud);
+    }
+    addRing(group, radius * 1.28, Math.max(0.025, radius * 0.016), color, 0.34, 0.58, -0.12);
+  } else if (cosmetic.style === "tilted-ring") {
+    addRing(group, radius * 1.25, Math.max(0.03, radius * 0.028), color, 0.65, 0.62, 0.24);
+    addRing(group, radius * 1.47, Math.max(0.02, radius * 0.014), 0x9deeff, 0.48, -0.42, -0.2);
+    addRing(group, radius * 1.68, Math.max(0.015, radius * 0.009), 0xc58cff, 0.34, 0.18, 0.14);
+  } else if (cosmetic.style === "prism") {
+    for (let index = 0; index < 6; index += 1) {
+      const angle = (index / 6) * Math.PI * 2;
+      const prism = new THREE.Mesh(new THREE.ConeGeometry(radius * 0.07, radius * 0.4, 5), sceneryMaterial(index % 2 ? color : 0xa997ff, 0.65));
+      prism.position.set(Math.cos(angle) * radius * 1.16, Math.sin(index * 2.2) * radius * 0.15, Math.sin(angle) * radius * 1.16);
+      prism.rotation.z = angle - Math.PI / 2;
+      group.add(prism);
+    }
+    group.add(makeSprite(color, radius * 2.65, 0.1));
+  } else if (cosmetic.style === "magnetic") {
+    const first = addRing(group, radius * 1.34, Math.max(0.025, radius * 0.018), color, 0.58, -Math.PI / 2, 0.28);
+    first.rotation.y = 0.45;
+    const second = addRing(group, radius * 1.52, Math.max(0.02, radius * 0.012), 0xc58cff, 0.48, -Math.PI / 2, -0.24);
+    second.rotation.y = -0.52;
+  } else if (cosmetic.style === "corona") {
+    group.add(makeSprite(color, radius * 3.05, 0.16));
+    addParticleBelt(group, radius * 1.3, 96, color, radius * 0.17);
+    addRing(group, radius * 1.22, Math.max(0.035, radius * 0.026), 0xff865c, 0.58, 0.22, 0.28);
+  } else if (cosmetic.style === "void") {
+    addRing(group, radius * 1.22, Math.max(0.045, radius * 0.05), 0xff9b62, 0.68, 0.34, 0.36);
+    addRing(group, radius * 1.52, Math.max(0.025, radius * 0.018), color, 0.54, -0.28, -0.3);
+    group.add(makeSprite(color, radius * 3.1, 0.14));
+  }
+
+  model.add(group);
+  model.userData.cosmeticGroup = group;
+}
+
 function rebuildPlayerModel() {
   state.evolutionAnimation = null;
+  clearPlayerCosmetic();
   playerRoot.clear();
   state.player.model = createCelestialModel(state.player.level, true);
   state.player.field = createGravityField();
   playerRoot.add(state.player.model, state.player.field);
+  applyPlayerCosmetic();
   updatePlayerVisual();
 }
 
@@ -1718,6 +1916,7 @@ function triggerEvolution(nextLevel) {
   oldModel.visible = true;
   playerRoot.add(newModel);
   state.player.model = newModel;
+  applyPlayerCosmetic();
   createEvolutionBurst(state.player.position, data.accent);
   updateAllBodyScales();
   updateGridDensity();
@@ -2423,7 +2622,7 @@ function endGame() {
 }
 
 function togglePause() {
-  if (state.status === "gameover" || state.status === "evolving" || state.status === "stage-clear") return;
+  if (["gameover", "evolving", "stage-clear", "codex"].includes(state.status)) return;
   state.status = state.status === "paused" ? "playing" : "paused";
   ui.pauseCover.hidden = state.status !== "paused";
   updateUi(true);
@@ -2492,8 +2691,10 @@ function restartGame() {
   ui.gameoverCover.hidden = true;
   ui.evolutionPopup.hidden = true;
   ui.stageClearPopup.hidden = true;
+  ui.codexPopup.hidden = true;
   ui.comboPill.hidden = true;
   ui.dangerAlert.hidden = true;
+  renderCodex();
   addToast("開始收集星塵", "#a8f4ff");
   updateUi(true);
 }
@@ -2526,6 +2727,7 @@ function getSavedGame() {
     bossCooldown: state.bossCooldown,
     cosmicEvent: { ...state.cosmicEvent },
     magneticStorm: { ...state.magneticStorm },
+    cosmetics: { unlocked: [...state.cosmetics.unlocked], selected: state.cosmetics.selected },
     endlessChallenge: state.endlessChallenge,
     stage: {
       ...state.stage,
@@ -2578,6 +2780,15 @@ function restoreGame(saved) {
   state.bossCooldown = saved.bossCooldown ?? BOSS_FIRST_DELAY;
   state.cosmicEvent = saved.cosmicEvent || state.cosmicEvent;
   state.magneticStorm = saved.magneticStorm || state.magneticStorm;
+  if (saved.cosmetics) {
+    const validIds = new Set(COSMETICS.map((cosmetic) => cosmetic.id));
+    state.cosmetics.unlocked = [...new Set([
+      ...state.cosmetics.unlocked,
+      ...(Array.isArray(saved.cosmetics.unlocked) ? saved.cosmetics.unlocked : []),
+    ])].filter((id) => validIds.has(id));
+    if (saved.cosmetics.selected && state.cosmetics.unlocked.includes(saved.cosmetics.selected)) state.cosmetics.selected = saved.cosmetics.selected;
+    saveCosmeticCollection();
+  }
   state.endlessChallenge = saved.endlessChallenge ?? false;
   if (saved.stage) {
     state.stage = {
@@ -2658,8 +2869,10 @@ function setupInput() {
       if (event.repeat) return;
       if (state.status === "evolving" && !ui.evolutionPopup.hidden) continueAfterEvolution();
       else if (state.status === "stage-clear" && !ui.stageClearPopup.hidden) continueAfterStageClear();
+      else if (state.status === "codex") closeCodex();
       else togglePause();
     }
+    if (event.key === "Escape" && state.status === "codex") closeCodex();
     if (event.key.toLowerCase() === "r") restartGame();
   });
   window.addEventListener("keyup", (event) => {
@@ -2749,9 +2962,13 @@ function init() {
   const keyLight = new THREE.DirectionalLight(0x99baff, 1.6);
   keyLight.position.set(-12, 24, 16);
   scene.add(keyLight);
+  loadCosmeticCollection();
   rebuildPlayerModel();
+  renderCodex();
   setupInput();
   ui.pauseButton.addEventListener("click", togglePause);
+  ui.codexButton.addEventListener("click", openCodex);
+  ui.codexClose.addEventListener("click", closeCodex);
   ui.resumeButton.addEventListener("click", togglePause);
   ui.restartButton.addEventListener("click", restartGame);
   ui.gameoverRestart.addEventListener("click", restartGame);

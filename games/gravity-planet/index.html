@@ -19,6 +19,7 @@
           <p class="game-tagline">吸收碎石，變成宇宙裡更大的存在。</p>
         </div>
         <div class="header-actions">
+          <button class="button button-quiet" id="codex-button" type="button">星體圖鑑 <span id="codex-count">0/10</span></button>
           <button class="button button-quiet" id="pause-button" type="button">暫停</button>
           <button class="button button-primary" id="restart-button" type="button">重新開始 <span aria-hidden="true">↗</span></button>
         </div>
@@ -98,6 +99,20 @@
               </div>
               <div class="evolution-note" id="stage-clear-note">請選擇強化與航線；空白鍵會採用第一項強化與穩定航線。</div>
               <button class="button button-primary" id="stage-continue" type="button">前往下一星域 <span aria-hidden="true">↗</span></button>
+            </div>
+          </div>
+          <div class="codex-popup" id="codex-popup" hidden>
+            <div class="codex-card">
+              <div class="codex-heading">
+                <div>
+                  <span class="cover-kicker">CELESTIAL ARCHIVE</span>
+                  <h2>星體圖鑑</h2>
+                  <p>完成每個航段的隱藏目標，解鎖不影響數值的核心外觀。</p>
+                </div>
+                <button class="codex-close" id="codex-close" type="button" aria-label="關閉星體圖鑑">×</button>
+              </div>
+              <div class="codex-grid" id="codex-grid"></div>
+              <div class="evolution-note">外觀只改變玩家星體特效，不影響質量、引力、速度或碰撞體積。</div>
             </div>
           </div>
           <div class="pause-cover" id="pause-cover" hidden>
