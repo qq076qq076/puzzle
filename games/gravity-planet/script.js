@@ -1,15 +1,27 @@
 const LEVELS = [
-  { name: "碎星微石", mass: 0, bodyMass: 1, radius: 0.5, drift: 3.5, gravity: 3.5, color: 0x8190a7, accent: 0xb7c7df, spin: 0.45, description: "最初的漂浮碎石。它很輕，能快速穿過星塵帶，靠近小碎片就能將它們吸入核心。" },
-  { name: "小行星", mass: 10, bodyMass: 4, radius: 0.78, drift: 3.2, gravity: 4.5, color: 0x8f7773, accent: 0xe0b19c, spin: 0.38, description: "核心聚合成穩定的小行星，隕石坑與碎石環開始受到自身引力牽引。" },
-  { name: "月岩", mass: 50, bodyMass: 12, radius: 1.18, drift: 2.9, gravity: 5.5, color: 0xa9bedc, accent: 0xd9e6ff, spin: 0.32, description: "冷色月岩擁有更寬廣的引力場，漂浮碎石會在靠近時自然改變方向。" },
-  { name: "行星胚", mass: 180, bodyMass: 35, radius: 1.8, drift: 2.6, gravity: 7, color: 0xd75948, accent: 0xffb347, spin: 0.28, description: "熔岩核心正在成形。熱裂縫讓你的引力變得明亮，也更容易捕捉遠處碎片。" },
-  { name: "岩質行星", mass: 600, bodyMass: 100, radius: 2.7, drift: 2.3, gravity: 9, color: 0x297db9, accent: 0x76e2d3, spin: 0.24, description: "大氣層包住藍綠色地表，你已經足以影響周圍星體的漂移軌跡。" },
-  { name: "氣體巨行星", mass: 1800, bodyMass: 280, radius: 4, drift: 2, gravity: 12, color: 0xd58fae, accent: 0xffd09d, spin: 0.2, description: "氣體條紋與巨大風暴圍繞核心旋轉，鄰近星體會被你的引力慢慢拉成群。" },
-  { name: "冰巨星", mass: 5000, bodyMass: 750, radius: 5.8, drift: 1.7, gravity: 15, color: 0x5dbddc, accent: 0x9e9cff, spin: 0.16, description: "藍紫冰晶與極光形成新的重力景觀，你的引力場已能改寫更大的星體路線。" },
-  { name: "棕矮星", mass: 14000, bodyMass: 2000, radius: 8.2, drift: 1.4, gravity: 19, color: 0xd07b45, accent: 0xffb96d, spin: 0.13, description: "等離子體在核心周圍翻湧，磁場與引力同時牽引著附近的星塵與小星體。" },
-  { name: "恆星", mass: 38000, bodyMass: 5500, radius: 11.6, drift: 1.1, gravity: 24, color: 0xffa522, accent: 0xffe69b, spin: 0.1, description: "耀斑與日冕照亮黑暗，你已經成為一個會讓其他星體繞行的恆星。" },
-  { name: "黑洞", mass: 100000, bodyMass: 15000, radius: 16, drift: 0.8, gravity: 30, color: 0x0a0818, accent: 0xff8e52, spin: 0.07, description: "最後的形態。吸積盤吞吐星光，連光線與空間都開始在你的核心周圍彎曲。" },
+  { name: "星塵碎片", family: "debris", variant: "base", mass: 0, bodyMass: 1, radius: 0.5, drift: 3.5, gravity: 3.5, color: 0x71829c, accent: 0xa8dfff, spin: 0.48, description: "星塵剛聚成一枚微小晶石。它幾乎沒有重量，卻能靈活穿過最狹窄的碎石縫隙。" },
+  { name: "碎星微石", family: "debris", variant: "advanced", mass: 8, bodyMass: 2, radius: 0.62, drift: 3.38, gravity: 4, color: 0x8190a7, accent: 0xb7c7df, spin: 0.45, description: "漂浮碎石形成穩定核心，焦黑外殼開始牽引附近星塵，留下細小的移動尾跡。" },
+  { name: "微型小行星", family: "asteroid", variant: "base", mass: 24, bodyMass: 4, radius: 0.78, drift: 3.25, gravity: 4.5, color: 0x7d6e70, accent: 0xd69c8c, spin: 0.41, description: "不規則岩體長出第一批隕石坑，細碎岩屑開始沿著核心外圍繞行。" },
+  { name: "小行星", family: "asteroid", variant: "advanced", mass: 60, bodyMass: 9, radius: 0.96, drift: 3.1, gravity: 5, color: 0x8f7773, accent: 0xe0b19c, spin: 0.38, description: "核心聚合成完整小行星，深隕石坑、發亮礦脈與雙層碎石環讓輪廓更加鮮明。" },
+  { name: "微型衛星", family: "moon", variant: "base", mass: 140, bodyMass: 18, radius: 1.18, drift: 2.95, gravity: 5.6, color: 0x8fa5c4, accent: 0xc6dcff, spin: 0.35, description: "岩體逐漸球化成一枚微型衛星，破碎地殼在冷光下顯露出漫長的撞擊歷史。" },
+  { name: "月岩", family: "moon", variant: "advanced", mass: 300, bodyMass: 36, radius: 1.44, drift: 2.8, gravity: 6.2, color: 0xa9bedc, accent: 0xd9e6ff, spin: 0.32, description: "完整月面擁有放射狀撞擊紋與稀薄塵環，漂浮碎石會在靠近時自然改變方向。" },
+  { name: "原行星核", family: "protoplanet", variant: "base", mass: 620, bodyMass: 70, radius: 1.78, drift: 2.65, gravity: 7, color: 0xa9443b, accent: 0xff7a45, spin: 0.3, description: "高壓讓核心開始熔融，橙紅能量從暗色岩殼的裂隙間向外滲出。" },
+  { name: "行星胚", family: "protoplanet", variant: "advanced", mass: 1250, bodyMass: 140, radius: 2.18, drift: 2.5, gravity: 7.8, color: 0xd75948, accent: 0xffb347, spin: 0.28, description: "熔岩海與火山噴流包圍核心。這顆尚未冷卻的行星已能捕捉更遠處的碎片。" },
+  { name: "矮行星", family: "terrestrial", variant: "base", mass: 2500, bodyMass: 280, radius: 2.65, drift: 2.35, gravity: 8.8, color: 0x477c9f, accent: 0x8fe1dc, spin: 0.26, description: "冰岩地貌與亮色斑塊遍布表面，一層薄薄的大氣開始包覆逐漸安定的地殼。" },
+  { name: "岩質行星", family: "terrestrial", variant: "advanced", mass: 5000, bodyMass: 520, radius: 3.2, drift: 2.2, gravity: 9.8, color: 0x297db9, accent: 0x76e2d3, spin: 0.24, description: "海陸、雲層與半透明大氣構成完整世界，你已足以改寫周圍星體的漂移軌跡。" },
+  { name: "氣體行星", family: "gas-giant", variant: "base", mass: 9500, bodyMass: 950, radius: 3.85, drift: 2.05, gravity: 11, color: 0xb879a6, accent: 0xf0b4ce, spin: 0.22, description: "輕盈氣層形成柔和雲帶，氣旋不斷吞吐能量，一道細環正在赤道外圍成形。" },
+  { name: "氣體巨行星", family: "gas-giant", variant: "advanced", mass: 18000, bodyMass: 1700, radius: 4.65, drift: 1.9, gravity: 12.4, color: 0xd58fae, accent: 0xffd09d, spin: 0.2, description: "多層氣體條紋與巨大風暴包圍核心，寬廣星環在雲海上投下流動的陰影。" },
+  { name: "冰行星", family: "ice-giant", variant: "base", mass: 34000, bodyMass: 3100, radius: 5.6, drift: 1.75, gravity: 14, color: 0x4ba9ce, accent: 0x83e5ff, spin: 0.18, description: "低溫將氣層染成青藍色，極地光帶掠過冰層，晶體碎環在外圍緩慢聚集。" },
+  { name: "冰巨星", family: "ice-giant", variant: "advanced", mass: 64000, bodyMass: 5800, radius: 6.75, drift: 1.6, gravity: 15.8, color: 0x5dbddc, accent: 0x9e9cff, spin: 0.16, description: "藍紫冰晶、多層星環與強烈極光形成新的重力景觀，巨大核心改寫整片星域的路線。" },
+  { name: "超級氣體巨星", family: "substellar", variant: "base", mass: 120000, bodyMass: 10800, radius: 8.1, drift: 1.45, gravity: 17.8, color: 0xb8654a, accent: 0xff9c69, spin: 0.145, description: "龐大雲帶因壓力而泛光，多重星環切過表面；核心只差一步就能點燃微弱核融合。" },
+  { name: "棕矮星", family: "substellar", variant: "advanced", mass: 225000, bodyMass: 20000, radius: 9.7, drift: 1.3, gravity: 20, color: 0xd07b45, accent: 0xffb96d, spin: 0.13, description: "等離子在核心周圍翻湧，磁力線、電弧與粒子帶一同掃過這顆未完全點燃的星體。" },
+  { name: "紅矮星", family: "stellar", variant: "base", mass: 420000, bodyMass: 37000, radius: 11.6, drift: 1.16, gravity: 22.5, color: 0xe95c3f, accent: 0xff9b67, spin: 0.115, description: "暗紅光球已能持續核融合，表面米粒組織翻湧，短促耀斑不時照亮附近星塵。" },
+  { name: "恆星", family: "stellar", variant: "advanced", mass: 780000, bodyMass: 69000, radius: 13.8, drift: 1.02, gravity: 25.2, color: 0xffa522, accent: 0xffe69b, spin: 0.1, description: "耀斑、日冕與粒子噴流照亮黑暗，你已成為足以讓其他星體繞行的主序恆星。" },
+  { name: "超巨星", family: "terminal", variant: "base", mass: 1450000, bodyMass: 128000, radius: 16.4, drift: 0.9, gravity: 28.2, color: 0xff784f, accent: 0xffc27d, spin: 0.085, description: "多層光殼隨著內部壓力脈動，巨型日珥與星風震波預告核心即將迎來最後坍縮。" },
+  { name: "黑洞", family: "terminal", variant: "advanced", mass: 2700000, bodyMass: 240000, radius: 19.5, drift: 0.78, gravity: 31.5, color: 0x0a0818, accent: 0xff8e52, spin: 0.07, description: "最後形態。吸積盤吞吐星光，重力透鏡扭曲背景，雙向噴流從看不見的核心延伸至宇宙。" },
 ];
+
+const SAVE_SCHEMA_VERSION = 2;
 
 const REGIONS = [
   { id: "debris", name: "碎石帶", description: "碎石密度提高，收集路線更容易形成連鎖。", color: 0x62e6ff, gridColor: 0x234c73, gravityMultiplier: 1, bodyDriftMultiplier: 1, playerAccelerationMultiplier: 1.04, anomalyBonus: 0.02 },
@@ -58,8 +70,12 @@ const STAGES = [
   { id: "frozen-drift", name: "冰封迷航", description: "低引力與高速漂移會讓每次轉向都更難預測。", objective: { type: "anomaly", target: 3, text: "吸收 3 個異常星體" }, bonus: { type: "survive", target: 90, text: "本星域存活 90 秒", absolute: true }, hidden: { type: "combo", target: 9, text: "達成 9 連擊", absolute: true }, reward: 24, minimumDuration: 35, threatLimit: 2, events: ["anti-gravity", "meteor"], introEventDelay: 13, modifiers: { gravity: 0.76, drift: 1.32, anomaly: 0.13 } },
   { id: "brown-storm", name: "棕矮磁暴", description: "磁暴反覆扭曲航線，必須讀懂重力方向。", objective: { type: "gravity-storm", target: 2, text: "完成 2 次重力風暴" }, bonus: { type: "boss", target: 1, text: "完成 1 次強化 Boss 遭遇" }, hidden: { type: "fragment", target: 12, text: "吸收 12 個碰撞碎星" }, reward: 28, minimumDuration: 45, threatLimit: 2, events: ["gravity-storm"], introEventDelay: 7, eventCooldown: 8, bossDelay: 15, modifiers: { gravity: 1.24, drift: 1.12, anomaly: 0.07 } },
   { id: "stellar-flare", name: "恆星耀斑", description: "多種宇宙事件接連發生，航線不再長時間穩定。", objective: { type: "event", target: 3, text: "完成 3 次宇宙事件" }, bonus: { type: "anomaly", target: 4, text: "吸收 4 個異常星體" }, hidden: { type: "boss", target: 1, text: "在事件期間完成 Boss 遭遇" }, reward: 34, minimumDuration: 45, threatLimit: 2, events: ["meteor", "gravity-storm", "solar-flare", "anti-gravity"], introEventDelay: 6, eventCooldown: 7, bossDelay: 14, modifiers: { gravity: 1.12, drift: 1.2, anomaly: 0.12 } },
-  { id: "black-hole-edge", name: "黑洞邊界", description: "穩定最終核心，完成從碎石到黑洞的旅程。", objective: { type: "level", target: 10, text: "進化為黑洞", absolute: true }, bonus: { type: "event", target: 4, text: "完成 4 次宇宙事件" }, hidden: { type: "boss", target: 2, text: "完成 2 次 Boss 遭遇" }, reward: 45, minimumDuration: 60, threatLimit: 2, events: ["meteor", "gravity-storm", "solar-flare", "anti-gravity"], introEventDelay: 5, eventCooldown: 6, bossDelay: 10, modifiers: { gravity: 1.2, drift: 1.22, anomaly: 0.15 } },
+  { id: "black-hole-edge", name: "黑洞邊界", description: "穩定最終核心，完成從碎石到黑洞的旅程。", objective: { type: "level", target: 20, text: "進化為黑洞", absolute: true }, bonus: { type: "event", target: 4, text: "完成 4 次宇宙事件" }, hidden: { type: "boss", target: 2, text: "完成 2 次 Boss 遭遇" }, reward: 45, minimumDuration: 60, threatLimit: 2, events: ["meteor", "gravity-storm", "solar-flare", "anti-gravity"], introEventDelay: 5, eventCooldown: 6, bossDelay: 10, modifiers: { gravity: 1.2, drift: 1.22, anomaly: 0.15 } },
 ];
+
+STAGES.forEach((stage, index) => {
+  stage.recommendedLevel = { entry: index === 0 ? 1 : index * 2, completion: (index + 1) * 2 };
+});
 
 const COSMETICS = [
   { id: "debris-launch", name: "星塵微光", description: "細小星塵沿核心外圍緩慢繞行。", color: "#9deeff", style: "halo" },
@@ -76,7 +92,7 @@ const COSMETICS = [
 
 const MISSIONS = [
   { id: "absorb", title: "星塵採集者", description: "吸收 30 個星體", target: 30, reward: 10, format: (value, target) => `${value}/${target}` },
-  { id: "reach-level", title: "跨越天體", description: "進化到第 5 階", target: 5, reward: 20, format: (value, target) => `LV ${value}/${target}` },
+  { id: "reach-level", title: "跨越天體", description: "進化到第 10 階", target: 10, reward: 20, format: (value, target) => `LV ${value}/${target}` },
   { id: "anomaly", title: "異常觀測員", description: "吸收 3 個異常星體", target: 3, reward: 18, format: (value, target) => `${value}/${target}` },
   { id: "chain", title: "碰撞藝術家", description: "完成 8 次星體連鎖碰撞", target: 8, reward: 22, format: (value, target) => `${value}/${target}` },
   { id: "survive", title: "長途漂流", description: "存活 180 秒", target: 180, reward: 35, format: (value, target) => `${formatTime(value)}/${formatTime(target)}` },
@@ -385,6 +401,71 @@ function levelForMass(mass) {
     if (mass >= LEVELS[index].mass) level = index + 1;
   }
   return level;
+}
+
+function legacyLevelToCurrent(level) {
+  return clamp(Math.trunc(level) * 2, 1, LEVELS.length);
+}
+
+function migrateSavedGame(saved) {
+  if (!saved || saved.schemaVersion >= SAVE_SCHEMA_VERSION) return saved;
+  const migrated = {
+    ...saved,
+    schemaVersion: SAVE_SCHEMA_VERSION,
+    player: { ...saved.player },
+    bodies: Array.isArray(saved.bodies) ? saved.bodies.map((body) => ({ ...body })) : [],
+    missions: saved.missions ? { ...saved.missions } : saved.missions,
+    stage: saved.stage ? { ...saved.stage } : saved.stage,
+  };
+  const hasLegacyPlayerLevel = Number.isInteger(saved.player?.level) && saved.player.level >= 1;
+  const migratedPlayerLevel = hasLegacyPlayerLevel
+    ? legacyLevelToCurrent(saved.player.level)
+    : levelForMass(Number(saved.player?.mass) || 0);
+  migrated.player.level = migratedPlayerLevel;
+  migrated.player.mass = Math.max(Number(saved.player?.mass) || 0, LEVELS[migratedPlayerLevel - 1].mass);
+  const legacyHighLevel = Number.isInteger(saved.highLevel) ? saved.highLevel : saved.player?.level;
+  migrated.highLevel = Number.isInteger(legacyHighLevel)
+    ? legacyLevelToCurrent(legacyHighLevel)
+    : migratedPlayerLevel;
+  migrated.highMass = Math.max(Number(saved.highMass) || 0, migrated.player.mass, LEVELS[migrated.highLevel - 1].mass);
+  migrated.bodies = migrated.bodies.map((body) => {
+    const level = Number.isInteger(body.level)
+      ? legacyLevelToCurrent(body.level)
+      : levelForMass(Number(body.mass) || 0);
+    return {
+      ...body,
+      level,
+      mass: Math.max(Number(body.mass) || 0, LEVELS[level - 1].bodyMass),
+    };
+  });
+  if (migrated.missions?.["reach-level"]) {
+    const legacyProgress = Number(migrated.missions["reach-level"].progress) || 0;
+    migrated.missions = {
+      ...migrated.missions,
+      "reach-level": {
+        ...migrated.missions["reach-level"],
+        progress: legacyProgress > 0 ? legacyLevelToCurrent(legacyProgress) : 0,
+      },
+    };
+  }
+  if (migrated.stage?.index === STAGES.length - 1 && Number.isFinite(migrated.stage.progress)) {
+    migrated.stage.progress = migrated.stage.progress > 0 ? legacyLevelToCurrent(migrated.stage.progress) : 0;
+  }
+  return migrated;
+}
+
+function migrateLegacyBestLevel() {
+  try {
+    const storageVersion = Number(window.localStorage.getItem("gravityPlanetBestLevelSchema")) || 1;
+    if (storageVersion >= SAVE_SCHEMA_VERSION) return;
+    const legacyBestLevel = Number(window.localStorage.getItem("gravityPlanetBestLevel"));
+    if (Number.isInteger(legacyBestLevel) && legacyBestLevel > 0) {
+      window.localStorage.setItem("gravityPlanetBestLevel", String(legacyLevelToCurrent(legacyBestLevel)));
+    }
+    window.localStorage.setItem("gravityPlanetBestLevelSchema", String(SAVE_SCHEMA_VERSION));
+  } catch {
+    // 本機儲存被限制時不影響本局進度。
+  }
 }
 
 function dataForId(collection, id) {
@@ -750,6 +831,7 @@ function addCrater(group, radius, position, scale = 1) {
 
 function createCelestialModel(level, isPlayer = false) {
   const data = LEVELS[level - 1];
+  const modelLevel = Math.ceil(level / 2);
   const group = new THREE.Group();
   group.userData.rotationSpeed = data.spin * (isPlayer ? 1.15 : 1);
   group.userData.phase = rand(0, Math.PI * 2);
@@ -759,31 +841,31 @@ function createCelestialModel(level, isPlayer = false) {
   if (!planetBandTexture) planetBandTexture = makeBandTexture();
 
   const radius = data.radius;
-  const isEmissive = level >= 4;
+  const isEmissive = modelLevel >= 4;
   const material = new THREE.MeshStandardMaterial({
     color: data.color,
-    roughness: level >= 8 ? 0.45 : 0.8,
-    metalness: level >= 6 ? 0.08 : 0.02,
+    roughness: modelLevel >= 8 ? 0.45 : 0.8,
+    metalness: modelLevel >= 6 ? 0.08 : 0.02,
     emissive: isEmissive ? data.color : 0x000000,
-    emissiveIntensity: level >= 9 ? 1.1 : level >= 4 ? 0.12 : 0,
-    flatShading: level <= 2,
+    emissiveIntensity: modelLevel >= 9 ? 1.1 : modelLevel >= 4 ? 0.12 : 0,
+    flatShading: modelLevel <= 2,
   });
 
   let core;
-  if (level === 1) {
+  if (modelLevel === 1) {
     core = new THREE.Mesh(new THREE.IcosahedronGeometry(radius, 1), material);
-  } else if (level === 2) {
+  } else if (modelLevel === 2) {
     core = new THREE.Mesh(new THREE.IcosahedronGeometry(radius, 2), material);
     core.scale.set(1.15, 0.9, 1.05);
     [[0.5, 0.4, 0.6], [-0.7, 0.1, 0.35], [0.1, -0.8, 0.3], [-0.4, 0.65, -0.5]].forEach((point, index) => {
       addCrater(group, radius, new THREE.Vector3(...point), index % 2 ? 0.7 : 1);
     });
     addRing(group, radius * 1.08, radius * 0.02, data.accent, 0.25, 0.35, 0.18);
-  } else if (level === 3) {
+  } else if (modelLevel === 3) {
     core = new THREE.Mesh(new THREE.SphereGeometry(radius, 24, 16), material);
     [[0.4, 0.6, 0.7], [-0.7, 0.2, 0.45], [0.1, -0.8, 0.3], [-0.5, -0.5, -0.65], [0.65, -0.1, -0.4]].forEach((point, index) => addCrater(group, radius, new THREE.Vector3(...point), index % 3 === 0 ? 1.2 : 0.75));
     addRing(group, radius * 1.11, radius * 0.016, data.accent, 0.32, 0.2, 0.13);
-  } else if (level === 4) {
+  } else if (modelLevel === 4) {
     core = new THREE.Mesh(new THREE.IcosahedronGeometry(radius, 3), material);
     for (let index = 0; index < 4; index += 1) {
       const crack = new THREE.Mesh(
@@ -794,7 +876,7 @@ function createCelestialModel(level, isPlayer = false) {
       group.add(crack);
     }
     group.add(makeSprite(data.accent, radius * 2.7, 0.09));
-  } else if (level === 5) {
+  } else if (modelLevel === 5) {
     core = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 20), material);
     const cloud = new THREE.Mesh(
       new THREE.SphereGeometry(radius * 1.025, 32, 20),
@@ -804,7 +886,7 @@ function createCelestialModel(level, isPlayer = false) {
     group.add(cloud);
     addRing(group, radius * 1.12, radius * 0.018, data.accent, 0.25, 0.72, 0.11);
     group.add(makeSprite(data.accent, radius * 2.5, 0.07));
-  } else if (level === 6) {
+  } else if (modelLevel === 6) {
     const stripedMaterial = material.clone();
     stripedMaterial.map = planetBandTexture;
     stripedMaterial.color.setHex(0xffffff);
@@ -816,7 +898,7 @@ function createCelestialModel(level, isPlayer = false) {
     const storm = makeSprite(0xffb3bd, radius * 0.75, 0.18);
     storm.position.set(radius * 0.45, radius * 0.25, radius * 0.76);
     group.add(storm);
-  } else if (level === 7) {
+  } else if (modelLevel === 7) {
     core = new THREE.Mesh(new THREE.SphereGeometry(radius, 36, 24), material);
     const iceShell = new THREE.Mesh(
       new THREE.SphereGeometry(radius * 1.035, 32, 20),
@@ -831,7 +913,7 @@ function createCelestialModel(level, isPlayer = false) {
       aurora.position.set(Math.cos(index * 2.1) * radius * 0.8, 0, Math.sin(index * 2.1) * radius * 0.8);
       group.add(aurora);
     }
-  } else if (level === 8) {
+  } else if (modelLevel === 8) {
     core = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 20), material);
     core.material.emissive.setHex(0x7b2c19);
     core.material.emissiveIntensity = 0.5;
@@ -839,7 +921,7 @@ function createCelestialModel(level, isPlayer = false) {
     addRing(group, radius * 1.2, radius * 0.025, 0xb36bff, 0.52, 0.2, -0.2);
     addParticleBelt(group, radius * 1.16, 140, 0xffb26a, 0.28);
     group.add(makeSprite(0xff9f52, radius * 2.9, 0.13));
-  } else if (level === 9) {
+  } else if (modelLevel === 9) {
     core = new THREE.Mesh(new THREE.SphereGeometry(radius, 36, 24), new THREE.MeshBasicMaterial({ color: 0xffb62e }));
     const corona = new THREE.Mesh(
       new THREE.SphereGeometry(radius * 1.08, 32, 20),
@@ -887,12 +969,12 @@ function createCelestialModel(level, isPlayer = false) {
   group.userData.core = core;
   group.userData.glow = group.children.find((child) => child.isSprite) || null;
   if (isPlayer) {
-    const playerGlow = makeSprite(data.accent, radius * (level >= 8 ? 3 : 2.2), 0.16);
+    const playerGlow = makeSprite(data.accent, radius * (modelLevel >= 8 ? 3 : 2.2), 0.16);
     playerGlow.position.y = -0.03;
     group.add(playerGlow);
     group.userData.glow = playerGlow;
-    if (level >= 5) {
-      const light = new THREE.PointLight(data.accent, level >= 9 ? 3.1 : 1.3, radius * 7, 2);
+    if (modelLevel >= 5) {
+      const light = new THREE.PointLight(data.accent, modelLevel >= 9 ? 3.1 : 1.3, radius * 7, 2);
       light.position.y = 1.2;
       group.add(light);
     }
@@ -2702,6 +2784,7 @@ function restartGame() {
 function getSavedGame() {
   if (state.status === "evolving") return null;
   return {
+    schemaVersion: SAVE_SCHEMA_VERSION,
     status: state.status,
     time: state.time,
     highMass: state.highMass,
@@ -2754,6 +2837,8 @@ function getSavedGame() {
 }
 
 function restoreGame(saved) {
+  const migratedFromLegacy = !saved.schemaVersion || saved.schemaVersion < SAVE_SCHEMA_VERSION;
+  saved = migrateSavedGame(saved);
   restartGame();
   [...state.bodies].forEach(removeBody);
   const savedStatus = saved.status;
@@ -2825,7 +2910,7 @@ function restoreGame(saved) {
   ui.pauseCover.hidden = true;
   ui.gameoverCover.hidden = state.status !== "gameover";
   if (savedStatus === "stage-clear" && !state.endlessChallenge) showStageClear();
-  addToast("已恢復上次的星球進度", "#a8f4ff");
+  addToast(migratedFromLegacy ? "舊存檔已升級為二十階版本" : "已恢復上次的星球進度", "#a8f4ff");
   updateUi(true);
 }
 
@@ -2963,6 +3048,7 @@ function init() {
   const keyLight = new THREE.DirectionalLight(0x99baff, 1.6);
   keyLight.position.set(-12, 24, 16);
   scene.add(keyLight);
+  migrateLegacyBestLevel();
   loadCosmeticCollection();
   rebuildPlayerModel();
   renderCodex();
