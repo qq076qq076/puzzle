@@ -284,7 +284,7 @@ function loadCosmeticCollection() {
   try {
     const saved = JSON.parse(window.localStorage.getItem("gravityPlanetCosmetics") || "{}");
     const validIds = new Set(COSMETICS.map((cosmetic) => cosmetic.id));
-    state.cosmetics.unlocked = Array.isArray(saved.unlocked) ? saved.unlocked.filter((id) => validIds.has(id)) : [];
+    state.cosmetics.unlocked = Array.isArray(saved.unlocked) ? [...new Set(saved.unlocked.filter((id) => validIds.has(id)))] : [];
     state.cosmetics.selected = validIds.has(saved.selected) && state.cosmetics.unlocked.includes(saved.selected) ? saved.selected : null;
   } catch {
     state.cosmetics = { unlocked: [], selected: null };
@@ -2788,6 +2788,7 @@ function restoreGame(saved) {
     ])].filter((id) => validIds.has(id));
     if (saved.cosmetics.selected && state.cosmetics.unlocked.includes(saved.cosmetics.selected)) state.cosmetics.selected = saved.cosmetics.selected;
     saveCosmeticCollection();
+    renderCodex();
   }
   state.endlessChallenge = saved.endlessChallenge ?? false;
   if (saved.stage) {
