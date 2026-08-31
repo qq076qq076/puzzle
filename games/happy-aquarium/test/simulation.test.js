@@ -45,13 +45,31 @@ test("hatched fish periodically drop collectible coins only while online", () =>
   const report = simulate(state, START + 30_000);
   assert.equal(report.coinsDropped, 1);
   assert.equal(state.tank.coinDrops.length, 1);
-  assert.equal(state.tank.coinDrops[0].value, 3);
+  assert.equal(state.tank.coinDrops[0].value, 4);
+  assert.equal(state.tank.coinDrops[0].x, 0.5);
+  assert.equal(state.tank.coinDrops[0].y, 0.5);
 
   const offline = createFreshState(START);
   offline.tank.fishes.push({ ...movingFish("offline-fish", 80), acquiredAt: START, nextCoinAt: START + 30_000 });
   const offlineReport = simulate(offline, START + 30_000, { offline: true });
   assert.equal(offlineReport.coinsDropped, 0);
   assert.equal(offline.tank.coinDrops.length, 0);
+});
+
+test("periodic coin value is ten percent of the catalog purchase price", () => {
+  const state = createFreshState(START);
+  state.tank.fishes.push({ ...movingFish("stingray-coin", 80), speciesId: "stingray", acquiredAt: START, nextCoinAt: START + 30_000 });
+
+  simulate(state, START + 30_000);
+  assert.equal(state.tank.coinDrops[0].value, 2_000);
+});
+
+test("fish without a catalog purchase price do not create periodic coins", () => {
+  const state = createFreshState(START);
+  state.tank.fishes.push({ ...movingFish("mermaid-coin", 80), speciesId: "rainbow-mermaid", acquiredAt: START, nextCoinAt: START + 30_000 });
+
+  simulate(state, START + 30_000);
+  assert.equal(state.tank.coinDrops.length, 0);
 });
 
 test("animal steering remains finite and inside the aquarium", () => {

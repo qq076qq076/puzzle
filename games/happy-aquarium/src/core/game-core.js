@@ -47,7 +47,8 @@ export class GameCore {
     this.#publish([{ type: "stateReset" }]);
   }
 
-  tick(now = Date.now()) {
+  tick(now = Date.now(), liveFishPositions = null) {
+    syncLiveFishPositions(this.#state, liveFishPositions);
     const report = simulate(this.#state, now);
     const events = [{ type: "tick", report }];
     if (report.hatched > 0) claimTutorial(this.#state, "hatch-first-egg", { coins: 50 }, events);
@@ -86,6 +87,19 @@ export class GameCore {
   #publish(events) {
     const snapshot = this.snapshot();
     for (const listener of this.#listeners) listener(snapshot, events);
+  }
+}
+
+function syncLiveFishPositions(state, positions) {
+  if (!positions || typeof positions !== "object") return;
+  for (const fish of state.tank.fishes) {
+    const live = positions[fish.id];
+    if (!live) continue;
+    const x = Number(live.x);
+    const y = Number(live.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    fish.position = { x: clamp(x, 0.04, 0.96), y: clamp(y, 0.125, 0.92) };
+    if (live.heading === "left" || live.heading === "right") fish.heading = live.heading;
   }
 }
 

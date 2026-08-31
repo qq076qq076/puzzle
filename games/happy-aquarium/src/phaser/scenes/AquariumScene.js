@@ -1,7 +1,7 @@
 import Phaser from "phaser";
-import { ASSET_INSETS, DEVICE_PLACEMENTS, FOOD_FALL_SPEED_PX, GAME_HEIGHT, GAME_WIDTH, HELPERS, SPECIES_BY_ID, STAGE_SCALE } from "../../config/game-config.js";
+import { ASSET_INSETS, COIN_FALL_SPEED_PX, DEVICE_PLACEMENTS, FOOD_FALL_SPEED_PX, GAME_HEIGHT, GAME_WIDTH, HELPERS, SPECIES_BY_ID, STAGE_SCALE } from "../../config/game-config.js";
 import { createAgent, createHelperAgent, stepAgents, stepHelperAgent } from "../../core/animal-ai.js";
-import { fallingFoodY } from "../../core/calculations.js";
+import { fallingDropY, fallingFoodY } from "../../core/calculations.js";
 import { isDeviceActive } from "../../core/simulation.js";
 import {
   decorationTextureKey,
@@ -196,23 +196,24 @@ export class AquariumScene extends Phaser.Scene {
 
   syncCoins() {
     const ids = new Set(this.snapshot.tank.coinDrops.map((coin) => coin.id));
-    for (const [id, sprite] of this.coinViews) {
+    for (const [id, view] of this.coinViews) {
       if (!ids.has(id)) {
-        sprite.destroy();
+        view.sprite.destroy();
         this.coinViews.delete(id);
       }
     }
     for (const coin of this.snapshot.tank.coinDrops) {
-      let sprite = this.coinViews.get(coin.id);
-      if (!sprite) {
+      let view = this.coinViews.get(coin.id);
+      if (!view) {
         const texture = objectTextureKey("coin-spin");
-        sprite = this.add.sprite(coin.x * GAME_WIDTH, coin.y * GAME_HEIGHT, texture).setScale(0.72).setDepth(760).setInteractive({ useHandCursor: true });
+        const sprite = this.add.sprite(coin.x * GAME_WIDTH, coinDisplayY(coin), texture).setScale(0.72).setDepth(760).setInteractive({ useHandCursor: true });
         sprite.play(`${texture}:play`);
         sprite.on("pointerdown", () => this.ui.runCommand("COLLECT_COIN", { coinId: coin.id }));
-        this.tweens.add({ targets: sprite, y: sprite.y - 8, duration: 750, yoyo: true, repeat: -1, ease: "Sine.inOut" });
-        this.coinViews.set(coin.id, sprite);
+        view = { sprite, coin };
+        this.coinViews.set(coin.id, view);
       }
-      sprite.x = coin.x * GAME_WIDTH;
+      view.coin = coin;
+      view.sprite.setPosition(coin.x * GAME_WIDTH, coinDisplayY(coin));
     }
   }
 
@@ -229,6 +230,7 @@ export class AquariumScene extends Phaser.Scene {
     const fishById = new Map(this.snapshot.tank.fishes.map((fish) => [fish.id, fish]));
     const agents = [...this.fishViews.values()].filter((view) => view.kind === "fish").map((view) => view.agent);
     for (const view of this.foodViews.values()) view.sprite.y = foodDisplayY(view.food);
+    for (const view of this.coinViews.values()) view.sprite.y = coinDisplayY(view.coin);
     const foods = [...this.foodViews.entries()].map(([id, view]) => ({ id, x: view.sprite.x, y: view.sprite.y, claimedBy: view.claimedBy, consumed: view.consumed, view }));
     const consumed = [];
     let steps = 0;
@@ -259,7 +261,10 @@ export class AquariumScene extends Phaser.Scene {
     for (const item of consumed) this.ui.runCommand("EAT_FOOD", item);
     if (time - this.lastTickAt >= 1000) {
       this.lastTickAt = time;
-      this.core.tick(Date.now());
+      const liveFishPositions = Object.fromEntries([...this.fishViews.entries()]
+        .filter(([, view]) => view.kind === "fish")
+        .map(([id, view]) => [id, { x: view.agent.x / GAME_WIDTH, y: view.agent.y / GAME_HEIGHT, heading: view.agent.facing < 0 ? "left" : "right" }]));
+      this.core.tick(Date.now(), liveFishPositions);
     }
   }
 
@@ -296,6 +301,10 @@ const HELPERS_BY_KIND = Object.fromEntries(HELPERS.map((item) => [item.id, item.
 
 function foodDisplayY(food, now = Date.now()) {
   return fallingFoodY(food, now, { gameHeight: GAME_HEIGHT, speed: FOOD_FALL_SPEED_PX, floor: 520 });
+}
+
+function coinDisplayY(coin, now = Date.now()) {
+  return fallingDropY(coin, now, { gameHeight: GAME_HEIGHT, speed: COIN_FALL_SPEED_PX, floor: 510 });
 }
 
 function applySpriteInset(sprite, inset) {

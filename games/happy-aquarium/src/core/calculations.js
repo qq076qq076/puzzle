@@ -30,9 +30,13 @@ export function clamp(value, min, max) {
 }
 
 export function fallingFoodY(food, now, { gameHeight = 600, speed = 24, floor = 520 } = {}) {
+  return fallingDropY(food, now, { gameHeight, speed, floor });
+}
+
+export function fallingDropY(drop, now, { gameHeight = 600, speed = 24, floor = 520 } = {}) {
   const currentTime = Number(now);
-  const createdAt = Number(food?.createdAt);
-  const start = (Number(food?.y) || 0.5) * gameHeight;
+  const createdAt = Number(drop?.createdAt);
+  const start = (Number(drop?.y) || 0.5) * gameHeight;
   const elapsedSeconds = Number.isFinite(currentTime) && Number.isFinite(createdAt) ? Math.max(0, currentTime - createdAt) / 1000 : 0;
   return Math.min(floor, start + elapsedSeconds * speed);
 }

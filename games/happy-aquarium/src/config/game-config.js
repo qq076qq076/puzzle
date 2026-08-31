@@ -87,7 +87,7 @@ export const FOOD_FALL_SPEED_PX = 24;
 export const COIN_DROP_INTERVAL_MS = 30_000;
 export const COIN_DROP_LIFETIME_MS = 120_000;
 export const COIN_DROP_LIMIT = 40;
-export const COIN_VALUE_BY_STAGE = { fry: 1, juvenile: 2, adult: 3 };
+export const COIN_FALL_SPEED_PX = 16;
 
 export const ASSET_INSETS = {
   helpers: {},

@@ -2,7 +2,6 @@ import {
   COIN_DROP_INTERVAL_MS,
   COIN_DROP_LIFETIME_MS,
   COIN_DROP_LIMIT,
-  COIN_VALUE_BY_STAGE,
   DEVICE_BY_ID,
   FOOD_LIFETIME_MS,
   HELPER_BY_ID,
@@ -46,6 +45,8 @@ export function simulate(state, now = Date.now(), { offline = false } = {}) {
 
 function updateFishCoinDrop(state, fish, from, now, offline, report) {
   if (fish.stage === "egg" || fish.health === "dead") return;
+  const purchasePrice = Number(SPECIES_BY_ID[fish.speciesId]?.eggPrice);
+  const coinValue = Number.isFinite(purchasePrice) && purchasePrice > 0 ? Math.floor(purchasePrice * 0.1) : 0;
   const nextAt = Number(fish.nextCoinAt);
   fish.nextCoinAt = Number.isFinite(nextAt) && nextAt > 0 ? nextAt : Math.max(from, Number(fish.acquiredAt) || from) + COIN_DROP_INTERVAL_MS;
   if (fish.nextCoinAt > now) return;
@@ -53,16 +54,16 @@ function updateFishCoinDrop(state, fish, from, now, offline, report) {
     fish.nextCoinAt = now + COIN_DROP_INTERVAL_MS;
     return;
   }
-  if (state.tank.coinDrops.length < COIN_DROP_LIMIT) {
+  if (coinValue > 0 && state.tank.coinDrops.length < COIN_DROP_LIMIT) {
     const scheduledAt = fish.nextCoinAt;
-    const x = clamp((Number(fish.position?.x) || 0.5) + (nextRandom(state.rng) - 0.5) * 0.08, 0.06, 0.94);
-    const y = clamp((Number(fish.position?.y) || 0.5) + (nextRandom(state.rng) - 0.5) * 0.06, 0.16, 0.86);
+    const x = clamp(Number(fish.position?.x) || 0.5, 0.06, 0.94);
+    const y = clamp(Number(fish.position?.y) || 0.5, 0.16, 0.86);
     state.tank.coinDrops.push({
       id: `coin_${fish.id}_${scheduledAt}`,
       fishId: fish.id,
       x,
       y,
-      value: COIN_VALUE_BY_STAGE[fish.stage] || 1,
+      value: coinValue,
       createdAt: now,
       expiresAt: now + COIN_DROP_LIFETIME_MS,
     });

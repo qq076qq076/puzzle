@@ -74,6 +74,21 @@ test("collecting a fish coin credits it exactly once", () => {
   assert.equal(duplicate.state.player.coins, 303);
 });
 
+test("coin drops use the fish live position supplied by the scene", () => {
+  const state = createFreshState(START);
+  state.tank.fishes.push({ ...fish("moving", 80), nextCoinAt: START + 1_000 });
+  const core = new GameCore(state);
+
+  core.tick(START + 1_000, { moving: { x: 0.27, y: 0.43, heading: "left" } });
+  const snapshot = core.snapshot();
+  assert.deepEqual(snapshot.tank.fishes[0].position, { x: 0.27, y: 0.43 });
+  assert.equal(snapshot.tank.fishes[0].heading, "left");
+  assert.equal(snapshot.tank.coinDrops.length, 1);
+  assert.equal(snapshot.tank.coinDrops[0].x, 0.27);
+  assert.equal(snapshot.tank.coinDrops[0].y, 0.43);
+  assert.equal(snapshot.tank.coinDrops[0].value, 4);
+});
+
 test("development mode unlocks free items and creates adult fish", () => {
   const state = createFreshState(START);
   state.player.coins = 0;
