@@ -25,7 +25,7 @@ export class BootScene extends Phaser.Scene {
       for (const state of device.states) this.load.spritesheet(deviceTextureKey(device.id, state), runtimeUrl(`devices/${device.id}/${device.id}-${state}.png`), { frameWidth: 64, frameHeight: 64 });
     }
     for (const id of catalog.objects) this.load.spritesheet(objectTextureKey(id), runtimeUrl(`objects/${id}.png`), { frameWidth: 64, frameHeight: 64 });
-    for (const id of catalog.decorations) this.load.image(decorationTextureKey(id), runtimeUrl(`decorations/${id}.png`));
+    for (const id of catalog.decorations) this.load.spritesheet(decorationTextureKey(id), runtimeUrl(`decorations/${id}-animated.png`), { frameWidth: 64, frameHeight: 64 });
     for (const id of catalog.ui) this.load.image(uiTextureKey(id), runtimeUrl(`ui/${id}.png`));
     this.load.on("loaderror", (file) => console.warn("[Aquarium] Asset failed", file.key));
   }
@@ -56,6 +56,7 @@ export class BootScene extends Phaser.Scene {
     }
     for (const device of catalog.devices) for (const state of device.states) createStripAnimation(this, deviceTextureKey(device.id, state), 4, 7);
     for (const id of catalog.objects) createStripAnimation(this, objectTextureKey(id), 4, 8);
+    for (const id of catalog.decorations) createStripAnimation(this, decorationTextureKey(id), 3, 4);
   }
 
   createMissingTexture() {

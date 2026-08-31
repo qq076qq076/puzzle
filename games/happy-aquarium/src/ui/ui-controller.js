@@ -7,6 +7,7 @@ import { runtimeUrl } from "../phaser/asset-registry.js";
 export class UIController {
   constructor(core) {
     this.core = core;
+    this.devMode = core.devMode;
     this.snapshot = core.snapshot();
     this.currentTab = "fish";
     this.selected = null;
@@ -62,7 +63,7 @@ export class UIController {
 
   render(snapshot, events = []) {
     this.snapshot = snapshot;
-    this.elements.coins.textContent = formatNumber(snapshot.player.coins);
+    this.elements.coins.textContent = this.devMode ? "∞" : formatNumber(snapshot.player.coins);
     this.elements.gems.textContent = formatNumber(snapshot.player.gems);
     this.elements.clean.value = snapshot.tank.cleanliness;
     this.elements.cleanLabel.textContent = Math.round(snapshot.tank.cleanliness);
@@ -86,14 +87,14 @@ export class UIController {
       items = SPECIES.filter((item) => item.eggPrice != null).map((item) => card({
         preview: spritePreview(runtimeUrl(`fish/${item.id}/${item.id}-states.png`), "atlas"), title: item.name,
         subtitle: `${Math.round(item.growthMs / 60_000)} 分鐘 · 成魚 ${formatNumber(item.adultSellPrice)}`,
-        price: item.eggPrice, missing: missingRequirements(this.snapshot, item), owned: false, command: "BUY_EGG", field: "speciesId", id: item.id,
+        price: item.eggPrice, missing: this.devMode ? [] : missingRequirements(this.snapshot, item), owned: false, command: "BUY_EGG", field: "speciesId", id: item.id, devMode: this.devMode,
       }));
     } else if (this.currentTab === "helpers") {
-      items = HELPERS.map((item) => card({ preview: imagePreview(runtimeUrl(`helpers/${item.id}/${item.id}-idle.png`), ASSET_INSETS.helpers[`${item.id}-idle`]), title: item.name, subtitle: `清潔衰減 -${item.reduction * 100}%`, price: item.price, missing: missingRequirements(this.snapshot, item), owned: ownedHelpers.has(item.id), command: "BUY_HELPER", field: "helperId", id: item.id }));
+      items = HELPERS.map((item) => card({ preview: imagePreview(runtimeUrl(`helpers/${item.id}/${item.id}-idle.png`), ASSET_INSETS.helpers[`${item.id}-idle`]), title: item.name, subtitle: `清潔衰減 -${item.reduction * 100}%`, price: item.price, missing: this.devMode ? [] : missingRequirements(this.snapshot, item), owned: ownedHelpers.has(item.id), command: "BUY_HELPER", field: "helperId", id: item.id, devMode: this.devMode }));
     } else if (this.currentTab === "devices") {
-      items = DEVICES.map((item) => card({ preview: spritePreview(runtimeUrl(`devices/${item.id}/${item.id}-active.png`), "strip", ASSET_INSETS.devices[item.id]), title: item.name, subtitle: deviceDescription(item), price: item.price, missing: missingRequirements(this.snapshot, item), owned: ownedDevices.has(item.id), command: "BUY_DEVICE", field: "deviceId", id: item.id }));
+      items = DEVICES.map((item) => card({ preview: spritePreview(runtimeUrl(`devices/${item.id}/${item.id}-active.png`), "strip", ASSET_INSETS.devices[item.id]), title: item.name, subtitle: deviceDescription(item), price: item.price, missing: this.devMode ? [] : missingRequirements(this.snapshot, item), owned: ownedDevices.has(item.id), command: "BUY_DEVICE", field: "deviceId", id: item.id, devMode: this.devMode }));
     } else {
-      items = DECORATIONS.map((item) => card({ preview: imagePreview(runtimeUrl(`decorations/${item.id}.png`), ASSET_INSETS.decorations[item.id]), title: item.name, subtitle: `吸引力 ${item.appeal}`, price: item.price, missing: missingRequirements(this.snapshot, item), owned: false, command: "BUY_DECORATION", field: "decorationId", id: item.id }));
+      items = DECORATIONS.map((item) => card({ preview: spritePreview(runtimeUrl(`decorations/${item.id}-animated.png`), "decoration", ASSET_INSETS.decorations[item.id]), title: item.name, subtitle: `吸引力 ${item.appeal}`, price: item.price, missing: this.devMode ? [] : missingRequirements(this.snapshot, item), owned: false, command: "BUY_DECORATION", field: "decorationId", id: item.id, devMode: this.devMode }));
     }
     this.elements.shop.innerHTML = items.join("");
   }
@@ -187,11 +188,12 @@ export class UIController {
   }
 }
 
-function card({ preview, title, subtitle, price, missing = [], owned, command, field, id }) {
+function card({ preview, title, subtitle, price, missing = [], owned, command, field, id, devMode = false }) {
   const locked = missing.length > 0;
   const disabled = locked || owned;
   const missingLabel = requirementNames(missing).join("＋");
-  return `<article class="shop-card"><div class="shop-art">${preview}</div><div><h3>${title}</h3><p>${subtitle}</p></div><button type="button" data-command="${command}" data-field="${field}" data-id="${id}" ${disabled ? "disabled" : ""}>${locked ? `需 ${missingLabel}` : owned ? "已擁有" : `● ${formatNumber(price)}`}</button></article>`;
+  const availableLabel = devMode ? command === "BUY_EGG" ? "生成成魚" : "免費使用" : `● ${formatNumber(price)}`;
+  return `<article class="shop-card"><div class="shop-art">${preview}</div><div><h3>${title}</h3><p>${subtitle}</p></div><button type="button" data-command="${command}" data-field="${field}" data-id="${id}" ${disabled ? "disabled" : ""}>${locked ? `需 ${missingLabel}` : owned ? "已擁有" : availableLabel}</button></article>`;
 }
 
 function spritePreview(url, layout, inset) { return `<span class="sprite-preview sprite-preview--${layout}" style="background-image:url('${url}');${clipStyle(inset)}"></span>`; }

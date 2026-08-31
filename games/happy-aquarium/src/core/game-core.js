@@ -1,5 +1,6 @@
 import {
   DECORATION_BY_ID,
+  COIN_DROP_INTERVAL_MS,
   DEVICE_BY_ID,
   FOOD_LIFETIME_MS,
   FOOD_SATIETY,
@@ -17,8 +18,9 @@ export class GameCore {
   #state;
   #listeners = new Set();
 
-  constructor(state = createFreshState()) {
+  constructor(state = createFreshState(), { devMode = false } = {}) {
     this.#state = normalizeState(state);
+    this.devMode = Boolean(devMode);
   }
 
   subscribe(listener) {
@@ -61,7 +63,7 @@ export class GameCore {
     const handler = COMMANDS[type];
     if (!handler) return this.#failure(transactionId, "UNKNOWN_COMMAND");
     const events = [];
-    const result = handler(this.#state, payload, now, events);
+    const result = handler(this.#state, payload, now, events, { devMode: this.devMode });
     if (!result.ok) return this.#failure(transactionId, result.errorCode);
     this.#recordTransaction(transactionId, type, now);
     events.push({ type: "saveUrgent" });
@@ -88,24 +90,25 @@ export class GameCore {
 }
 
 const COMMANDS = {
-  BUY_EGG(state, { speciesId }, now, events) {
+  BUY_EGG(state, { speciesId }, now, events, { devMode }) {
     const species = SPECIES_BY_ID[speciesId];
     if (!species || species.eggPrice == null) return fail("NOT_FOR_SALE");
-    if (!isUnlocked(state, species)) return fail("REQUIREMENTS_LOCKED");
-    if (speciesId === "moonfish" && !isTaipeiNight(now)) return fail("NIGHT_ONLY");
-    if (state.player.coins < species.eggPrice) return fail("NOT_ENOUGH_COINS");
-    state.player.coins -= species.eggPrice;
-    const tutorialEgg = speciesId === "guppy" && !state.tutorial.firstEggOverrideConsumed;
+    if (!devMode && !isUnlocked(state, species)) return fail("REQUIREMENTS_LOCKED");
+    if (!devMode && speciesId === "moonfish" && !isTaipeiNight(now)) return fail("NIGHT_ONLY");
+    if (!devMode && state.player.coins < species.eggPrice) return fail("NOT_ENOUGH_COINS");
+    if (!devMode) state.player.coins -= species.eggPrice;
+    const tutorialEgg = !devMode && speciesId === "guppy" && !state.tutorial.firstEggOverrideConsumed;
     state.tutorial.firstEggOverrideConsumed ||= tutorialEgg;
     const fish = {
-      id: makeId("fish"), speciesId, name: species.name, acquiredAt: now, acquisitionType: "shop", acquisitionCost: species.eggPrice,
-      stage: "egg", growth: 0, satiety: 0, variant: null, health: "healthy", sickSince: 0, diedAt: 0,
+      id: makeId("fish"), speciesId, name: species.name, acquiredAt: now, acquisitionType: devMode ? "dev" : "shop", acquisitionCost: devMode ? 0 : species.eggPrice,
+      stage: devMode ? "adult" : "egg", growth: devMode ? 100 : 0, satiety: devMode ? 100 : 0, variant: null, health: "healthy", sickSince: 0, diedAt: 0,
       lastDiseaseCheckAt: now, starvingSince: 0, mateCooldownUntil: 0, skills: [], paidPerformancesOnDay: 0,
       behaviorSeed: randomInt(state.rng, 1, 0x7fffffff), position: { x: 0.2 + nextRandom(state.rng) * 0.6, y: 0.2 + nextRandom(state.rng) * 0.5 }, heading: "right", tutorialEgg,
+      nextCoinAt: now + COIN_DROP_INTERVAL_MS,
     };
     state.tank.fishes.push(fish);
     state.stats.eggsBought += 1;
-    claimTutorial(state, "buy-first-egg", { coins: 30 }, events);
+    if (!devMode) claimTutorial(state, "buy-first-egg", { coins: 30 }, events);
     events.push({ type: "fishAdded", fishId: fish.id });
     return ok();
   },
@@ -136,6 +139,16 @@ const COMMANDS = {
     fish.starvingSince = 0;
     claimTutorial(state, "feed-first-fish", { coins: 50 }, events);
     events.push({ type: "foodEaten", foodId, fishId });
+    return ok();
+  },
+
+  COLLECT_COIN(state, { coinId }, _now, events) {
+    const index = state.tank.coinDrops.findIndex((coin) => coin.id === coinId);
+    if (index < 0) return fail("COIN_NOT_FOUND");
+    const [coin] = state.tank.coinDrops.splice(index, 1);
+    const value = Math.max(0, Math.floor(Number(coin.value) || 0));
+    state.player.coins += value;
+    events.push({ type: "coinCollected", coinId, value });
     return ok();
   },
 
@@ -208,25 +221,25 @@ const COMMANDS = {
     return ok();
   },
 
-  BUY_HELPER(state, { helperId }, now, events) {
+  BUY_HELPER(state, { helperId }, now, events, { devMode }) {
     const config = HELPER_BY_ID[helperId];
     if (!config) return fail("UNKNOWN_ITEM");
-    if (!isUnlocked(state, config)) return fail("REQUIREMENTS_LOCKED");
+    if (!devMode && !isUnlocked(state, config)) return fail("REQUIREMENTS_LOCKED");
     if (state.tank.helpers.some((item) => item.kind === helperId)) return fail("ALREADY_OWNED");
-    if (state.player.coins < config.price) return fail("NOT_ENOUGH_COINS");
-    state.player.coins -= config.price;
+    if (!devMode && state.player.coins < config.price) return fail("NOT_ENOUGH_COINS");
+    if (!devMode) state.player.coins -= config.price;
     state.tank.helpers.push({ id: makeId("helper"), kind: helperId, acquiredAt: now, satiety: 80, hungrySince: 0, lastPassiveFeedAt: 0, lastDailyWorkDayKey: "", behaviorSeed: randomInt(state.rng, 1, 0x7fffffff), position: { x: 0.3 + nextRandom(state.rng) * 0.4, y: 0.86 } });
     events.push({ type: "helperAdded", helperId });
     return ok();
   },
 
-  BUY_DEVICE(state, { deviceId }, now, events) {
+  BUY_DEVICE(state, { deviceId }, now, events, { devMode }) {
     const config = DEVICE_BY_ID[deviceId];
     if (!config) return fail("UNKNOWN_ITEM");
-    if (!isUnlocked(state, config)) return fail("REQUIREMENTS_LOCKED");
+    if (!devMode && !isUnlocked(state, config)) return fail("REQUIREMENTS_LOCKED");
     if (state.tank.devices.instances.some((item) => item.catalogId === deviceId)) return fail("ALREADY_OWNED");
-    if (state.player.coins < config.price) return fail("NOT_ENOUGH_COINS");
-    state.player.coins -= config.price;
+    if (!devMode && state.player.coins < config.price) return fail("NOT_ENOUGH_COINS");
+    if (!devMode) state.player.coins -= config.price;
     const instance = { id: makeId("device"), catalogId: deviceId, purchasedAt: now, state: {}, schedule: null };
     if (config.capacity) instance.state = { ammo: config.capacity, intervalMs: config.intervalMs, nextRunAt: now + config.intervalMs };
     if (deviceId === "hang-on-filter") instance.state.cartridgeUntil = now + 7 * 24 * 3_600_000;
@@ -248,13 +261,13 @@ const COMMANDS = {
     return ok();
   },
 
-  BUY_DECORATION(state, { decorationId }, _now, events) {
+  BUY_DECORATION(state, { decorationId }, _now, events, { devMode }) {
     const config = DECORATION_BY_ID[decorationId];
     if (!config) return fail("UNKNOWN_ITEM");
-    if (!isUnlocked(state, config)) return fail("REQUIREMENTS_LOCKED");
-    if (state.tank.decorations.length >= 10) return fail("DECORATION_LIMIT");
-    if (state.player.coins < config.price) return fail("NOT_ENOUGH_COINS");
-    state.player.coins -= config.price;
+    if (!devMode && !isUnlocked(state, config)) return fail("REQUIREMENTS_LOCKED");
+    if (!devMode && state.tank.decorations.length >= 10) return fail("DECORATION_LIMIT");
+    if (!devMode && state.player.coins < config.price) return fail("NOT_ENOUGH_COINS");
+    if (!devMode) state.player.coins -= config.price;
     const count = state.tank.decorations.length;
     state.tank.decorations.push({ id: makeId("decor"), catalogId: decorationId, x: 0.12 + (count % 6) * 0.14, y: 0.86 - Math.floor(count / 6) * 0.10, rotation: 0 });
     events.push({ type: "decorationAdded", decorationId });
@@ -316,6 +329,7 @@ export const ERROR_MESSAGES = {
   UNKNOWN_COMMAND: "未知操作。", NOT_FOR_SALE: "這種魚不能直接購買。", REQUIREMENTS_LOCKED: "尚未持有解鎖所需物品。",
   NIGHT_ONLY: "月光魚只在台北時間 18:00～06:00 販售。", NOT_ENOUGH_COINS: "金幣不足。",
   INVALID_FOOD_POSITION: "請點擊魚缸水域放置魚糧。", FOOD_NOT_FOUND: "這顆魚糧已經被吃掉了。", FISH_CANNOT_EAT: "這隻魚目前不能進食。", ALREADY_CLEAN: "魚缸已經很乾淨。",
+  COIN_NOT_FOUND: "這枚金幣已經被撿走或消失了。",
   NO_WAFER: "背包沒有藻錠。", NO_HUNGRY_HELPER: "目前沒有需要藻錠的清潔生物。", FISH_NOT_SICK: "這隻魚不需要治療。",
   NO_MEDICINE: "背包沒有藥水。", CANNOT_ACCELERATE: "目前不能加速。", NOT_ENOUGH_GEMS: "寶石不足。", CANNOT_REVIVE: "已超過復活期限。",
   FISH_NOT_FOUND: "找不到這隻魚。", CANNOT_SELL: "目前不能出售。", UNKNOWN_ITEM: "找不到商品。", ALREADY_OWNED: "已經擁有。",

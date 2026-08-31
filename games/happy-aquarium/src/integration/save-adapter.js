@@ -12,6 +12,7 @@ export function createSaveAdapter(core, ui) {
     validate: isValidCheckpoint,
     getState: () => core.snapshot(),
     hasProgress: (data) => Boolean(data?.tank?.fishes?.length || data?.stats?.eggsBought || data?.transactions?.recentIds?.length),
+    autoRestore: true,
     interval: 2000,
     cloudInterval: 5000,
     onConflict: (remoteCheckpoint) => {
@@ -22,7 +23,7 @@ export function createSaveAdapter(core, ui) {
     },
   });
   if (window.PuzzleFirebase?.onStatus) {
-    window.PuzzleFirebase.onStatus(({ status }) => ui.setSaveStatus(status === "ready" ? "雲端已連線" : ["local", "error"].includes(status) ? "本機存檔" : "雲端連線中"));
+    window.PuzzleFirebase.onStatus(({ status }) => ui.setSaveStatus(status === "online" ? "雲端已同步" : ["local", "error"].includes(status) ? "本機存檔" : "雲端連線中"));
   }
   return controller;
 }

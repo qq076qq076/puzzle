@@ -52,6 +52,7 @@ button:focus-visible, a:focus-visible, .aquarium-stage:focus-visible { outline: 
 .sprite-preview { background-repeat: no-repeat; background-position: 0 0; }
 .sprite-preview--atlas { background-size: 256px 384px; }
 .sprite-preview--strip { background-size: 256px 64px; }
+.sprite-preview--decoration { background-size: 192px 64px; }
 .shop-card h3 { margin: 0 0 4px; font-size: 14px; }
 .shop-card p { margin: 0; color: #8fc8d6; font-size: 11px; }
 .shop-card > button { max-width: 116px; min-width: 72px; min-height: 40px; padding: 6px 10px; border: 0; border-radius: 11px; color: #05303c; background: #ffd771; font-size: 11px; font-weight: 900; line-height: 1.2; cursor: pointer; }
@@ -113,6 +114,7 @@ dialog input[type="text"], dialog input:not([type]) { width: 100%; min-height: 4
   .single-preview, .sprite-preview { width: 60px; height: 60px; background-size: auto; }
   .sprite-preview--atlas { background-size: 240px 360px; }
   .sprite-preview--strip { background-size: 240px 60px; }
+  .sprite-preview--decoration { background-size: 180px 60px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

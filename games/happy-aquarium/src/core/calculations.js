@@ -28,3 +28,11 @@ export function dayKeyTaipei(timestamp) {
 export function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
+
+export function fallingFoodY(food, now, { gameHeight = 600, speed = 24, floor = 520 } = {}) {
+  const currentTime = Number(now);
+  const createdAt = Number(food?.createdAt);
+  const start = (Number(food?.y) || 0.5) * gameHeight;
+  const elapsedSeconds = Number.isFinite(currentTime) && Number.isFinite(createdAt) ? Math.max(0, currentTime - createdAt) / 1000 : 0;
+  return Math.min(floor, start + elapsedSeconds * speed);
+}

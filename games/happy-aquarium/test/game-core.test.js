@@ -59,6 +59,41 @@ test("food has no cooldown and only the fish that eats it recovers satiety", () 
   assert.equal(eaten.state.tank.fishes.find((item) => item.id === "full").satiety, 95);
 });
 
+test("collecting a fish coin credits it exactly once", () => {
+  const state = createFreshState(START);
+  state.tank.coinDrops.push({ id: "coin-1", fishId: "fish-1", value: 3, expiresAt: Date.now() + 60_000 });
+  const core = new GameCore(state);
+
+  const collected = core.dispatch("COLLECT_COIN", { coinId: "coin-1" }, "collect-1", START);
+  assert.equal(collected.ok, true);
+  assert.equal(collected.state.player.coins, 303);
+  assert.equal(collected.state.tank.coinDrops.length, 0);
+
+  const duplicate = core.dispatch("COLLECT_COIN", { coinId: "coin-1" }, "collect-1", START);
+  assert.equal(duplicate.duplicate, true);
+  assert.equal(duplicate.state.player.coins, 303);
+});
+
+test("development mode unlocks free items and creates adult fish", () => {
+  const state = createFreshState(START);
+  state.player.coins = 0;
+  const core = new GameCore(state, { devMode: true });
+
+  const fishResult = core.dispatch("BUY_EGG", { speciesId: "stingray" }, "dev-fish", START);
+  assert.equal(fishResult.ok, true);
+  assert.equal(fishResult.state.player.coins, 0);
+  assert.equal(fishResult.state.tank.fishes[0].stage, "adult");
+  assert.equal(fishResult.state.tank.fishes[0].growth, 100);
+  assert.equal(fishResult.state.tank.fishes[0].satiety, 100);
+
+  for (let index = 0; index < 11; index += 1) {
+    const result = core.dispatch("BUY_DECORATION", { decorationId: "coral-gate" }, `dev-decor-${index}`, START);
+    assert.equal(result.ok, true);
+  }
+  assert.equal(core.snapshot().tank.decorations.length, 11);
+  assert.equal(core.snapshot().player.coins, 0);
+});
+
 test("ownership prerequisites replace levels and fish count never blocks purchases", () => {
   const state = createFreshState(START);
   state.player.coins = 10_000;
@@ -85,10 +120,11 @@ test("legacy level, experience, capacity, and feed cooldown fields are removed d
   legacy.tank.lastFeedAt = START;
 
   const migrated = normalizeState(legacy, START);
-  assert.equal(migrated.schemaVersion, 2);
+  assert.equal(migrated.schemaVersion, 3);
   assert.deepEqual(migrated.player, { coins: 300, gems: 3 });
   assert.equal("fishLimit" in migrated.tank, false);
   assert.equal("lastFeedAt" in migrated.tank, false);
+  assert.deepEqual(migrated.tank.coinDrops, []);
 });
 
 function fish(id, satiety, speciesId = "guppy") {

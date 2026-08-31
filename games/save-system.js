@@ -353,7 +353,8 @@
       if (syncCover) syncCover.close();
       resolveInitialization();
       if (selectedCheckpoint) {
-        showChoice(selectedCheckpoint, selectedSource);
+        if (options.autoRestore === true) beginAutosave();
+        else showChoice(selectedCheckpoint, selectedSource);
       } else {
         beginAutosave();
       }
@@ -365,7 +366,12 @@
       finishInitialization(null);
     }
 
-    return { save: saveNow, clear: clear, ready: window.PuzzleFirebaseReady || Promise.resolve(null) };
+    return {
+      save: saveNow,
+      clear: clear,
+      ready: initializationReady,
+      firebaseReady: window.PuzzleFirebaseReady || Promise.resolve(null)
+    };
   }
 
   window.PuzzleSave = {

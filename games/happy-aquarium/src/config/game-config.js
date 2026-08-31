@@ -73,6 +73,11 @@ export const TRANSACTION_LIMIT = 50;
 export const OFFLINE_CAP_MS = 7 * 24 * 3_600_000;
 export const FOOD_LIFETIME_MS = 20_000;
 export const FOOD_SATIETY = 15;
+export const FOOD_FALL_SPEED_PX = 24;
+export const COIN_DROP_INTERVAL_MS = 30_000;
+export const COIN_DROP_LIFETIME_MS = 120_000;
+export const COIN_DROP_LIMIT = 40;
+export const COIN_VALUE_BY_STAGE = { fry: 1, juvenile: 2, adult: 3 };
 
 export const ASSET_INSETS = {
   helpers: {

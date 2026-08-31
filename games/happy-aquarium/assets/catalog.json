@@ -15,6 +15,7 @@
   "objects": [
     "fish-egg-hatch",
     "fish-food-fall",
+    "coin-spin",
     "algae-wafer-fall",
     "medicine-use",
     "treasure-chest-open",
@@ -50,6 +51,7 @@
     },
     "objects": {
       "feeding": ["fish-food-fall", "algae-wafer-fall"],
+      "currency": ["coin-spin"],
       "care-and-growth": ["fish-egg-hatch", "medicine-use"],
       "rewards-and-events": ["treasure-chest-open", "drift-bottle-bob"]
     },

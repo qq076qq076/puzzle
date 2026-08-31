@@ -34,6 +34,26 @@ test("offline simulation is capped at seven days", () => {
   assert.equal(state.lastProcessedAt, START + 30 * 24 * 3_600_000);
 });
 
+test("hatched fish periodically drop collectible coins only while online", () => {
+  const state = createFreshState(START);
+  state.tank.fishes.push({
+    ...movingFish("fish-coin", 80),
+    acquiredAt: START,
+    nextCoinAt: START + 30_000,
+  });
+
+  const report = simulate(state, START + 30_000);
+  assert.equal(report.coinsDropped, 1);
+  assert.equal(state.tank.coinDrops.length, 1);
+  assert.equal(state.tank.coinDrops[0].value, 3);
+
+  const offline = createFreshState(START);
+  offline.tank.fishes.push({ ...movingFish("offline-fish", 80), acquiredAt: START, nextCoinAt: START + 30_000 });
+  const offlineReport = simulate(offline, START + 30_000, { offline: true });
+  assert.equal(offlineReport.coinsDropped, 0);
+  assert.equal(offline.tank.coinDrops.length, 0);
+});
+
 test("animal steering remains finite and inside the aquarium", () => {
   const fish = {
     id: "fish-1",

@@ -1,6 +1,7 @@
 import Phaser from "phaser";
-import { ASSET_INSETS, GAME_HEIGHT, GAME_WIDTH, STAGE_SCALE } from "../../config/game-config.js";
+import { ASSET_INSETS, FOOD_FALL_SPEED_PX, GAME_HEIGHT, GAME_WIDTH, STAGE_SCALE } from "../../config/game-config.js";
 import { createAgent, stepAgents } from "../../core/animal-ai.js";
+import { fallingFoodY } from "../../core/calculations.js";
 import { isDeviceActive } from "../../core/simulation.js";
 import {
   decorationTextureKey,
@@ -22,6 +23,7 @@ export class AquariumScene extends Phaser.Scene {
     this.decorationViews = new Map();
     this.deviceViews = new Map();
     this.foodViews = new Map();
+    this.coinViews = new Map();
     this.accumulator = 0;
     this.lastTickAt = 0;
     this.buildTank();
@@ -56,6 +58,7 @@ export class AquariumScene extends Phaser.Scene {
     this.syncHelpers();
     this.syncFish();
     this.syncFoods();
+    this.syncCoins();
     this.syncAlgae();
     for (const event of events) this.playEvent(event);
   }
@@ -120,8 +123,9 @@ export class AquariumScene extends Phaser.Scene {
       let sprite = this.decorationViews.get(decoration.id);
       if (!sprite) {
         const texture = decorationTextureKey(decoration.catalogId);
-        sprite = this.add.image(decoration.x * GAME_WIDTH, decoration.y * GAME_HEIGHT, this.textures.exists(texture) ? texture : "__AQUARIUM_MISSING").setScale(1.18);
+        sprite = this.add.sprite(decoration.x * GAME_WIDTH, decoration.y * GAME_HEIGHT, this.textures.exists(texture) ? texture : "__AQUARIUM_MISSING").setScale(1.18);
         applySpriteInset(sprite, ASSET_INSETS.decorations[decoration.catalogId]);
+        if (this.anims.exists(`${texture}:play`)) sprite.play(`${texture}:play`, true);
         this.decorationViews.set(decoration.id, sprite);
       }
       sprite.setPosition(decoration.x * GAME_WIDTH, decoration.y * GAME_HEIGHT).setDepth(240 + decoration.y * 150);
@@ -177,10 +181,33 @@ export class AquariumScene extends Phaser.Scene {
       if (!view) {
         const sprite = this.add.sprite(food.x * GAME_WIDTH, food.y * GAME_HEIGHT, objectTextureKey("fish-food-fall")).setScale(0.55).setDepth(700);
         sprite.play(`${objectTextureKey("fish-food-fall")}:play`);
-        view = { sprite, claimedBy: null, consumed: false };
+        view = { sprite, food, claimedBy: null, consumed: false };
         this.foodViews.set(food.id, view);
       }
-      view.sprite.setPosition(food.x * GAME_WIDTH, food.y * GAME_HEIGHT);
+      view.food = food;
+      view.sprite.setPosition(food.x * GAME_WIDTH, foodDisplayY(food));
+    }
+  }
+
+  syncCoins() {
+    const ids = new Set(this.snapshot.tank.coinDrops.map((coin) => coin.id));
+    for (const [id, sprite] of this.coinViews) {
+      if (!ids.has(id)) {
+        sprite.destroy();
+        this.coinViews.delete(id);
+      }
+    }
+    for (const coin of this.snapshot.tank.coinDrops) {
+      let sprite = this.coinViews.get(coin.id);
+      if (!sprite) {
+        const texture = objectTextureKey("coin-spin");
+        sprite = this.add.sprite(coin.x * GAME_WIDTH, coin.y * GAME_HEIGHT, texture).setScale(0.72).setDepth(760).setInteractive({ useHandCursor: true });
+        sprite.play(`${texture}:play`);
+        sprite.on("pointerdown", () => this.ui.runCommand("COLLECT_COIN", { coinId: coin.id }));
+        this.tweens.add({ targets: sprite, y: sprite.y - 8, duration: 750, yoyo: true, repeat: -1, ease: "Sine.inOut" });
+        this.coinViews.set(coin.id, sprite);
+      }
+      sprite.x = coin.x * GAME_WIDTH;
     }
   }
 
@@ -196,6 +223,7 @@ export class AquariumScene extends Phaser.Scene {
     this.accumulator += clamped;
     const fishById = new Map(this.snapshot.tank.fishes.map((fish) => [fish.id, fish]));
     const agents = [...this.fishViews.values()].filter((view) => view.kind === "fish").map((view) => view.agent);
+    for (const view of this.foodViews.values()) view.sprite.y = foodDisplayY(view.food);
     const foods = [...this.foodViews.entries()].map(([id, view]) => ({ id, x: view.sprite.x, y: view.sprite.y, claimedBy: view.claimedBy, consumed: view.consumed, view }));
     const consumed = [];
     let steps = 0;
@@ -227,6 +255,7 @@ export class AquariumScene extends Phaser.Scene {
 
   playEvent(event) {
     if (event.type === "foodEaten") this.playEating(event.fishId);
+    if (event.type === "coinCollected") this.ui.toast(`+${event.value} 金幣`);
     if (event.type === "rewardOpened") this.ui.toast(event.message);
     if (["fishCured", "fishRevived", "fishGrew"].includes(event.type)) this.flash(0x9fffd0);
   }
@@ -251,6 +280,10 @@ export class AquariumScene extends Phaser.Scene {
     this.bubbles.add(bubble);
     this.tweens.add({ targets: bubble, y: 70, x: bubble.x + (Math.random() - 0.5) * 80, alpha: 0, duration: 5000 + Math.random() * 3500, onComplete: () => bubble.destroy() });
   }
+}
+
+function foodDisplayY(food, now = Date.now()) {
+  return fallingFoodY(food, now, { gameHeight: GAME_HEIGHT, speed: FOOD_FALL_SPEED_PX, floor: 520 });
 }
 
 function applySpriteInset(sprite, inset) {

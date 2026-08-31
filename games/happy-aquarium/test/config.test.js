@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync, readdirSync } from "node:fs";
 
 import { DECORATIONS, DEVICES, HELPERS, SPECIES } from "../src/config/game-config.js";
 
@@ -16,3 +17,16 @@ test("every ownership prerequisite references a known catalog item", () => {
     }
   }
 });
+
+test("every decoration and collectible coin has a runtime animation strip", () => {
+  const decorationDirectory = new URL("../assets/runtime/decorations/", import.meta.url);
+  const animated = readdirSync(decorationDirectory).filter((name) => name.endsWith("-animated.png"));
+  assert.equal(animated.length, 30);
+  for (const name of animated) assert.deepEqual(pngSize(new URL(name, decorationDirectory)), [192, 64], name);
+  assert.deepEqual(pngSize(new URL("../assets/runtime/objects/coin-spin.png", import.meta.url)), [256, 64]);
+});
+
+function pngSize(url) {
+  const buffer = readFileSync(url);
+  return [buffer.readUInt32BE(16), buffer.readUInt32BE(20)];
+}

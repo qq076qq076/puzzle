@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export function makeId(prefix = "item") {
   const suffix = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -17,6 +17,7 @@ export function createFreshState(now = Date.now()) {
       devices: { instances: [], slots: {} },
       decorations: [],
       foods: [],
+      coinDrops: [],
     },
     inventory: { algaeWafers: 2, medicines: 1, filterCartridges: 0, decorationShards: 0, fertilizerShards: 0 },
     tutorial: { step: "buy-first-egg", firstEggOverrideConsumed: false, claimedRewardIds: [] },
@@ -51,6 +52,9 @@ export function normalizeState(input, now = Date.now()) {
   state.tank.devices.slots = state.tank.devices.slots && typeof state.tank.devices.slots === "object" ? state.tank.devices.slots : {};
   state.tank.foods = Array.isArray(state.tank.foods)
     ? state.tank.foods.filter((food) => food && typeof food.id === "string" && finiteNumber(food.expiresAt, 0) > now)
+    : [];
+  state.tank.coinDrops = Array.isArray(state.tank.coinDrops)
+    ? state.tank.coinDrops.filter((coin) => coin && typeof coin.id === "string" && finiteNumber(coin.expiresAt, 0) > now)
     : [];
   state.tank.cleanliness = Math.max(0, Math.min(100, finiteNumber(state.tank.cleanliness, 100)));
   state.inventory = { ...fresh.inventory, ...(state.inventory ?? {}) };

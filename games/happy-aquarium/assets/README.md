@@ -4,7 +4,7 @@
 
 | 目錄／檔案 | 內容 |
 | --- | --- |
-| `runtime/` | 87 張可直接載入的正式 PNG |
+| `runtime/` | 可直接載入的正式 PNG，含魚類圖集、互動物件與裝飾動畫 strip |
 | `source/` | 高解析母表、中間稿、向量原稿與舊版備份 |
 | `manifest.json` | 14 種魚的圖集、狀態、FPS 與播放模式 |
 | `catalog.json` | 其他素材索引及全部素材的遊戲語意分類 |
@@ -54,6 +54,12 @@ for (const [state, row] of Object.entries(stateRows)) {
 ```
 
 完整規格以 `manifest.json` 為準。早期逐狀態分片與根目錄相容檔已歸檔在 `source/legacy-runtime-split/` 和 `source/legacy-root-copies/`；新程式一律使用 `runtime/fish/` 下的狀態圖集。
+
+## 金幣與裝飾動畫
+
+- `runtime/objects/coin-spin.png` 為 `256×64`、4 幀水平 strip。
+- `runtime/decorations/<id>-animated.png` 為 `192×64`、3 幀水平 strip；原本 `64×64` 單圖保留作為輸入源。
+- `tools/build-animated-assets.py` 會把已核可的金幣圖組正規化為 runtime strip，並從現有裝飾單圖重建三幀水下擺動。
 
 ## 維護
 
