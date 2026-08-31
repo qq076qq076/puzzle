@@ -23,7 +23,6 @@ export class UIController {
   bindElements() {
     this.elements = {
       coins: byId("coins-value"), gems: byId("gems-value"),
-      clean: byId("clean-progress"), cleanLabel: byId("clean-label"), fishCount: byId("fish-count-label"), save: byId("save-status"),
       wafer: byId("wafer-count"), medicine: byId("medicine-count"), shop: byId("shop-panel"), selection: byId("selection-panel"),
       tankName: byId("tank-name"), toast: byId("toast"), offline: byId("offline-report"), dialog: byId("game-dialog"), dialogContent: byId("dialog-content"),
     };
@@ -65,9 +64,6 @@ export class UIController {
     this.snapshot = snapshot;
     this.elements.coins.textContent = this.devMode ? "∞" : formatNumber(snapshot.player.coins);
     this.elements.gems.textContent = formatNumber(snapshot.player.gems);
-    this.elements.clean.value = snapshot.tank.cleanliness;
-    this.elements.cleanLabel.textContent = Math.round(snapshot.tank.cleanliness);
-    this.elements.fishCount.textContent = `${snapshot.tank.fishes.length} 隻魚`;
     this.elements.wafer.textContent = snapshot.inventory.algaeWafers;
     this.elements.medicine.textContent = snapshot.inventory.medicines;
     this.elements.tankName.textContent = snapshot.tank.name;
@@ -86,7 +82,7 @@ export class UIController {
     if (this.currentTab === "fish") {
       items = SPECIES.filter((item) => item.eggPrice != null).map((item) => card({
         preview: spritePreview(runtimeUrl(`fish/${item.id}/${item.id}-states.png`), "atlas"), title: item.name,
-        subtitle: `${Math.round(item.growthMs / 60_000)} 分鐘 · 成魚 ${formatNumber(item.adultSellPrice)}`,
+        subtitle: "",
         price: item.eggPrice, missing: this.devMode ? [] : missingRequirements(this.snapshot, item), owned: false, command: "BUY_EGG", field: "speciesId", id: item.id, devMode: this.devMode,
       }));
     } else if (this.currentTab === "helpers") {
@@ -164,7 +160,7 @@ export class UIController {
     this.elements.offline.querySelector("button").addEventListener("click", () => { this.elements.offline.hidden = true; });
   }
 
-  setSaveStatus(text) { this.elements.save.textContent = text; }
+  setSaveStatus(text) { this.saveStatus = text; }
 
   async renameTank() {
     const value = await this.ask("魚缿名稱", `<input id="dialog-input" maxlength="24" value="${escapeHtml(this.snapshot.tank.name)}" />`);
@@ -193,7 +189,7 @@ function card({ preview, title, subtitle, price, missing = [], owned, command, f
   const disabled = locked || owned;
   const missingLabel = requirementNames(missing).join("＋");
   const availableLabel = devMode ? command === "BUY_EGG" ? "生成成魚" : "免費使用" : `● ${formatNumber(price)}`;
-  return `<article class="shop-card"><div class="shop-art">${preview}</div><div><h3>${title}</h3><p>${subtitle}</p></div><button type="button" data-command="${command}" data-field="${field}" data-id="${id}" ${disabled ? "disabled" : ""}>${locked ? `需 ${missingLabel}` : owned ? "已擁有" : availableLabel}</button></article>`;
+  return `<article class="shop-card"><div class="shop-art">${preview}</div><div><h3>${title}</h3>${subtitle ? `<p>${subtitle}</p>` : ""}</div><button type="button" data-command="${command}" data-field="${field}" data-id="${id}" ${disabled ? "disabled" : ""}>${locked ? `需 ${missingLabel}` : owned ? "已擁有" : availableLabel}</button></article>`;
 }
 
 function spritePreview(url, layout, inset) { return `<span class="sprite-preview sprite-preview--${layout}" style="background-image:url('${url}');${clipStyle(inset)}"></span>`; }

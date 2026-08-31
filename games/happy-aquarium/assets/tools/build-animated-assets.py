@@ -75,9 +75,10 @@ def build_decoration_strips() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--coin-source", type=Path, required=True)
+    parser.add_argument("--coin-source", type=Path)
     args = parser.parse_args()
-    build_coin_strip(args.coin_source)
+    if args.coin_source:
+        build_coin_strip(args.coin_source)
     build_decoration_strips()
 
 

@@ -76,3 +76,11 @@ for (const [state, row] of Object.entries(stateRows)) {
 ```
 
 驗證器會檢查檔案是否齊全、圖片尺寸、RGBA 透明背景、魚類格位邊界，以及語意分類是否重複或遺漏。
+
+完整掃描執行素材並輸出各分類接觸表：
+
+```bash
+python3 tools/audit-runtime-assets.py --output /tmp/happy-aquarium-asset-audit
+```
+
+若掃描確認有鄰格殘影、透明像素殘色或既知裁切帶，可執行 `python3 tools/repair-runtime-alpha.py`；修復後須重跑掃描並目視檢查接觸表。修復腳本只處理已確認的透明瑕疵，不會重新繪製主體。

@@ -1,6 +1,6 @@
 import Phaser from "phaser";
-import { ASSET_INSETS, FOOD_FALL_SPEED_PX, GAME_HEIGHT, GAME_WIDTH, STAGE_SCALE } from "../../config/game-config.js";
-import { createAgent, stepAgents } from "../../core/animal-ai.js";
+import { ASSET_INSETS, DEVICE_PLACEMENTS, FOOD_FALL_SPEED_PX, GAME_HEIGHT, GAME_WIDTH, HELPERS, SPECIES_BY_ID, STAGE_SCALE } from "../../config/game-config.js";
+import { createAgent, createHelperAgent, stepAgents, stepHelperAgent } from "../../core/animal-ai.js";
 import { fallingFoodY } from "../../core/calculations.js";
 import { isDeviceActive } from "../../core/simulation.js";
 import {
@@ -83,7 +83,7 @@ export class AquariumScene extends Phaser.Scene {
         this.fishViews.set(fish.id, view);
       }
       view.fish = fish;
-      const scale = kind === "egg" ? 0.8 : STAGE_SCALE[fish.stage] || 1;
+      const scale = kind === "egg" ? 0.8 : (STAGE_SCALE[fish.stage] || 1) * (SPECIES_BY_ID[fish.speciesId]?.displayScale || 1);
       view.sprite.setScale(scale).setAlpha(fish.health === "sick" ? 0.72 : 1);
       if (kind === "egg") {
         view.sprite.setFrame(Math.min(3, Math.floor(fish.growth / 2.5)));
@@ -100,19 +100,22 @@ export class AquariumScene extends Phaser.Scene {
 
   syncHelpers() {
     const ids = new Set(this.snapshot.tank.helpers.map((item) => item.id));
-    for (const [id, view] of this.helperViews) if (!ids.has(id)) { view.destroy(); this.helperViews.delete(id); }
-    this.snapshot.tank.helpers.forEach((helper, index) => {
+    for (const [id, view] of this.helperViews) if (!ids.has(id)) { view.sprite.destroy(); this.helperViews.delete(id); }
+    this.snapshot.tank.helpers.forEach((helper) => {
       const state = helper.satiety <= 0 ? "hungry" : "work";
       const texture = helperTextureKey(helper.kind, state);
-      let sprite = this.helperViews.get(helper.id);
-      if (!sprite) {
-        sprite = this.add.sprite(110 + index * 90, 510, texture).setDepth(470).setInteractive({ useHandCursor: true });
+      let view = this.helperViews.get(helper.id);
+      if (!view) {
+        const agent = createHelperAgent(helper);
+        const sprite = this.add.sprite(agent.x, agent.y, texture).setDepth(470).setInteractive({ useHandCursor: true });
         sprite.on("pointerdown", () => this.ui.selectHelper(helper.id));
-        this.helperViews.set(helper.id, sprite);
+        view = { sprite, agent, helper };
+        this.helperViews.set(helper.id, view);
       }
-      if (sprite.texture.key !== texture) sprite.setTexture(texture);
-      applySpriteInset(sprite, ASSET_INSETS.helpers[`${helper.kind}-${state}`]);
-      sprite.play(`${texture}:play`, true);
+      view.helper = helper;
+      if (view.sprite.texture.key !== texture) view.sprite.setTexture(texture);
+      applySpriteInset(view.sprite, ASSET_INSETS.helpers[`${helper.kind}-${state}`]);
+      view.sprite.play(`${texture}:play`, true);
     });
   }
 
@@ -136,7 +139,7 @@ export class AquariumScene extends Phaser.Scene {
     const installed = Object.values(this.snapshot.tank.devices.slots).filter(Boolean);
     const ids = new Set(installed);
     for (const [id, sprite] of this.deviceViews) if (!ids.has(id)) { sprite.destroy(); this.deviceViews.delete(id); }
-    installed.forEach((id, index) => {
+    installed.forEach((id) => {
       const device = this.snapshot.tank.devices.instances.find((item) => item.id === id);
       if (!device) return;
       const active = isDeviceActive(this.snapshot, device.catalogId);
@@ -144,12 +147,14 @@ export class AquariumScene extends Phaser.Scene {
       const expired = device.catalogId === "hang-on-filter" && !active;
       const state = empty ? "empty" : expired ? "expired" : active ? "active" : "off";
       const texture = deviceTextureKey(device.catalogId, state);
+      const placement = DEVICE_PLACEMENTS[device.catalogId];
       let sprite = this.deviceViews.get(id);
       if (!sprite) {
-        sprite = this.add.sprite(70 + index * 74, 98, this.textures.exists(texture) ? texture : "__AQUARIUM_MISSING").setDepth(420).setScale(0.9).setInteractive({ useHandCursor: true });
+        sprite = this.add.sprite(placement.x * GAME_WIDTH, placement.y * GAME_HEIGHT, this.textures.exists(texture) ? texture : "__AQUARIUM_MISSING").setInteractive({ useHandCursor: true });
         sprite.on("pointerdown", () => this.ui.selectDevice(id));
         this.deviceViews.set(id, sprite);
       }
+      sprite.setPosition(placement.x * GAME_WIDTH, placement.y * GAME_HEIGHT).setScale(placement.scale).setDepth(placement.depth);
       if (sprite.texture.key !== texture && this.textures.exists(texture)) sprite.setTexture(texture);
       applySpriteInset(sprite, ASSET_INSETS.devices[device.catalogId]);
       if (this.anims.exists(`${texture}:play`)) sprite.play(`${texture}:play`, true);
@@ -246,6 +251,11 @@ export class AquariumScene extends Phaser.Scene {
       }
       view.sprite.setDepth(100 + Math.floor(view.sprite.y));
     }
+    for (const view of this.helperViews.values()) {
+      const speed = HELPERS_BY_KIND[view.helper.kind] || 10;
+      stepHelperAgent(view.agent, speed, clamped, time / 1000);
+      view.sprite.setPosition(view.agent.x, view.agent.y).setFlipX(view.agent.direction < 0).setDepth(470);
+    }
     for (const item of consumed) this.ui.runCommand("EAT_FOOD", item);
     if (time - this.lastTickAt >= 1000) {
       this.lastTickAt = time;
@@ -281,6 +291,8 @@ export class AquariumScene extends Phaser.Scene {
     this.tweens.add({ targets: bubble, y: 70, x: bubble.x + (Math.random() - 0.5) * 80, alpha: 0, duration: 5000 + Math.random() * 3500, onComplete: () => bubble.destroy() });
   }
 }
+
+const HELPERS_BY_KIND = Object.fromEntries(HELPERS.map((item) => [item.id, item.movementSpeed]));
 
 function foodDisplayY(food, now = Date.now()) {
   return fallingFoodY(food, now, { gameHeight: GAME_HEIGHT, speed: FOOD_FALL_SPEED_PX, floor: 520 });

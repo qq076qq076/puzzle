@@ -1,6 +1,7 @@
 import { GAME_HEIGHT, GAME_WIDTH, SPECIES_BY_ID } from "../config/game-config.js";
 
 const WATER = { left: 40, right: 960, top: 75, bottom: 550 };
+const HELPER_PATROL = { left: 55, right: 945, floor: 512, bob: 4 };
 
 export function createAgent(fish) {
   const species = SPECIES_BY_ID[fish.speciesId];
@@ -22,6 +23,26 @@ export function createAgent(fish) {
     facingTimer: 0,
     foodTargetId: null,
   };
+}
+
+export function createHelperAgent(helper) {
+  const seed = (helper.behaviorSeed || 1) >>> 0;
+  return {
+    x: (helper.position?.x ?? 0.5) * GAME_WIDTH,
+    y: (helper.position?.y ?? 0.86) * GAME_HEIGHT,
+    direction: seed % 2 === 0 ? 1 : -1,
+    phase: (seed % 628) / 100,
+  };
+}
+
+export function stepHelperAgent(agent, speed, dt, timeSeconds = 0) {
+  agent.x += agent.direction * speed * dt;
+  if (agent.x <= HELPER_PATROL.left || agent.x >= HELPER_PATROL.right) {
+    agent.x = Math.max(HELPER_PATROL.left, Math.min(HELPER_PATROL.right, agent.x));
+    agent.direction *= -1;
+  }
+  agent.y = HELPER_PATROL.floor + Math.sin(timeSeconds + agent.phase) * HELPER_PATROL.bob;
+  return agent;
 }
 
 export function stepAgents(agents, fishById, foodsOrDt, maybeDt) {

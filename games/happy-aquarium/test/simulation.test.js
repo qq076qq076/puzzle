@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createAgent, stepAgents } from "../src/core/animal-ai.js";
+import { createAgent, createHelperAgent, stepAgents, stepHelperAgent } from "../src/core/animal-ai.js";
 import { simulate } from "../src/core/simulation.js";
 import { createFreshState } from "../src/core/state.js";
 
@@ -89,6 +89,16 @@ test("one food claim can only be consumed by one fish", () => {
   assert.equal(consumed.length, 1);
   assert.equal(consumed[0].foodId, "food-1");
   assert.equal(new Set(consumed.map((item) => item.fishId)).size, 1);
+});
+
+test("helpers patrol the aquarium floor and turn at the edges", () => {
+  const agent = createHelperAgent({ behaviorSeed: 2, position: { x: 0.94, y: 0.86 } });
+  const startX = agent.x;
+  for (let index = 0; index < 180; index += 1) stepHelperAgent(agent, 24, 1 / 60, index / 60);
+  assert.notEqual(agent.x, startX);
+  assert.ok(agent.x >= 55 && agent.x <= 945);
+  assert.ok(agent.y >= 508 && agent.y <= 516);
+  assert.equal(agent.direction, -1);
 });
 
 function movingFish(id, satiety) {

@@ -3,21 +3,21 @@ export const GAME_HEIGHT = 600;
 export const TIME_ZONE = "Asia/Taipei";
 
 export const SPECIES = [
-  ["goby", "小蝦虎", [], 30, 60, 30, 10, 35, [0.72, 0.92]],
-  ["guppy", "孔雀魚", [], 45, 100, 45, 10, 70, [0.20, 0.58]],
-  ["anglerfish", "燈籠魚", ["guppy"], 90, 210, 90, 12, 30, [0.58, 0.88]],
-  ["golden-koi", "黃金錦鯉", ["anglerfish"], 260, 600, 180, 12, 45, [0.18, 0.78]],
-  ["zebrafish", "斑馬魚", ["guppy"], 150, 360, 120, 14, 95, [0.22, 0.62]],
-  ["clownfish", "小丑魚", ["golden-koi"], 500, 1200, 240, 12, 55, [0.32, 0.72]],
-  ["blue-devil", "藍魔鬼", ["clownfish"], 520, 1250, 240, 13, 65, [0.28, 0.72]],
-  ["angelfish", "神仙魚", ["blue-devil"], 1400, 3400, 360, 12, 35, [0.25, 0.75]],
-  ["lionfish", "獅子魚", ["angelfish"], 1800, 4400, 480, 11, 30, [0.45, 0.85]],
-  ["moonfish", "月光魚", ["lionfish"], 3200, 8000, 600, 10, 45, [0.20, 0.68]],
-  ["arowana", "龍魚", ["moonfish"], 8000, 20000, 960, 9, 60, [0.12, 0.42]],
-  ["electric-eel", "電鰻", ["arowana"], 8800, 22000, 1080, 10, 70, [0.45, 0.88]],
-  ["stingray", "魟魚", ["electric-eel"], 20000, 52000, 1440, 8, 40, [0.76, 0.94]],
-  ["rainbow-mermaid", "彩虹美人魚", ["rainbow-crystal"], null, 120000, 1440, 8, 55, [0.15, 0.88]],
-].map(([id, name, requires, eggPrice, adultSellPrice, growthMinutes, satietyDrainPerHour, maxSpeed, depth]) => ({
+  ["goby", "小蝦虎", [], 30, 60, 30, 10, 35, 0.72, [0.72, 0.92]],
+  ["guppy", "孔雀魚", [], 45, 100, 45, 10, 70, 0.78, [0.20, 0.58]],
+  ["anglerfish", "燈籠魚", ["guppy"], 90, 210, 90, 12, 30, 0.95, [0.58, 0.88]],
+  ["golden-koi", "黃金錦鯉", ["anglerfish"], 260, 600, 180, 12, 45, 1.08, [0.18, 0.78]],
+  ["zebrafish", "斑馬魚", ["guppy"], 150, 360, 120, 14, 95, 0.80, [0.22, 0.62]],
+  ["clownfish", "小丑魚", ["golden-koi"], 500, 1200, 240, 12, 55, 0.90, [0.32, 0.72]],
+  ["blue-devil", "藍魔鬼", ["clownfish"], 520, 1250, 240, 13, 65, 0.88, [0.28, 0.72]],
+  ["angelfish", "神仙魚", ["blue-devil"], 1400, 3400, 360, 12, 35, 1.05, [0.25, 0.75]],
+  ["lionfish", "獅子魚", ["angelfish"], 1800, 4400, 480, 11, 30, 1.12, [0.45, 0.85]],
+  ["moonfish", "月光魚", ["lionfish"], 3200, 8000, 600, 10, 45, 1.00, [0.20, 0.68]],
+  ["arowana", "龍魚", ["moonfish"], 8000, 20000, 960, 9, 60, 1.25, [0.12, 0.42]],
+  ["electric-eel", "電鰻", ["arowana"], 8800, 22000, 1080, 10, 70, 1.22, [0.45, 0.88]],
+  ["stingray", "魟魚", ["electric-eel"], 20000, 52000, 1440, 8, 40, 1.45, [0.76, 0.94]],
+  ["rainbow-mermaid", "彩虹美人魚", ["rainbow-crystal"], null, 120000, 1440, 8, 55, 1.25, [0.15, 0.88]],
+].map(([id, name, requires, eggPrice, adultSellPrice, growthMinutes, satietyDrainPerHour, maxSpeed, displayScale, depth]) => ({
   id,
   name,
   requires,
@@ -25,15 +25,16 @@ export const SPECIES = [
   adultSellPrice,
   growthMs: growthMinutes * 60_000,
   satietyDrainPerHour,
+  displayScale,
   movement: { maxSpeed, depthMin: depth[0], depthMax: depth[1] },
 }));
 
 export const SPECIES_BY_ID = Object.fromEntries(SPECIES.map((item) => [item.id, item]));
 
 export const HELPERS = [
-  { id: "apple-snail", name: "蘋果螺", requires: ["goby"], price: 800, reduction: 0.20, drainPerHour: 0.75 },
-  { id: "cleaner-shrimp", name: "清潔蝦", requires: ["clownfish"], price: 4500, reduction: 0.15, drainPerHour: 1 },
-  { id: "pleco", name: "清道夫魚", requires: ["cleaner-shrimp"], price: 9000, reduction: 0.25, drainPerHour: 35 / 24 },
+  { id: "apple-snail", name: "蘋果螺", requires: ["goby"], price: 800, reduction: 0.20, drainPerHour: 0.75, movementSpeed: 10 },
+  { id: "cleaner-shrimp", name: "清潔蝦", requires: ["clownfish"], price: 4500, reduction: 0.15, drainPerHour: 1, movementSpeed: 18 },
+  { id: "pleco", name: "清道夫魚", requires: ["cleaner-shrimp"], price: 9000, reduction: 0.25, drainPerHour: 35 / 24, movementSpeed: 24 },
 ];
 
 export const DEVICES = [
@@ -67,6 +68,15 @@ export const HELPER_BY_ID = Object.fromEntries(HELPERS.map((item) => [item.id, i
 export const DEVICE_BY_ID = Object.fromEntries(DEVICES.map((item) => [item.id, item]));
 export const DECORATION_BY_ID = Object.fromEntries(DECORATIONS.map((item) => [item.id, item]));
 
+export const DEVICE_PLACEMENTS = {
+  "bubble-stone": { x: 0.18, y: 0.86, scale: 0.90, depth: 420 },
+  "basic-feeder": { x: 0.84, y: 0.17, scale: 0.90, depth: 420 },
+  "advanced-feeder": { x: 0.84, y: 0.17, scale: 0.90, depth: 420 },
+  "warm-lamp": { x: 0.67, y: 0.13, scale: 0.90, depth: 420 },
+  "hang-on-filter": { x: 0.08, y: 0.22, scale: 0.90, depth: 420 },
+  "uv-sterilizer": { x: 0.13, y: 0.34, scale: 0.90, depth: 420 },
+};
+
 export const STAGE_MULTIPLIER = { egg: 0, fry: 0.25, juvenile: 0.60, adult: 1 };
 export const STAGE_SCALE = { egg: 0.75, fry: 0.40, juvenile: 0.70, adult: 1 };
 export const TRANSACTION_LIMIT = 50;
@@ -80,19 +90,7 @@ export const COIN_DROP_LIMIT = 40;
 export const COIN_VALUE_BY_STAGE = { fry: 1, juvenile: 2, adult: 3 };
 
 export const ASSET_INSETS = {
-  helpers: {
-    "pleco-idle": { top: 24, bottom: 0 },
-    "pleco-work": { top: 24, bottom: 0 },
-  },
-  devices: {
-    "warm-lamp": { top: 0, bottom: 5 },
-    "hang-on-filter": { top: 7, bottom: 0 },
-    "advanced-feeder": { top: 7, bottom: 4 },
-  },
-  decorations: {
-    "anubias-plant": { top: 8, bottom: 0 },
-    "java-fern": { top: 8, bottom: 0 },
-    "moss-ball": { top: 8, bottom: 0 },
-    "starfish": { top: 8, bottom: 0 },
-  },
+  helpers: {},
+  devices: {},
+  decorations: {},
 };
