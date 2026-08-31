@@ -1,13 +1,5 @@
 import { SPECIES_BY_ID, STAGE_MULTIPLIER } from "../config/game-config.js";
 
-export function requiredExp(level) {
-  return Math.round(100 * level * (1 + level / 10));
-}
-
-export function levelFishCapacity(level, completedExpansions = 0) {
-  return Math.min(99, 15 + Math.floor((level - 1) / 2) + Math.min(4, completedExpansions) * 5);
-}
-
 export function stageFromGrowth(growth) {
   if (growth < 10) return "egg";
   if (growth < 45) return "fry";
@@ -22,11 +14,6 @@ export function fishSellPrice(fish) {
   const variant = fish.variant === "shiny" ? 2 : 1;
   const condition = fish.health === "sick" ? 0.5 : 1;
   return Math.floor(species.adultSellPrice * stage * variant * condition);
-}
-
-export function saleExp(speciesId) {
-  const price = SPECIES_BY_ID[speciesId]?.adultSellPrice ?? 0;
-  return Math.max(5, Math.min(100, Math.round(Math.sqrt(price))));
 }
 
 export function dayKeyTaipei(timestamp) {

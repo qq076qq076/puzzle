@@ -18,21 +18,18 @@
         <div class="resources" aria-live="polite">
           <span><img id="icon-coin" alt="" /><small>金幣</small><strong id="coins-value">0</strong></span>
           <span><img id="icon-gem" alt="" /><small>寶石</small><strong id="gems-value">0</strong></span>
-          <span><img id="icon-exp" alt="" /><small>等級</small><strong id="level-value">1</strong></span>
         </div>
       </header>
 
       <section class="game-layout">
         <section class="tank-column">
           <div class="tank-status">
-            <label>EXP <progress id="exp-progress" value="0" max="100"></progress><span id="exp-label">0 / 100</span></label>
             <label>清潔度 <progress id="clean-progress" value="100" max="100"></progress><span id="clean-label">100</span></label>
-            <span id="capacity-label">0 / 15 隻</span>
+            <span id="fish-count-label">0 隻魚</span>
             <span id="save-status">本機存檔</span>
           </div>
-          <div id="aquarium-stage" class="aquarium-stage" tabindex="0" role="application" aria-label="水族箱。選擇魚糧後點擊水面餵食；點擊魚可查看狀態。"></div>
+          <div id="aquarium-stage" class="aquarium-stage" tabindex="0" role="application" aria-label="水族箱。點擊空白水域會立即放下一顆魚糧；點擊魚可查看狀態。"></div>
           <div class="tool-row" aria-label="照護工具">
-            <button type="button" data-action="feed">🍘 撒魚糧</button>
             <button type="button" data-action="clean">🧽 擦藻</button>
             <button type="button" data-action="wafer">🟢 藻錠 <span id="wafer-count">0</span></button>
             <button type="button" data-action="medicine">🧪 藥水 <span id="medicine-count">0</span></button>

@@ -3,18 +3,8 @@ import assert from "node:assert/strict";
 
 import {
   fishSellPrice,
-  levelFishCapacity,
-  requiredExp,
   stageFromGrowth,
 } from "../src/core/calculations.js";
-
-test("level and capacity formulas match the specification", () => {
-  assert.equal(requiredExp(1), 110);
-  assert.equal(requiredExp(5), 750);
-  assert.equal(requiredExp(20), 6000);
-  assert.equal(levelFishCapacity(1), 15);
-  assert.equal(levelFishCapacity(50, 4), 59);
-});
 
 test("growth stages and sale multipliers are deterministic", () => {
   assert.equal(stageFromGrowth(9.99), "egg");

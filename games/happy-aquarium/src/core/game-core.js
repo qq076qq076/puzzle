@@ -1,16 +1,17 @@
 import {
   DECORATION_BY_ID,
   DEVICE_BY_ID,
-  FEED_COOLDOWN_MS,
+  FOOD_LIFETIME_MS,
+  FOOD_SATIETY,
   HELPER_BY_ID,
-  MAX_FISH,
   SPECIES_BY_ID,
   TRANSACTION_LIMIT,
 } from "../config/game-config.js";
-import { clamp, fishSellPrice, levelFishCapacity, requiredExp, saleExp, stageFromGrowth } from "./calculations.js";
+import { clamp, fishSellPrice, stageFromGrowth } from "./calculations.js";
 import { nextRandom, randomInt } from "./rng.js";
-import { feedHungriestFish, simulate } from "./simulation.js";
+import { simulate } from "./simulation.js";
 import { createFreshState, makeId, normalizeState } from "./state.js";
+import { isUnlocked } from "./unlocks.js";
 
 export class GameCore {
   #state;
@@ -35,7 +36,6 @@ export class GameCore {
     const report = simulate(this.#state, now, { offline });
     const events = [{ type: "stateRestored", report }];
     if (report.hatched > 0) claimTutorial(this.#state, "hatch-first-egg", { coins: 50 }, events);
-    this.#grantExp(report.hatched * 5, events);
     this.#publish(events);
     return report;
   }
@@ -49,7 +49,6 @@ export class GameCore {
     const report = simulate(this.#state, now);
     const events = [{ type: "tick", report }];
     if (report.hatched > 0) claimTutorial(this.#state, "hatch-first-egg", { coins: 50 }, events);
-    this.#grantExp(report.hatched * 5, events);
     this.#publish(events);
     return report;
   }
@@ -64,7 +63,6 @@ export class GameCore {
     const events = [];
     const result = handler(this.#state, payload, now, events);
     if (!result.ok) return this.#failure(transactionId, result.errorCode);
-    this.#grantExp(result.exp || 0, events);
     this.#recordTransaction(transactionId, type, now);
     events.push({ type: "saveUrgent" });
     this.#publish(events);
@@ -83,19 +81,6 @@ export class GameCore {
     if (transactions.recent.length > TRANSACTION_LIMIT) transactions.recent.splice(0, transactions.recent.length - TRANSACTION_LIMIT);
   }
 
-  #grantExp(amount, events = []) {
-    if (this.#state.player.level >= 50) return;
-    this.#state.player.exp += Math.floor(amount || 0);
-    while (this.#state.player.level < 50 && this.#state.player.exp >= requiredExp(this.#state.player.level)) {
-      this.#state.player.exp -= requiredExp(this.#state.player.level);
-      this.#state.player.level += 1;
-      this.#state.player.coins += 100 + 25 * this.#state.player.level;
-      if ([10, 20, 30, 40, 50].includes(this.#state.player.level)) this.#state.player.gems += 1;
-      this.#state.tank.fishLimit = levelFishCapacity(this.#state.player.level, this.#state.stats.completedExpansions || 0);
-      events.push({ type: "levelUp", level: this.#state.player.level });
-    }
-  }
-
   #publish(events) {
     const snapshot = this.snapshot();
     for (const listener of this.#listeners) listener(snapshot, events);
@@ -106,9 +91,8 @@ const COMMANDS = {
   BUY_EGG(state, { speciesId }, now, events) {
     const species = SPECIES_BY_ID[speciesId];
     if (!species || species.eggPrice == null) return fail("NOT_FOR_SALE");
-    if (state.player.level < species.unlockLevel) return fail("LEVEL_LOCKED");
+    if (!isUnlocked(state, species)) return fail("REQUIREMENTS_LOCKED");
     if (speciesId === "moonfish" && !isTaipeiNight(now)) return fail("NIGHT_ONLY");
-    if (state.tank.fishes.length >= Math.min(MAX_FISH, state.tank.fishLimit)) return fail("TANK_FULL");
     if (state.player.coins < species.eggPrice) return fail("NOT_ENOUGH_COINS");
     state.player.coins -= species.eggPrice;
     const tutorialEgg = speciesId === "guppy" && !state.tutorial.firstEggOverrideConsumed;
@@ -123,17 +107,36 @@ const COMMANDS = {
     state.stats.eggsBought += 1;
     claimTutorial(state, "buy-first-egg", { coins: 30 }, events);
     events.push({ type: "fishAdded", fishId: fish.id });
-    return ok(3);
+    return ok();
   },
 
-  FEED(state, _payload, now, events) {
-    if (now - state.tank.lastFeedAt < FEED_COOLDOWN_MS) return fail("FEED_COOLDOWN");
-    const fishIds = feedHungriestFish(state, 5);
-    if (!fishIds.length) return fail("NO_HUNGRY_FISH");
-    state.tank.lastFeedAt = now;
+  FEED(state, { x, y }, now, events) {
+    const normalizedX = Number(x);
+    const normalizedY = Number(y);
+    if (!Number.isFinite(normalizedX) || !Number.isFinite(normalizedY)) return fail("INVALID_FOOD_POSITION");
+    const food = {
+      id: makeId("food"),
+      x: clamp(normalizedX, 0.04, 0.96),
+      y: clamp(normalizedY, 0.125, 0.875),
+      createdAt: now,
+      expiresAt: now + FOOD_LIFETIME_MS,
+    };
+    state.tank.foods.push(food);
+    events.push({ type: "foodDropped", foodId: food.id });
+    return ok();
+  },
+
+  EAT_FOOD(state, { foodId, fishId }, _now, events) {
+    const foodIndex = state.tank.foods.findIndex((item) => item.id === foodId);
+    if (foodIndex < 0) return fail("FOOD_NOT_FOUND");
+    const fish = state.tank.fishes.find((item) => item.id === fishId);
+    if (!fish || fish.stage === "egg" || fish.health !== "healthy" || fish.satiety >= 100) return fail("FISH_CANNOT_EAT");
+    state.tank.foods.splice(foodIndex, 1);
+    fish.satiety = clamp(fish.satiety + FOOD_SATIETY, 0, 100);
+    fish.starvingSince = 0;
     claimTutorial(state, "feed-first-fish", { coins: 50 }, events);
-    events.push({ type: "foodDropped", fishIds });
-    return ok(fishIds.length);
+    events.push({ type: "foodEaten", foodId, fishId });
+    return ok();
   },
 
   CLEAN(state, _payload, _now, events) {
@@ -141,7 +144,7 @@ const COMMANDS = {
     state.tank.cleanliness = clamp(state.tank.cleanliness + 2, 0, 100);
     claimTutorial(state, "clean-first-algae", { coins: 50, decorationId: "anubias-plant" }, events);
     events.push({ type: "algaeCleaned" });
-    return ok(1);
+    return ok();
   },
 
   USE_WAFER(state, _payload, _now, events) {
@@ -164,7 +167,7 @@ const COMMANDS = {
     fish.sickSince = 0;
     fish.satiety = Math.max(25, fish.satiety);
     events.push({ type: "fishCured", fishId });
-    return ok(10);
+    return ok();
   },
 
   ACCELERATE_FISH(state, { fishId }, _now, events) {
@@ -177,7 +180,7 @@ const COMMANDS = {
     if (fish.stage === "fry" && fish.satiety === 0) fish.satiety = 80;
     if (fish.stage !== "egg") claimTutorial(state, "hatch-first-egg", { coins: 50 }, events);
     events.push({ type: "fishGrew", fishId });
-    return ok(fish.stage === "adult" ? 5 : 0);
+    return ok();
   },
 
   REVIVE_FISH(state, { fishId }, now, events) {
@@ -202,13 +205,13 @@ const COMMANDS = {
     state.player.coins += price;
     state.stats.fishSold += 1;
     events.push({ type: "fishSold", fishId, price });
-    return ok(saleExp(fish.speciesId));
+    return ok();
   },
 
   BUY_HELPER(state, { helperId }, now, events) {
     const config = HELPER_BY_ID[helperId];
     if (!config) return fail("UNKNOWN_ITEM");
-    if (state.player.level < config.unlockLevel) return fail("LEVEL_LOCKED");
+    if (!isUnlocked(state, config)) return fail("REQUIREMENTS_LOCKED");
     if (state.tank.helpers.some((item) => item.kind === helperId)) return fail("ALREADY_OWNED");
     if (state.player.coins < config.price) return fail("NOT_ENOUGH_COINS");
     state.player.coins -= config.price;
@@ -220,7 +223,7 @@ const COMMANDS = {
   BUY_DEVICE(state, { deviceId }, now, events) {
     const config = DEVICE_BY_ID[deviceId];
     if (!config) return fail("UNKNOWN_ITEM");
-    if (state.player.level < config.unlockLevel) return fail("LEVEL_LOCKED");
+    if (!isUnlocked(state, config)) return fail("REQUIREMENTS_LOCKED");
     if (state.tank.devices.instances.some((item) => item.catalogId === deviceId)) return fail("ALREADY_OWNED");
     if (state.player.coins < config.price) return fail("NOT_ENOUGH_COINS");
     state.player.coins -= config.price;
@@ -248,7 +251,7 @@ const COMMANDS = {
   BUY_DECORATION(state, { decorationId }, _now, events) {
     const config = DECORATION_BY_ID[decorationId];
     if (!config) return fail("UNKNOWN_ITEM");
-    if (state.player.level < config.unlockLevel) return fail("LEVEL_LOCKED");
+    if (!isUnlocked(state, config)) return fail("REQUIREMENTS_LOCKED");
     if (state.tank.decorations.length >= 10) return fail("DECORATION_LIMIT");
     if (state.player.coins < config.price) return fail("NOT_ENOUGH_COINS");
     state.player.coins -= config.price;
@@ -298,8 +301,6 @@ function claimTutorial(state, id, reward, events) {
   if (reward.decorationId && state.tank.decorations.length < 10) state.tank.decorations.push({ id: makeId("decor"), catalogId: reward.decorationId, x: 0.18, y: 0.85, rotation: 0 });
   const order = ["buy-first-egg", "hatch-first-egg", "feed-first-fish", "clean-first-algae"];
   state.tutorial.step = order[order.indexOf(id) + 1] || "complete";
-  const expById = { "buy-first-egg": 10, "hatch-first-egg": 15, "feed-first-fish": 15, "clean-first-algae": 20 };
-  state.player.exp += expById[id] || 0;
   events.push({ type: "tutorialAdvanced", step: state.tutorial.step });
 }
 
@@ -308,13 +309,13 @@ function isTaipeiNight(now) {
   return hour >= 18 || hour < 6;
 }
 
-function ok(exp = 0) { return { ok: true, exp }; }
+function ok() { return { ok: true }; }
 function fail(errorCode) { return { ok: false, errorCode }; }
 
 export const ERROR_MESSAGES = {
-  UNKNOWN_COMMAND: "未知操作。", NOT_FOR_SALE: "這種魚不能直接購買。", LEVEL_LOCKED: "等級尚未解鎖。",
-  NIGHT_ONLY: "月光魚只在台北時間 18:00～06:00 販售。", TANK_FULL: "魚缸容量已滿。", NOT_ENOUGH_COINS: "金幣不足。",
-  FEED_COOLDOWN: "魚糧還在冷卻中。", NO_HUNGRY_FISH: "目前沒有需要進食的魚。", ALREADY_CLEAN: "魚缸已經很乾淨。",
+  UNKNOWN_COMMAND: "未知操作。", NOT_FOR_SALE: "這種魚不能直接購買。", REQUIREMENTS_LOCKED: "尚未持有解鎖所需物品。",
+  NIGHT_ONLY: "月光魚只在台北時間 18:00～06:00 販售。", NOT_ENOUGH_COINS: "金幣不足。",
+  INVALID_FOOD_POSITION: "請點擊魚缸水域放置魚糧。", FOOD_NOT_FOUND: "這顆魚糧已經被吃掉了。", FISH_CANNOT_EAT: "這隻魚目前不能進食。", ALREADY_CLEAN: "魚缸已經很乾淨。",
   NO_WAFER: "背包沒有藻錠。", NO_HUNGRY_HELPER: "目前沒有需要藻錠的清潔生物。", FISH_NOT_SICK: "這隻魚不需要治療。",
   NO_MEDICINE: "背包沒有藥水。", CANNOT_ACCELERATE: "目前不能加速。", NOT_ENOUGH_GEMS: "寶石不足。", CANNOT_REVIVE: "已超過復活期限。",
   FISH_NOT_FOUND: "找不到這隻魚。", CANNOT_SELL: "目前不能出售。", UNKNOWN_ITEM: "找不到商品。", ALREADY_OWNED: "已經擁有。",

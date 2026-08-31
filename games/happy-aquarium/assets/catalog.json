@@ -29,7 +29,7 @@
     "string-lights", "warm-lamp", "mirror-backdrop", "toy-submarine", "coral-gate"
   ],
   "ui": [
-    "coin", "gem", "exp-star", "fish-food",
+    "coin", "gem", "fish-food",
     "algae-wafer", "medicine", "cleaning-brush", "filter-cartridge",
     "fertilizer-shard", "decoration-shard", "fish-egg", "visitor-ticket",
     "heart", "clock", "inventory-crate", "quest-scroll"
@@ -63,7 +63,7 @@
     },
     "ui": {
       "currency": ["coin", "gem"],
-      "progress-and-status": ["exp-star", "heart", "clock"],
+      "progress-and-status": ["heart", "clock"],
       "care-items": ["fish-food", "algae-wafer", "medicine", "cleaning-brush"],
       "parts-and-eggs": ["filter-cartridge", "fertilizer-shard", "decoration-shard", "fish-egg"],
       "navigation-and-quests": ["visitor-ticket", "inventory-crate", "quest-scroll"]

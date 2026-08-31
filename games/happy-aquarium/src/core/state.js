@@ -1,6 +1,4 @@
-import { levelFishCapacity } from "./calculations.js";
-
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export function makeId(prefix = "item") {
   const suffix = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -10,16 +8,15 @@ export function makeId(prefix = "item") {
 export function createFreshState(now = Date.now()) {
   return {
     schemaVersion: SCHEMA_VERSION,
-    player: { level: 1, exp: 0, coins: 300, gems: 3 },
+    player: { coins: 300, gems: 3 },
     tank: {
       name: "我的第一缸",
-      fishLimit: 15,
       cleanliness: 100,
       fishes: [],
       helpers: [],
       devices: { instances: [], slots: {} },
       decorations: [],
-      lastFeedAt: 0,
+      foods: [],
     },
     inventory: { algaeWafers: 2, medicines: 1, filterCartridges: 0, decorationShards: 0, fertilizerShards: 0 },
     tutorial: { step: "buy-first-egg", firstEggOverrideConsumed: false, claimedRewardIds: [] },
@@ -39,20 +36,23 @@ export function normalizeState(input, now = Date.now()) {
   const fresh = createFreshState(now);
   const state = structuredClone(input);
   state.schemaVersion = SCHEMA_VERSION;
-  state.player = { ...fresh.player, ...(state.player ?? {}) };
-  state.player.level = Math.max(1, Math.min(50, finiteInt(state.player.level, 1)));
-  state.player.exp = Math.max(0, finiteInt(state.player.exp, 0));
-  state.player.coins = Math.max(0, finiteInt(state.player.coins, 0));
-  state.player.gems = Math.max(0, finiteInt(state.player.gems, 0));
+  state.player = {
+    coins: Math.max(0, finiteInt(state.player?.coins, fresh.player.coins)),
+    gems: Math.max(0, finiteInt(state.player?.gems, fresh.player.gems)),
+  };
   state.tank = { ...fresh.tank, ...(state.tank ?? {}) };
-  state.tank.fishes = Array.isArray(state.tank.fishes) ? state.tank.fishes.slice(0, 99) : [];
+  delete state.tank.fishLimit;
+  delete state.tank.lastFeedAt;
+  state.tank.fishes = Array.isArray(state.tank.fishes) ? state.tank.fishes : [];
   state.tank.helpers = Array.isArray(state.tank.helpers) ? state.tank.helpers : [];
   state.tank.decorations = Array.isArray(state.tank.decorations) ? state.tank.decorations : [];
   state.tank.devices = state.tank.devices && typeof state.tank.devices === "object" ? state.tank.devices : fresh.tank.devices;
   state.tank.devices.instances = Array.isArray(state.tank.devices.instances) ? state.tank.devices.instances : [];
   state.tank.devices.slots = state.tank.devices.slots && typeof state.tank.devices.slots === "object" ? state.tank.devices.slots : {};
+  state.tank.foods = Array.isArray(state.tank.foods)
+    ? state.tank.foods.filter((food) => food && typeof food.id === "string" && finiteNumber(food.expiresAt, 0) > now)
+    : [];
   state.tank.cleanliness = Math.max(0, Math.min(100, finiteNumber(state.tank.cleanliness, 100)));
-  state.tank.fishLimit = levelFishCapacity(state.player.level, finiteInt(state.stats?.completedExpansions, 0));
   state.inventory = { ...fresh.inventory, ...(state.inventory ?? {}) };
   state.tutorial = { ...fresh.tutorial, ...(state.tutorial ?? {}) };
   state.events = { ...fresh.events, ...(state.events ?? {}) };
@@ -67,7 +67,8 @@ export function normalizeState(input, now = Date.now()) {
 }
 
 export function isValidCheckpoint(input) {
-  return Boolean(input && typeof input === "object" && Number(input.schemaVersion) === SCHEMA_VERSION && input.player && input.tank);
+  const version = Number(input?.schemaVersion);
+  return Boolean(input && typeof input === "object" && version >= 1 && version <= SCHEMA_VERSION && input.player && input.tank);
 }
 
 function finiteNumber(value, fallback) {

@@ -20,17 +20,27 @@ export function createAgent(fish) {
     seed,
     facing: fish.heading === "left" ? -1 : 1,
     facingTimer: 0,
+    foodTargetId: null,
   };
 }
 
-export function stepAgents(agents, fishById, dt) {
+export function stepAgents(agents, fishById, foodsOrDt, maybeDt) {
+  const foods = Array.isArray(foodsOrDt) ? foodsOrDt : [];
+  const dt = Array.isArray(foodsOrDt) ? maybeDt : foodsOrDt;
   const grid = buildGrid(agents, 96);
+  const consumed = [];
   for (const agent of agents) {
     const fish = fishById.get(agent.id);
     const config = SPECIES_BY_ID[agent.speciesId];
     if (!fish || !config || fish.health === "dead" || fish.stage === "egg") continue;
+    const foodTarget = updateFoodTarget(agent, fish, foods, config);
     agent.retargetIn -= dt;
-    if (agent.retargetIn <= 0) chooseTarget(agent, config);
+    if (foodTarget) {
+      agent.targetX = foodTarget.x;
+      agent.targetY = foodTarget.y;
+    } else if (agent.retargetIn <= 0) {
+      chooseTarget(agent, config);
+    }
     const speedFactor = fish.health === "sick" ? 0.35 : fish.satiety < 25 ? 0.72 : fish.stage === "fry" ? 0.85 : fish.stage === "juvenile" ? 0.95 : 1;
     const maxSpeed = Math.max(8, config.movement.maxSpeed * speedFactor);
     let ax = (agent.targetX - agent.x) * 0.35;
@@ -71,7 +81,39 @@ export function stepAgents(agents, fishById, dt) {
       agent.facing = desiredFacing;
       agent.facingTimer = 0;
     }
+    if (foodTarget && !foodTarget.consumed && Math.hypot(agent.x - foodTarget.x, agent.y - foodTarget.y) < 18) {
+      foodTarget.consumed = true;
+      consumed.push({ foodId: foodTarget.id, fishId: fish.id });
+      agent.foodTargetId = null;
+    }
   }
+  return consumed;
+}
+
+function updateFoodTarget(agent, fish, foods, config) {
+  const canEat = fish.health === "healthy" && fish.stage !== "egg" && fish.satiety < 100;
+  let target = foods.find((food) => food.id === agent.foodTargetId && !food.consumed);
+  if (!canEat || (target && target.claimedBy && target.claimedBy !== fish.id)) {
+    if (target?.claimedBy === fish.id) target.claimedBy = null;
+    agent.foodTargetId = null;
+    target = null;
+  }
+  if (!canEat) return null;
+  if (!target) {
+    const candidates = foods
+      .filter((food) => !food.consumed && (!food.claimedBy || food.claimedBy === fish.id))
+      .sort((left, right) => foodScore(agent, fish, left, config) - foodScore(agent, fish, right, config) || left.id.localeCompare(right.id));
+    target = candidates[0] || null;
+    if (target) {
+      target.claimedBy = fish.id;
+      agent.foodTargetId = target.id;
+    }
+  }
+  return target;
+}
+
+function foodScore(agent, fish, food, config) {
+  return Math.hypot(agent.x - food.x, agent.y - food.y) / Math.max(8, config.movement.maxSpeed) + fish.satiety * 0.015;
 }
 
 function chooseTarget(agent, config) {

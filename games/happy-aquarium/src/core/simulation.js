@@ -1,4 +1,4 @@
-import { DEVICE_BY_ID, HELPER_BY_ID, OFFLINE_CAP_MS, SPECIES_BY_ID } from "../config/game-config.js";
+import { DEVICE_BY_ID, FOOD_LIFETIME_MS, HELPER_BY_ID, OFFLINE_CAP_MS, SPECIES_BY_ID } from "../config/game-config.js";
 import { clamp, dayKeyTaipei, stageFromGrowth } from "./calculations.js";
 import { nextRandom } from "./rng.js";
 
@@ -11,6 +11,7 @@ export function simulate(state, now = Date.now(), { offline = false } = {}) {
   const to = Math.min(now, from + OFFLINE_CAP_MS);
   const elapsed = to - from;
   const report = emptyReport(elapsed);
+  state.tank.foods = (state.tank.foods || []).filter((food) => Number(food.expiresAt) > now);
   const cleanlinessBefore = state.tank.cleanliness;
   const livingFish = state.tank.fishes.filter((fish) => fish.health !== "dead").length;
   const reduction = activeCleanReduction(state, to);
@@ -18,7 +19,7 @@ export function simulate(state, now = Date.now(), { offline = false } = {}) {
   state.tank.cleanliness = clamp(cleanlinessBefore - baseDecay * (elapsed / HOUR) * (1 - reduction), offline ? 10 : 0, 100);
 
   updateHelpers(state, elapsed, to, report);
-  runAutoFeeder(state, from, to, report);
+  runAutoFeeder(state, from, to, report, offline);
   const warmMultiplier = isDeviceActive(state, "warm-lamp", to) ? 1.1 : 1;
 
   for (const fish of state.tank.fishes) {
@@ -124,7 +125,7 @@ function updateHelpers(state, elapsed, now, report) {
   }
 }
 
-function runAutoFeeder(state, from, to, report) {
+function runAutoFeeder(state, from, to, report, offline) {
   const id = state.tank.devices.slots.feeder;
   const feeder = state.tank.devices.instances.find((item) => item.id === id);
   const config = feeder && DEVICE_BY_ID[feeder.catalogId];
@@ -132,12 +133,27 @@ function runAutoFeeder(state, from, to, report) {
   feeder.state.nextRunAt ||= from + config.intervalMs;
   let guard = 0;
   while (feeder.state.nextRunAt <= to && feeder.state.ammo > 0 && guard < 100) {
-    const fed = feedHungriestFish(state, 5);
+    const runAt = feeder.state.nextRunAt;
+    const virtualFeed = offline || runAt + FOOD_LIFETIME_MS <= to;
+    const fed = virtualFeed ? feedHungriestFish(state, 5) : [];
+    if (!virtualFeed) dropAutomaticFood(state, feeder.id, runAt, 5);
     feeder.state.ammo -= 1;
     feeder.state.nextRunAt += config.intervalMs;
     report.autoFeeds += 1;
     report.fishFed += fed.length;
     guard += 1;
+  }
+}
+
+function dropAutomaticFood(state, feederId, createdAt, count) {
+  for (let index = 0; index < count; index += 1) {
+    state.tank.foods.push({
+      id: `food_auto_${feederId}_${createdAt}_${index}`,
+      x: 0.46 + index * 0.02,
+      y: 0.18,
+      createdAt,
+      expiresAt: createdAt + FOOD_LIFETIME_MS,
+    });
   }
 }
 

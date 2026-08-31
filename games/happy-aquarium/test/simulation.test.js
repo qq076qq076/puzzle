@@ -55,3 +55,31 @@ test("animal steering remains finite and inside the aquarium", () => {
   assert.ok(agent.y >= 75 && agent.y <= 550);
   assert.ok(Math.hypot(agent.vx, agent.vy) <= 70.001);
 });
+
+test("one food claim can only be consumed by one fish", () => {
+  const fishes = [
+    movingFish("fish-1", 20),
+    movingFish("fish-2", 30),
+  ];
+  const agents = fishes.map(createAgent);
+  const fishById = new Map(fishes.map((fish) => [fish.id, fish]));
+  const foods = [{ id: "food-1", x: 500, y: 300, claimedBy: null, consumed: false }];
+
+  const consumed = stepAgents(agents, fishById, foods, 1 / 60);
+  assert.equal(consumed.length, 1);
+  assert.equal(consumed[0].foodId, "food-1");
+  assert.equal(new Set(consumed.map((item) => item.fishId)).size, 1);
+});
+
+function movingFish(id, satiety) {
+  return {
+    id,
+    speciesId: "guppy",
+    stage: "adult",
+    health: "healthy",
+    satiety,
+    behaviorSeed: 42,
+    position: { x: 0.5, y: 0.5 },
+    heading: "right",
+  };
+}

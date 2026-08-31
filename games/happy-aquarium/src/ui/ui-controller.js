@@ -1,6 +1,7 @@
-import { DECORATIONS, DEVICES, HELPERS, SPECIES, SPECIES_BY_ID } from "../config/game-config.js";
-import { fishSellPrice, requiredExp } from "../core/calculations.js";
+import { ASSET_INSETS, DECORATIONS, DEVICES, HELPERS, SPECIES, SPECIES_BY_ID } from "../config/game-config.js";
+import { fishSellPrice } from "../core/calculations.js";
 import { ERROR_MESSAGES } from "../core/game-core.js";
+import { missingRequirements, requirementNames } from "../core/unlocks.js";
 import { runtimeUrl } from "../phaser/asset-registry.js";
 
 export class UIController {
@@ -20,14 +21,13 @@ export class UIController {
 
   bindElements() {
     this.elements = {
-      coins: byId("coins-value"), gems: byId("gems-value"), level: byId("level-value"), exp: byId("exp-progress"), expLabel: byId("exp-label"),
-      clean: byId("clean-progress"), cleanLabel: byId("clean-label"), capacity: byId("capacity-label"), save: byId("save-status"),
+      coins: byId("coins-value"), gems: byId("gems-value"),
+      clean: byId("clean-progress"), cleanLabel: byId("clean-label"), fishCount: byId("fish-count-label"), save: byId("save-status"),
       wafer: byId("wafer-count"), medicine: byId("medicine-count"), shop: byId("shop-panel"), selection: byId("selection-panel"),
       tankName: byId("tank-name"), toast: byId("toast"), offline: byId("offline-report"), dialog: byId("game-dialog"), dialogContent: byId("dialog-content"),
     };
     byId("icon-coin").src = runtimeUrl("ui/coin.png");
     byId("icon-gem").src = runtimeUrl("ui/gem.png");
-    byId("icon-exp").src = runtimeUrl("ui/exp-star.png");
   }
 
   bindEvents() {
@@ -40,7 +40,6 @@ export class UIController {
     });
     document.querySelector(".tool-row").addEventListener("click", (event) => {
       const action = event.target.closest("[data-action]")?.dataset.action;
-      if (action === "feed") this.runCommand("FEED");
       if (action === "clean") this.runCommand("CLEAN");
       if (action === "wafer") this.runCommand("USE_WAFER");
       if (action === "medicine") this.useMedicineOnSelected();
@@ -65,14 +64,9 @@ export class UIController {
     this.snapshot = snapshot;
     this.elements.coins.textContent = formatNumber(snapshot.player.coins);
     this.elements.gems.textContent = formatNumber(snapshot.player.gems);
-    this.elements.level.textContent = snapshot.player.level;
-    const needed = requiredExp(snapshot.player.level);
-    this.elements.exp.max = needed;
-    this.elements.exp.value = snapshot.player.exp;
-    this.elements.expLabel.textContent = snapshot.player.level >= 50 ? "MAX" : `${snapshot.player.exp} / ${needed}`;
     this.elements.clean.value = snapshot.tank.cleanliness;
     this.elements.cleanLabel.textContent = Math.round(snapshot.tank.cleanliness);
-    this.elements.capacity.textContent = `${snapshot.tank.fishes.length} / ${snapshot.tank.fishLimit} 隻`;
+    this.elements.fishCount.textContent = `${snapshot.tank.fishes.length} 隻魚`;
     this.elements.wafer.textContent = snapshot.inventory.algaeWafers;
     this.elements.medicine.textContent = snapshot.inventory.medicines;
     this.elements.tankName.textContent = snapshot.tank.name;
@@ -80,28 +74,26 @@ export class UIController {
     this.renderSelection();
     for (const event of events) {
       if (event.type === "saveUrgent") this.saver?.save?.(true);
-      if (event.type === "levelUp") this.toast(`升到 Lv${event.level}！`);
       if (event.type === "tutorialAdvanced") this.toast(tutorialMessage(event.step));
     }
   }
 
   renderShop() {
-    const level = this.snapshot.player.level;
     const ownedHelpers = new Set(this.snapshot.tank.helpers.map((item) => item.kind));
     const ownedDevices = new Set(this.snapshot.tank.devices.instances.map((item) => item.catalogId));
     let items;
     if (this.currentTab === "fish") {
       items = SPECIES.filter((item) => item.eggPrice != null).map((item) => card({
-        preview: spritePreview(runtimeUrl(`fish/${item.id}/${item.id}-states.png`)), title: item.name,
+        preview: spritePreview(runtimeUrl(`fish/${item.id}/${item.id}-states.png`), "atlas"), title: item.name,
         subtitle: `${Math.round(item.growthMs / 60_000)} 分鐘 · 成魚 ${formatNumber(item.adultSellPrice)}`,
-        price: item.eggPrice, locked: level < item.unlockLevel, owned: false, command: "BUY_EGG", field: "speciesId", id: item.id, unlock: item.unlockLevel,
+        price: item.eggPrice, missing: missingRequirements(this.snapshot, item), owned: false, command: "BUY_EGG", field: "speciesId", id: item.id,
       }));
     } else if (this.currentTab === "helpers") {
-      items = HELPERS.map((item) => card({ preview: spritePreview(runtimeUrl(`helpers/${item.id}/${item.id}-idle.png`)), title: item.name, subtitle: `清潔衰減 -${item.reduction * 100}%`, price: item.price, locked: level < item.unlockLevel, owned: ownedHelpers.has(item.id), command: "BUY_HELPER", field: "helperId", id: item.id, unlock: item.unlockLevel }));
+      items = HELPERS.map((item) => card({ preview: imagePreview(runtimeUrl(`helpers/${item.id}/${item.id}-idle.png`), ASSET_INSETS.helpers[`${item.id}-idle`]), title: item.name, subtitle: `清潔衰減 -${item.reduction * 100}%`, price: item.price, missing: missingRequirements(this.snapshot, item), owned: ownedHelpers.has(item.id), command: "BUY_HELPER", field: "helperId", id: item.id }));
     } else if (this.currentTab === "devices") {
-      items = DEVICES.map((item) => card({ preview: spritePreview(runtimeUrl(`devices/${item.id}/${item.id}-${item.id.includes("feeder") ? "active" : item.id === "hang-on-filter" ? "active" : "active"}.png`)), title: item.name, subtitle: deviceDescription(item), price: item.price, locked: level < item.unlockLevel, owned: ownedDevices.has(item.id), command: "BUY_DEVICE", field: "deviceId", id: item.id, unlock: item.unlockLevel }));
+      items = DEVICES.map((item) => card({ preview: spritePreview(runtimeUrl(`devices/${item.id}/${item.id}-active.png`), "strip", ASSET_INSETS.devices[item.id]), title: item.name, subtitle: deviceDescription(item), price: item.price, missing: missingRequirements(this.snapshot, item), owned: ownedDevices.has(item.id), command: "BUY_DEVICE", field: "deviceId", id: item.id }));
     } else {
-      items = DECORATIONS.map((item) => card({ preview: `<img src="${runtimeUrl(`decorations/${item.id}.png`)}" alt="" />`, title: item.name, subtitle: `吸引力 ${item.appeal}`, price: item.price, locked: level < item.unlockLevel, owned: false, command: "BUY_DECORATION", field: "decorationId", id: item.id, unlock: item.unlockLevel }));
+      items = DECORATIONS.map((item) => card({ preview: imagePreview(runtimeUrl(`decorations/${item.id}.png`), ASSET_INSETS.decorations[item.id]), title: item.name, subtitle: `吸引力 ${item.appeal}`, price: item.price, missing: missingRequirements(this.snapshot, item), owned: false, command: "BUY_DECORATION", field: "decorationId", id: item.id }));
     }
     this.elements.shop.innerHTML = items.join("");
   }
@@ -195,12 +187,16 @@ export class UIController {
   }
 }
 
-function card({ preview, title, subtitle, price, locked, owned, command, field, id, unlock }) {
+function card({ preview, title, subtitle, price, missing = [], owned, command, field, id }) {
+  const locked = missing.length > 0;
   const disabled = locked || owned;
-  return `<article class="shop-card"><div class="shop-art">${preview}</div><div><h3>${title}</h3><p>${subtitle}</p></div><button type="button" data-command="${command}" data-field="${field}" data-id="${id}" ${disabled ? "disabled" : ""}>${locked ? `Lv${unlock}` : owned ? "已擁有" : `● ${formatNumber(price)}`}</button></article>`;
+  const missingLabel = requirementNames(missing).join("＋");
+  return `<article class="shop-card"><div class="shop-art">${preview}</div><div><h3>${title}</h3><p>${subtitle}</p></div><button type="button" data-command="${command}" data-field="${field}" data-id="${id}" ${disabled ? "disabled" : ""}>${locked ? `需 ${missingLabel}` : owned ? "已擁有" : `● ${formatNumber(price)}`}</button></article>`;
 }
 
-function spritePreview(url) { return `<span class="sprite-preview" style="background-image:url('${url}')"></span>`; }
+function spritePreview(url, layout, inset) { return `<span class="sprite-preview sprite-preview--${layout}" style="background-image:url('${url}');${clipStyle(inset)}"></span>`; }
+function imagePreview(url, inset) { return `<img class="single-preview" src="${url}" alt="" style="${clipStyle(inset)}" />`; }
+function clipStyle(inset) { return inset ? `clip-path:inset(${inset.top || 0}px 0 ${inset.bottom || 0}px 0)` : ""; }
 function deviceDescription(item) {
   if (item.reduction) return `清潔衰減 -${item.reduction * 100}%`;
   if (item.capacity) return `料倉 ${item.capacity} 份`;
