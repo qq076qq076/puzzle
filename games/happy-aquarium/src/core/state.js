@@ -1,3 +1,5 @@
+import { DECORATION_SCALE, DEVICE_SCALE } from "../config/game-config.js";
+
 export const SCHEMA_VERSION = 3;
 
 export function makeId(prefix = "item") {
@@ -46,9 +48,13 @@ export function normalizeState(input, now = Date.now()) {
   delete state.tank.lastFeedAt;
   state.tank.fishes = Array.isArray(state.tank.fishes) ? state.tank.fishes : [];
   state.tank.helpers = Array.isArray(state.tank.helpers) ? state.tank.helpers : [];
-  state.tank.decorations = Array.isArray(state.tank.decorations) ? state.tank.decorations : [];
+  state.tank.decorations = Array.isArray(state.tank.decorations)
+    ? state.tank.decorations.map((item) => ({ ...item, scale: clamp(finiteNumber(item?.scale, DECORATION_SCALE.default), DECORATION_SCALE.min, DECORATION_SCALE.max) }))
+    : [];
   state.tank.devices = state.tank.devices && typeof state.tank.devices === "object" ? state.tank.devices : fresh.tank.devices;
-  state.tank.devices.instances = Array.isArray(state.tank.devices.instances) ? state.tank.devices.instances : [];
+  state.tank.devices.instances = Array.isArray(state.tank.devices.instances)
+    ? state.tank.devices.instances.map((item) => ({ ...item, scale: clamp(finiteNumber(item?.scale, DEVICE_SCALE.default), DEVICE_SCALE.min, DEVICE_SCALE.max) }))
+    : [];
   state.tank.devices.slots = state.tank.devices.slots && typeof state.tank.devices.slots === "object" ? state.tank.devices.slots : {};
   state.tank.foods = Array.isArray(state.tank.foods)
     ? state.tank.foods.filter((food) => food && typeof food.id === "string" && finiteNumber(food.expiresAt, 0) > now)
@@ -82,4 +88,8 @@ function finiteNumber(value, fallback) {
 
 function finiteInt(value, fallback) {
   return Math.floor(finiteNumber(value, fallback));
+}
+
+function clamp(value, minimum, maximum) {
+  return Math.max(minimum, Math.min(maximum, value));
 }

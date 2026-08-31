@@ -1,7 +1,9 @@
 import {
   DECORATION_BY_ID,
+  DECORATION_SCALE,
   COIN_DROP_INTERVAL_MS,
   DEVICE_BY_ID,
+  DEVICE_SCALE,
   FOOD_LIFETIME_MS,
   FOOD_SATIETY,
   HELPER_BY_ID,
@@ -242,7 +244,7 @@ const COMMANDS = {
     if (state.tank.helpers.some((item) => item.kind === helperId)) return fail("ALREADY_OWNED");
     if (!devMode && state.player.coins < config.price) return fail("NOT_ENOUGH_COINS");
     if (!devMode) state.player.coins -= config.price;
-    state.tank.helpers.push({ id: makeId("helper"), kind: helperId, acquiredAt: now, satiety: 80, hungrySince: 0, lastPassiveFeedAt: 0, lastDailyWorkDayKey: "", behaviorSeed: randomInt(state.rng, 1, 0x7fffffff), position: { x: 0.3 + nextRandom(state.rng) * 0.4, y: 0.86 } });
+    state.tank.helpers.push({ id: makeId("helper"), kind: helperId, acquiredAt: now, satiety: config.drainPerHour > 0 ? 80 : 100, hungrySince: 0, lastPassiveFeedAt: 0, lastDailyWorkDayKey: "", behaviorSeed: randomInt(state.rng, 1, 0x7fffffff), position: { x: 0.3 + nextRandom(state.rng) * 0.4, y: 0.86 } });
     events.push({ type: "helperAdded", helperId });
     return ok();
   },
@@ -254,7 +256,7 @@ const COMMANDS = {
     if (state.tank.devices.instances.some((item) => item.catalogId === deviceId)) return fail("ALREADY_OWNED");
     if (!devMode && state.player.coins < config.price) return fail("NOT_ENOUGH_COINS");
     if (!devMode) state.player.coins -= config.price;
-    const instance = { id: makeId("device"), catalogId: deviceId, purchasedAt: now, state: {}, schedule: null };
+    const instance = { id: makeId("device"), catalogId: deviceId, purchasedAt: now, scale: DEVICE_SCALE.default, state: {}, schedule: null };
     if (config.capacity) instance.state = { ammo: config.capacity, intervalMs: config.intervalMs, nextRunAt: now + config.intervalMs };
     if (deviceId === "hang-on-filter") instance.state.cartridgeUntil = now + 7 * 24 * 3_600_000;
     if (["warm-lamp", "uv-sterilizer"].includes(deviceId)) instance.schedule = { timeZone: "Asia/Taipei", startMinute: 480, durationMinutes: 720 };
@@ -284,7 +286,7 @@ const COMMANDS = {
     if (!devMode) state.player.coins -= config.price;
     const count = state.tank.decorations.length;
     const instanceId = makeId("decor");
-    state.tank.decorations.push({ id: instanceId, catalogId: decorationId, x: 0.12 + (count % 6) * 0.14, y: 0.86 - Math.floor(count / 6) * 0.10, rotation: 0 });
+    state.tank.decorations.push({ id: instanceId, catalogId: decorationId, x: 0.12 + (count % 6) * 0.14, y: 0.86 - Math.floor(count / 6) * 0.10, rotation: 0, scale: DECORATION_SCALE.default });
     events.push({ type: "decorationAdded", decorationId, instanceId });
     return ok();
   },
@@ -298,6 +300,26 @@ const COMMANDS = {
     decoration.x = clamp(normalizedX, 0.06, 0.94);
     decoration.y = clamp(normalizedY, 0.20, 0.90);
     events.push({ type: "decorationMoved", instanceId });
+    return ok();
+  },
+
+  RESIZE_DECORATION(state, { instanceId, scale }, _now, events) {
+    const decoration = state.tank.decorations.find((item) => item.id === instanceId);
+    const normalizedScale = Number(scale);
+    if (!decoration) return fail("DECORATION_NOT_FOUND");
+    if (!Number.isFinite(normalizedScale)) return fail("INVALID_OBJECT_SCALE");
+    decoration.scale = clamp(normalizedScale, DECORATION_SCALE.min, DECORATION_SCALE.max);
+    events.push({ type: "decorationResized", instanceId, scale: decoration.scale });
+    return ok();
+  },
+
+  RESIZE_DEVICE(state, { instanceId, scale }, _now, events) {
+    const device = state.tank.devices.instances.find((item) => item.id === instanceId);
+    const normalizedScale = Number(scale);
+    if (!device) return fail("DEVICE_NOT_FOUND");
+    if (!Number.isFinite(normalizedScale)) return fail("INVALID_OBJECT_SCALE");
+    device.scale = clamp(normalizedScale, DEVICE_SCALE.min, DEVICE_SCALE.max);
+    events.push({ type: "deviceResized", instanceId, scale: device.scale });
     return ok();
   },
 
@@ -338,7 +360,7 @@ function claimTutorial(state, id, reward, events) {
   if (state.tutorial.claimedRewardIds.includes(id) || state.tutorial.step !== id) return;
   state.tutorial.claimedRewardIds.push(id);
   state.player.coins += reward.coins || 0;
-  if (reward.decorationId && state.tank.decorations.length < 10) state.tank.decorations.push({ id: makeId("decor"), catalogId: reward.decorationId, x: 0.18, y: 0.85, rotation: 0 });
+  if (reward.decorationId && state.tank.decorations.length < 10) state.tank.decorations.push({ id: makeId("decor"), catalogId: reward.decorationId, x: 0.18, y: 0.85, rotation: 0, scale: DECORATION_SCALE.default });
   const order = ["buy-first-egg", "hatch-first-egg", "feed-first-fish", "clean-first-algae"];
   state.tutorial.step = order[order.indexOf(id) + 1] || "complete";
   events.push({ type: "tutorialAdvanced", step: state.tutorial.step });
@@ -360,5 +382,5 @@ export const ERROR_MESSAGES = {
   NO_WAFER: "背包沒有藻錠。", NO_HUNGRY_HELPER: "目前沒有需要藻錠的清潔生物。", FISH_NOT_SICK: "這隻魚不需要治療。",
   NO_MEDICINE: "背包沒有藥水。", CANNOT_ACCELERATE: "目前不能加速。", NOT_ENOUGH_GEMS: "寶石不足。", CANNOT_REVIVE: "已超過復活期限。",
   FISH_NOT_FOUND: "找不到這隻魚。", CANNOT_SELL: "目前不能出售。", UNKNOWN_ITEM: "找不到商品。", ALREADY_OWNED: "已經擁有。",
-  NO_FEEDER: "尚未安裝餵食器。", DECORATION_LIMIT: "魚缸最多擺放 10 件裝飾。", DECORATION_NOT_FOUND: "找不到這件裝飾。", INVALID_DECORATION_POSITION: "請把裝飾放在魚缸內。", NO_REWARD: "目前沒有漂流禮物。", INVALID_NAME: "名稱不能空白。",
+  NO_FEEDER: "尚未安裝餵食器。", DEVICE_NOT_FOUND: "找不到這台設備。", DECORATION_LIMIT: "魚缸最多擺放 10 件裝飾。", DECORATION_NOT_FOUND: "找不到這件裝飾。", INVALID_DECORATION_POSITION: "請把裝飾放在魚缸內。", INVALID_OBJECT_SCALE: "請選擇有效的物件大小。", NO_REWARD: "目前沒有漂流禮物。", INVALID_NAME: "名稱不能空白。",
 };

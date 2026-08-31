@@ -122,7 +122,21 @@ test("decorations can be moved and their normalized position is clamped", () => 
     x: 0.94,
     y: 0.42,
     rotation: 0,
+    scale: 1.45,
   });
+});
+
+test("decoration and device display scales are customizable and clamped", () => {
+  const core = new GameCore(createFreshState(START), { devMode: true });
+  const decoration = core.dispatch("BUY_DECORATION", { decorationId: "starfish" }, "scale-buy-decor", START);
+  const decorationId = decoration.events.find((event) => event.type === "decorationAdded").instanceId;
+  const resizedDecoration = core.dispatch("RESIZE_DECORATION", { instanceId: decorationId, scale: 9 }, "scale-decor", START);
+  assert.equal(resizedDecoration.state.tank.decorations[0].scale, 2.5);
+
+  core.dispatch("BUY_DEVICE", { deviceId: "bubble-stone" }, "scale-buy-device", START);
+  const deviceId = core.snapshot().tank.devices.instances[0].id;
+  const resizedDevice = core.dispatch("RESIZE_DEVICE", { instanceId: deviceId, scale: 0.1 }, "scale-device", START);
+  assert.equal(resizedDevice.state.tank.devices.instances[0].scale, 0.75);
 });
 
 test("ownership prerequisites replace levels and fish count never blocks purchases", () => {

@@ -72,6 +72,34 @@ test("fish without a catalog purchase price do not create periodic coins", () =>
   assert.equal(state.tank.coinDrops.length, 0);
 });
 
+test("coin hermit crab automatically collects online coin drops", () => {
+  const state = createFreshState(START);
+  state.tank.helpers.push({ id: "collector", kind: "coin-hermit-crab", satiety: 100 });
+  state.tank.coinDrops.push({ id: "coin-existing", value: 75, expiresAt: START + 60_000 });
+
+  const report = simulate(state, START + 1_000);
+  assert.equal(state.player.coins, 375);
+  assert.equal(state.tank.coinDrops.length, 0);
+  assert.equal(report.coinsCollected, 75);
+  assert.equal(report.coinDropsCollected, 1);
+});
+
+test("coin hermit crab calculates offline income without duplicate payouts", () => {
+  const state = createFreshState(START);
+  state.tank.helpers.push({ id: "collector", kind: "coin-hermit-crab", satiety: 100 });
+  state.tank.fishes.push({ ...movingFish("offline-collected", 80), acquiredAt: START, nextCoinAt: START + 30_000 });
+
+  const report = simulate(state, START + 90_000, { offline: true });
+  assert.equal(report.coinDropsCollected, 3);
+  assert.equal(report.coinsCollected, 12);
+  assert.equal(state.player.coins, 312);
+  assert.equal(state.tank.coinDrops.length, 0);
+
+  const duplicate = simulate(state, START + 90_000, { offline: true });
+  assert.equal(duplicate.coinsCollected, 0);
+  assert.equal(state.player.coins, 312);
+});
+
 test("animal steering remains finite and inside the aquarium", () => {
   const fish = {
     id: "fish-1",

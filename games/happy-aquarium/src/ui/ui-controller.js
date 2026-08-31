@@ -1,5 +1,4 @@
-import { ASSET_INSETS, DECORATIONS, DEVICES, HELPERS, SPECIES, SPECIES_BY_ID } from "../config/game-config.js";
-import { fishSellPrice } from "../core/calculations.js";
+import { ASSET_INSETS, DECORATIONS, DECORATION_SCALE, DEVICES, DEVICE_SCALE, HELPERS, SPECIES } from "../config/game-config.js";
 import { ERROR_MESSAGES } from "../core/game-core.js";
 import { missingRequirements, requirementNames } from "../core/unlocks.js";
 import { runtimeUrl } from "../phaser/asset-registry.js";
@@ -56,6 +55,11 @@ export class UIController {
       const payload = this.selected?.type === "fish" ? { fishId: this.selected.id } : {};
       this.runCommand(button.dataset.command, payload);
     });
+    this.elements.selection.addEventListener("change", (event) => {
+      const input = event.target.closest("input[data-scale-command]");
+      if (!input || !this.selected) return;
+      this.runCommand(input.dataset.scaleCommand, { instanceId: this.selected.id, scale: Number(input.value) });
+    });
     byId("tank-name-button").addEventListener("click", () => this.renameTank());
     byId("settings-button").addEventListener("click", () => this.openSettings());
   }
@@ -86,7 +90,7 @@ export class UIController {
         price: item.eggPrice, missing: this.devMode ? [] : missingRequirements(this.snapshot, item), owned: false, command: "BUY_EGG", field: "speciesId", id: item.id, devMode: this.devMode,
       }));
     } else if (this.currentTab === "helpers") {
-      items = HELPERS.map((item) => card({ preview: imagePreview(runtimeUrl(`helpers/${item.id}/${item.id}-idle.png`), ASSET_INSETS.helpers[`${item.id}-idle`]), title: item.name, subtitle: `清潔衰減 -${item.reduction * 100}%`, price: item.price, missing: this.devMode ? [] : missingRequirements(this.snapshot, item), owned: ownedHelpers.has(item.id), command: "BUY_HELPER", field: "helperId", id: item.id, devMode: this.devMode }));
+      items = HELPERS.map((item) => card({ preview: imagePreview(runtimeUrl(`helpers/${item.id}/${item.id}-idle.png`), ASSET_INSETS.helpers[`${item.id}-idle`]), title: item.name, subtitle: helperDescription(item), price: item.price, missing: this.devMode ? [] : missingRequirements(this.snapshot, item), owned: ownedHelpers.has(item.id), command: "BUY_HELPER", field: "helperId", id: item.id, devMode: this.devMode }));
     } else if (this.currentTab === "devices") {
       items = DEVICES.map((item) => card({ preview: spritePreview(runtimeUrl(`devices/${item.id}/${item.id}-active.png`), "strip", ASSET_INSETS.devices[item.id]), title: item.name, subtitle: deviceDescription(item), price: item.price, missing: this.devMode ? [] : missingRequirements(this.snapshot, item), owned: ownedDevices.has(item.id), command: "BUY_DEVICE", field: "deviceId", id: item.id, devMode: this.devMode }));
     } else {
@@ -101,19 +105,15 @@ export class UIController {
       return;
     }
     if (this.selected.type === "fish") {
-      const fish = this.snapshot.tank.fishes.find((item) => item.id === this.selected.id);
-      if (!fish) { this.selected = null; this.elements.selection.hidden = true; return; }
-      const species = SPECIES_BY_ID[fish.speciesId];
-      const price = fishSellPrice(fish);
-      this.elements.selection.innerHTML = `<button class="selection-close" type="button" data-close>×</button><span class="eyebrow">SELECTED FISH</span><h2>${escapeHtml(fish.name)}</h2><p>${species.name} · ${stageName(fish.stage)} · ${healthName(fish.health)}</p><div class="meter"><span>飽食 ${Math.round(fish.satiety)}</span><progress max="100" value="${fish.satiety}"></progress></div><div class="meter"><span>成長 ${Math.floor(fish.growth)}%</span><progress max="100" value="${fish.growth}"></progress></div><div class="selection-actions">${fish.health === "sick" ? '<button data-command="USE_MEDICINE">使用藥水</button>' : ""}${fish.health === "dead" ? '<button data-command="REVIVE_FISH">3 寶石復活</button>' : ""}${fish.growth < 100 && fish.health !== "dead" ? '<button data-command="ACCELERATE_FISH">1 寶石加速</button>' : ""}${price > 0 ? `<button class="danger" data-command="SELL_FISH">出售 ${formatNumber(price)}</button>` : ""}</div>`;
-      this.elements.selection.querySelector("[data-close]").addEventListener("click", () => { this.selected = null; this.renderSelection(); });
-      this.elements.selection.hidden = false;
+      this.elements.selection.hidden = true;
       return;
     }
     if (this.selected.type === "helper") {
       const helper = this.snapshot.tank.helpers.find((item) => item.id === this.selected.id);
       if (!helper) return;
-      this.elements.selection.innerHTML = `<button class="selection-close" type="button" data-close>×</button><span class="eyebrow">CLEANING HELPER</span><h2>${HELPERS.find((item) => item.id === helper.kind)?.name}</h2><p>飽食 ${Math.round(helper.satiety)} / 100</p><button data-command="USE_WAFER">投餵藻錠</button>`;
+      const config = HELPERS.find((item) => item.id === helper.kind);
+      const collector = config?.role === "coin-collector";
+      this.elements.selection.innerHTML = `<button class="selection-close" type="button" data-close>×</button><span class="eyebrow">HELPER</span><h2>${config?.name}</h2><p>${collector ? "會在線上與離線期間自動收集金幣" : `飽食 ${Math.round(helper.satiety)} / 100`}</p>${collector ? "" : '<button data-command="USE_WAFER">投餵藻錠</button>'}`;
       this.elements.selection.querySelector("[data-close]").addEventListener("click", () => { this.selected = null; this.renderSelection(); });
       this.elements.selection.hidden = false;
       return;
@@ -123,15 +123,25 @@ export class UIController {
       if (!device) return;
       const config = DEVICES.find((item) => item.id === device.catalogId);
       const feeder = config.slot === "feeder";
-      this.elements.selection.innerHTML = `<button class="selection-close" type="button" data-close>×</button><span class="eyebrow">DEVICE</span><h2>${config.name}</h2><p>${feeder ? `料倉 ${device.state.ammo} / ${config.capacity}` : deviceDescription(config)}</p>${feeder ? '<button data-command="REFILL_FEEDER">免費補滿</button>' : ""}`;
+      this.elements.selection.innerHTML = `<button class="selection-close" type="button" data-close>×</button><span class="eyebrow">DEVICE</span><h2>${config.name}</h2><p>${feeder ? `料倉 ${device.state.ammo} / ${config.capacity}` : deviceDescription(config)}</p>${scaleControl("RESIZE_DEVICE", device.scale ?? DEVICE_SCALE.default, DEVICE_SCALE)}${feeder ? '<button data-command="REFILL_FEEDER">免費補滿</button>' : ""}`;
+      this.elements.selection.querySelector("[data-close]").addEventListener("click", () => { this.selected = null; this.renderSelection(); });
+      this.elements.selection.hidden = false;
+      return;
+    }
+    if (this.selected.type === "decoration") {
+      const decoration = this.snapshot.tank.decorations.find((item) => item.id === this.selected.id);
+      if (!decoration) { this.selected = null; this.elements.selection.hidden = true; return; }
+      const config = DECORATIONS.find((item) => item.id === decoration.catalogId);
+      this.elements.selection.innerHTML = `<button class="selection-close" type="button" data-close>×</button><span class="eyebrow">DECORATION</span><h2>${config?.name}</h2><p>拖曳可改變位置</p>${scaleControl("RESIZE_DECORATION", decoration.scale ?? DECORATION_SCALE.default, DECORATION_SCALE)}`;
       this.elements.selection.querySelector("[data-close]").addEventListener("click", () => { this.selected = null; this.renderSelection(); });
       this.elements.selection.hidden = false;
     }
   }
 
-  selectFish(id) { this.selected = { type: "fish", id }; this.renderSelection(); }
+  selectFish(id) { this.selected = { type: "fish", id }; this.elements.selection.hidden = true; }
   selectHelper(id) { this.selected = { type: "helper", id }; this.renderSelection(); }
   selectDevice(id) { this.selected = { type: "device", id }; this.renderSelection(); }
+  selectDecoration(id) { this.selected = { type: "decoration", id }; this.renderSelection(); }
 
   runCommand(type, payload = {}) {
     const result = this.core.dispatch(type, payload);
@@ -140,8 +150,10 @@ export class UIController {
   }
 
   useMedicineOnSelected() {
-    if (this.selected?.type !== "fish") return this.toast("請先點選一隻生病的魚。");
-    this.runCommand("USE_MEDICINE", { fishId: this.selected.id });
+    const selected = this.selected?.type === "fish" ? this.snapshot.tank.fishes.find((fish) => fish.id === this.selected.id && fish.health === "sick") : null;
+    const target = selected || this.snapshot.tank.fishes.find((fish) => fish.health === "sick");
+    if (!target) return this.toast("目前沒有需要治療的魚。");
+    this.runCommand("USE_MEDICINE", { fishId: target.id });
   }
 
   toast(message) {
@@ -155,7 +167,7 @@ export class UIController {
     if (!report || report.elapsedMs < 60_000) return;
     const hours = Math.floor(report.elapsedMs / 3_600_000);
     const minutes = Math.floor((report.elapsedMs % 3_600_000) / 60_000);
-    this.elements.offline.innerHTML = `<button type="button" aria-label="關閉">×</button><strong>離線 ${hours} 小時 ${minutes} 分</strong><span>孵化 ${report.hatched} · 長成 ${report.becameAdult} · 自動餵食 ${report.autoFeeds} · 新禮物 ${report.rewardsFound}</span>`;
+    this.elements.offline.innerHTML = `<button type="button" aria-label="關閉">×</button><strong>離線 ${hours} 小時 ${minutes} 分</strong><span>孵化 ${report.hatched} · 長成 ${report.becameAdult} · 自動餵食 ${report.autoFeeds} · 收幣 ${formatNumber(report.coinsCollected)} · 新禮物 ${report.rewardsFound}</span>`;
     this.elements.offline.hidden = false;
     this.elements.offline.querySelector("button").addEventListener("click", () => { this.elements.offline.hidden = true; });
   }
@@ -201,8 +213,10 @@ function deviceDescription(item) {
   if (item.growthMultiplier) return "成長速度 +10%";
   return "阻止新的低水質疾病";
 }
-function stageName(stage) { return ({ egg: "魚卵", fry: "幼魚", juvenile: "亞成魚", adult: "成魚" })[stage] || stage; }
-function healthName(health) { return ({ healthy: "健康", sick: "生病", dead: "死亡" })[health] || health; }
+function helperDescription(item) { return item.role === "coin-collector" ? "自動收集線上與離線金幣" : `清潔衰減 -${item.reduction * 100}%`; }
+function scaleControl(command, value, range) {
+  return `<label class="meter"><span>大小 ${Number(value).toFixed(2)}×</span><input type="range" min="${range.min}" max="${range.max}" step="0.05" value="${value}" data-scale-command="${command}" /></label>`;
+}
 function tutorialMessage(step) { return step === "complete" ? "新手引導完成！獲得水榕。" : "新手任務進展，獎勵已領取。"; }
 function formatNumber(value) { return new Intl.NumberFormat("zh-TW").format(Math.floor(Number(value) || 0)); }
 function escapeHtml(value) { return String(value).replace(/[&<>"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char]); }

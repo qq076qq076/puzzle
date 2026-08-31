@@ -31,11 +31,13 @@ export function simulate(state, now = Date.now(), { offline = false } = {}) {
   updateHelpers(state, elapsed, to, report);
   runAutoFeeder(state, from, to, report, offline);
   const warmMultiplier = isDeviceActive(state, "warm-lamp", to) ? 1.1 : 1;
+  const coinCollectorActive = state.tank.helpers.some((helper) => helper.kind === "coin-hermit-crab");
 
   for (const fish of state.tank.fishes) {
     updateFish(state, fish, elapsed, to, warmMultiplier, offline, report);
-    updateFishCoinDrop(state, fish, from, to, offline, report);
+    updateFishCoinDrop(state, fish, from, to, offline, coinCollectorActive, report);
   }
+  if (coinCollectorActive) collectDroppedCoins(state, report);
 
   accrueRewards(state, to, report);
   state.lastProcessedAt = now;
@@ -43,7 +45,7 @@ export function simulate(state, now = Date.now(), { offline = false } = {}) {
   return report;
 }
 
-function updateFishCoinDrop(state, fish, from, now, offline, report) {
+function updateFishCoinDrop(state, fish, from, now, offline, coinCollectorActive, report) {
   if (fish.stage === "egg" || fish.health === "dead") return;
   const purchasePrice = Number(SPECIES_BY_ID[fish.speciesId]?.eggPrice);
   const coinValue = Number.isFinite(purchasePrice) && purchasePrice > 0 ? Math.floor(purchasePrice * 0.1) : 0;
@@ -51,7 +53,16 @@ function updateFishCoinDrop(state, fish, from, now, offline, report) {
   fish.nextCoinAt = Number.isFinite(nextAt) && nextAt > 0 ? nextAt : Math.max(from, Number(fish.acquiredAt) || from) + COIN_DROP_INTERVAL_MS;
   if (fish.nextCoinAt > now) return;
   if (offline) {
-    fish.nextCoinAt = now + COIN_DROP_INTERVAL_MS;
+    if (coinCollectorActive && coinValue > 0) {
+      const count = Math.floor((now - fish.nextCoinAt) / COIN_DROP_INTERVAL_MS) + 1;
+      const value = count * coinValue;
+      state.player.coins += value;
+      report.coinsCollected += value;
+      report.coinDropsCollected += count;
+      fish.nextCoinAt += count * COIN_DROP_INTERVAL_MS;
+    } else {
+      fish.nextCoinAt = now + COIN_DROP_INTERVAL_MS;
+    }
     return;
   }
   if (coinValue > 0 && state.tank.coinDrops.length < COIN_DROP_LIMIT) {
@@ -70,6 +81,15 @@ function updateFishCoinDrop(state, fish, from, now, offline, report) {
     report.coinsDropped += 1;
   }
   fish.nextCoinAt = now + COIN_DROP_INTERVAL_MS;
+}
+
+function collectDroppedCoins(state, report) {
+  if (state.tank.coinDrops.length === 0) return;
+  const value = state.tank.coinDrops.reduce((sum, coin) => sum + Math.max(0, Math.floor(Number(coin.value) || 0)), 0);
+  report.coinDropsCollected += state.tank.coinDrops.length;
+  report.coinsCollected += value;
+  state.player.coins += value;
+  state.tank.coinDrops = [];
 }
 
 export function feedHungriestFish(state, pelletCount = 5) {
@@ -237,5 +257,5 @@ function makeSick(fish, now, report) {
 }
 
 function emptyReport(elapsedMs) {
-  return { elapsedMs, hatched: 0, becameAdult: 0, becameSick: 0, died: 0, autoFeeds: 0, fishFed: 0, helperActions: 0, rewardsFound: 0, coinsDropped: 0, cleanlinessLost: 0 };
+  return { elapsedMs, hatched: 0, becameAdult: 0, becameSick: 0, died: 0, autoFeeds: 0, fishFed: 0, helperActions: 0, rewardsFound: 0, coinsDropped: 0, coinDropsCollected: 0, coinsCollected: 0, cleanlinessLost: 0 };
 }

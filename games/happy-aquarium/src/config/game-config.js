@@ -35,6 +35,7 @@ export const HELPERS = [
   { id: "apple-snail", name: "蘋果螺", requires: ["goby"], price: 800, reduction: 0.20, drainPerHour: 0.75, movementSpeed: 10 },
   { id: "cleaner-shrimp", name: "清潔蝦", requires: ["clownfish"], price: 4500, reduction: 0.15, drainPerHour: 1, movementSpeed: 18 },
   { id: "pleco", name: "清道夫魚", requires: ["cleaner-shrimp"], price: 9000, reduction: 0.25, drainPerHour: 35 / 24, movementSpeed: 24 },
+  { id: "coin-hermit-crab", name: "收幣寄居蟹", requires: ["pleco"], price: 18000, reduction: 0, drainPerHour: 0, movementSpeed: 30, role: "coin-collector" },
 ];
 
 export const DEVICES = [
@@ -69,13 +70,16 @@ export const DEVICE_BY_ID = Object.fromEntries(DEVICES.map((item) => [item.id, i
 export const DECORATION_BY_ID = Object.fromEntries(DECORATIONS.map((item) => [item.id, item]));
 
 export const DEVICE_PLACEMENTS = {
-  "bubble-stone": { x: 0.18, y: 0.86, scale: 0.90, depth: 420 },
-  "basic-feeder": { x: 0.84, y: 0.17, scale: 0.90, depth: 420 },
-  "advanced-feeder": { x: 0.84, y: 0.17, scale: 0.90, depth: 420 },
-  "warm-lamp": { x: 0.67, y: 0.13, scale: 0.90, depth: 420 },
-  "hang-on-filter": { x: 0.08, y: 0.22, scale: 0.90, depth: 420 },
-  "uv-sterilizer": { x: 0.13, y: 0.34, scale: 0.90, depth: 420 },
+  "bubble-stone": { x: 0.18, y: 0.86, scale: 1.25, depth: 420 },
+  "basic-feeder": { x: 0.84, y: 0.17, scale: 1.25, depth: 420 },
+  "advanced-feeder": { x: 0.84, y: 0.17, scale: 1.25, depth: 420 },
+  "warm-lamp": { x: 0.67, y: 0.13, scale: 1.25, depth: 420 },
+  "hang-on-filter": { x: 0.08, y: 0.22, scale: 1.25, depth: 420 },
+  "uv-sterilizer": { x: 0.13, y: 0.34, scale: 1.25, depth: 420 },
 };
+
+export const DECORATION_SCALE = { min: 0.75, max: 2.50, default: 1.45 };
+export const DEVICE_SCALE = { min: 0.75, max: 2.00, default: 1.25 };
 
 export const STAGE_MULTIPLIER = { egg: 0, fry: 0.25, juvenile: 0.60, adult: 1 };
 export const STAGE_SCALE = { egg: 0.75, fry: 0.40, juvenile: 0.70, adult: 1 };

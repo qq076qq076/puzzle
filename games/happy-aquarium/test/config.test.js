@@ -26,6 +26,16 @@ test("every decoration and collectible coin has a runtime animation strip", () =
   assert.deepEqual(pngSize(new URL("../assets/runtime/objects/coin-spin.png", import.meta.url)), [256, 64]);
 });
 
+test("every helper has complete runtime states", () => {
+  for (const helper of HELPERS) {
+    const directory = new URL(`../assets/runtime/helpers/${helper.id}/`, import.meta.url);
+    assert.deepEqual(pngSize(new URL(`${helper.id}-idle.png`, directory)), [64, 64], `${helper.id} idle`);
+    assert.deepEqual(pngSize(new URL(`${helper.id}-work.png`, directory)), [256, 64], `${helper.id} work`);
+    assert.deepEqual(pngSize(new URL(`${helper.id}-hungry.png`, directory)), [256, 64], `${helper.id} hungry`);
+  }
+  assert.equal(HELPERS.find((item) => item.id === "coin-hermit-crab")?.role, "coin-collector");
+});
+
 test("every fish has a four-frame turn strip and the aquarium has a full background", () => {
   for (const species of SPECIES) {
     assert.deepEqual(pngSize(new URL(`../assets/runtime/fish/${species.id}/${species.id}-turn.png`, import.meta.url)), [256, 64], species.id);

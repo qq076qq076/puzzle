@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { ASSET_INSETS, COIN_FALL_SPEED_PX, DEVICE_PLACEMENTS, FOOD_FALL_SPEED_PX, GAME_HEIGHT, GAME_WIDTH, HELPERS, SPECIES_BY_ID, STAGE_SCALE } from "../../config/game-config.js";
+import { ASSET_INSETS, COIN_FALL_SPEED_PX, DECORATION_SCALE, DEVICE_PLACEMENTS, FOOD_FALL_SPEED_PX, GAME_HEIGHT, GAME_WIDTH, HELPERS, SPECIES_BY_ID, STAGE_SCALE } from "../../config/game-config.js";
 import { createAgent, createHelperAgent, stepAgents, stepHelperAgent } from "../../core/animal-ai.js";
 import { fallingDropY, fallingFoodY } from "../../core/calculations.js";
 import { isDeviceActive } from "../../core/simulation.js";
@@ -72,7 +72,6 @@ export class AquariumScene extends Phaser.Scene {
         view?.sprite.destroy();
         const texture = kind === "egg" ? objectTextureKey("fish-egg-hatch") : fishTextureKey(fish.speciesId);
         const sprite = this.add.sprite((fish.position?.x ?? 0.5) * GAME_WIDTH, (fish.position?.y ?? 0.5) * GAME_HEIGHT, this.textures.exists(texture) ? texture : "__AQUARIUM_MISSING");
-        sprite.setInteractive({ useHandCursor: true }).on("pointerdown", () => this.ui.selectFish(fish.id));
         const agent = createAgent(fish);
         view = { kind, sprite, agent, animation: "", renderFacing: agent.facing, turning: false };
         sprite.setFlipX(agent.facing < 0);
@@ -117,10 +116,11 @@ export class AquariumScene extends Phaser.Scene {
       let sprite = this.decorationViews.get(decoration.id);
       if (!sprite) {
         const texture = decorationTextureKey(decoration.catalogId);
-        sprite = this.add.sprite(decoration.x * GAME_WIDTH, decoration.y * GAME_HEIGHT, this.textures.exists(texture) ? texture : "__AQUARIUM_MISSING").setScale(1.18).setInteractive({ useHandCursor: true, draggable: true });
+        sprite = this.add.sprite(decoration.x * GAME_WIDTH, decoration.y * GAME_HEIGHT, this.textures.exists(texture) ? texture : "__AQUARIUM_MISSING").setScale(decoration.scale ?? DECORATION_SCALE.default).setInteractive({ useHandCursor: true, draggable: true });
         applySpriteInset(sprite, ASSET_INSETS.decorations[decoration.catalogId]);
         if (this.anims.exists(`${texture}:play`)) sprite.play(`${texture}:play`, true);
         this.input.setDraggable(sprite);
+        sprite.on("pointerdown", () => this.ui.selectDecoration(decoration.id));
         sprite.on("dragstart", () => {
           this.draggingDecorationId = decoration.id;
           if (this.pendingDecorationId === decoration.id) this.pendingDecorationId = null;
@@ -137,7 +137,7 @@ export class AquariumScene extends Phaser.Scene {
         });
         this.decorationViews.set(decoration.id, sprite);
       }
-      sprite.setPosition(decoration.x * GAME_WIDTH, decoration.y * GAME_HEIGHT).setDepth(240 + decoration.y * 150);
+      sprite.setPosition(decoration.x * GAME_WIDTH, decoration.y * GAME_HEIGHT).setScale(decoration.scale ?? DECORATION_SCALE.default).setDepth(240 + decoration.y * 150);
     }
   }
 
@@ -160,7 +160,7 @@ export class AquariumScene extends Phaser.Scene {
         sprite.on("pointerdown", () => this.ui.selectDevice(id));
         this.deviceViews.set(id, sprite);
       }
-      sprite.setPosition(placement.x * GAME_WIDTH, placement.y * GAME_HEIGHT).setScale(placement.scale).setDepth(placement.depth);
+      sprite.setPosition(placement.x * GAME_WIDTH, placement.y * GAME_HEIGHT).setScale(device.scale ?? placement.scale).setDepth(placement.depth);
       if (sprite.texture.key !== texture && this.textures.exists(texture)) sprite.setTexture(texture);
       applySpriteInset(sprite, ASSET_INSETS.devices[device.catalogId]);
       if (this.anims.exists(`${texture}:play`)) sprite.play(`${texture}:play`, true);
@@ -317,7 +317,7 @@ export class AquariumScene extends Phaser.Scene {
 
   playFishState(view) {
     const fish = view.fish;
-    const state = fish.health === "dead" ? "death" : fish.health === "sick" ? "sick" : fish.satiety < 25 ? "hungry" : "swim";
+    const state = fish.health === "dead" ? "death" : fish.health === "sick" ? "sick" : fish.satiety < 30 ? "hungry" : "swim";
     const key = `${fishTextureKey(fish.speciesId)}:${state}`;
     if (view.animation === key || !this.anims.exists(key)) return;
     view.sprite.play(key, true);

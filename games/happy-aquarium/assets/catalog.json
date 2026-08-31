@@ -3,7 +3,8 @@
   "helpers": [
     { "id": "apple-snail", "states": ["idle", "work", "hungry"] },
     { "id": "cleaner-shrimp", "states": ["idle", "work", "hungry"] },
-    { "id": "pleco", "states": ["idle", "work", "hungry"] }
+    { "id": "pleco", "states": ["idle", "work", "hungry"] },
+    { "id": "coin-hermit-crab", "states": ["idle", "work", "hungry"] }
   ],
   "devices": [
     { "id": "basic-feeder", "states": ["active", "empty"] },
@@ -43,7 +44,8 @@
       "late-and-legendary": ["stingray", "rainbow-mermaid"]
     },
     "helpers": {
-      "cleaning-creatures": ["apple-snail", "cleaner-shrimp", "pleco"]
+      "cleaning-creatures": ["apple-snail", "cleaner-shrimp", "pleco"],
+      "collectors": ["coin-hermit-crab"]
     },
     "devices": {
       "feeding": ["basic-feeder", "advanced-feeder"],
