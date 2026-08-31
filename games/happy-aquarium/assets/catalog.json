@@ -1,4 +1,5 @@
 {
+  "backgrounds": ["aquarium-background"],
   "helpers": [
     { "id": "apple-snail", "states": ["idle", "work", "hungry"] },
     { "id": "cleaner-shrimp", "states": ["idle", "work", "hungry"] },

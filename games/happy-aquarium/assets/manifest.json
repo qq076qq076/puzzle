@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "frameSize": 64,
   "frameCount": 4,
   "direction": "right",
@@ -10,6 +10,14 @@
     "columns": 4,
     "rows": 6,
     "idle": { "row": 0, "frame": 0 }
+  },
+  "turn": {
+    "filePattern": "runtime/fish/{id}/{id}-turn.png",
+    "width": 256,
+    "height": 64,
+    "frames": 4,
+    "fps": 12,
+    "mode": "once"
   },
   "states": {
     "idle": { "row": 0, "frame": 0, "frames": 1, "mode": "hold" },

@@ -20,6 +20,8 @@ export function runtimeUrl(relativePath) {
 }
 
 export function fishTextureKey(speciesId) { return `fish:${speciesId}`; }
+export function fishTurnTextureKey(speciesId) { return `fish-turn:${speciesId}`; }
+export function backgroundTextureKey(id) { return `background:${id}`; }
 export function helperTextureKey(helperId, state) { return `helper:${helperId}:${state}`; }
 export function deviceTextureKey(deviceId, state) { return `device:${deviceId}:${state}`; }
 export function objectTextureKey(objectId) { return `object:${objectId}`; }

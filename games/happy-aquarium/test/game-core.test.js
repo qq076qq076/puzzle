@@ -109,6 +109,22 @@ test("development mode unlocks free items and creates adult fish", () => {
   assert.equal(core.snapshot().player.coins, 0);
 });
 
+test("decorations can be moved and their normalized position is clamped", () => {
+  const core = new GameCore(createFreshState(START), { devMode: true });
+  const bought = core.dispatch("BUY_DECORATION", { decorationId: "starfish" }, "buy-decor", START);
+  const instanceId = bought.events.find((event) => event.type === "decorationAdded").instanceId;
+
+  const moved = core.dispatch("MOVE_DECORATION", { instanceId, x: 1.4, y: 0.42 }, "move-decor", START);
+  assert.equal(moved.ok, true);
+  assert.deepEqual(moved.state.tank.decorations[0], {
+    id: instanceId,
+    catalogId: "starfish",
+    x: 0.94,
+    y: 0.42,
+    rotation: 0,
+  });
+});
+
 test("ownership prerequisites replace levels and fish count never blocks purchases", () => {
   const state = createFreshState(START);
   state.player.coins = 10_000;

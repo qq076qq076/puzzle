@@ -15,6 +15,7 @@
 
 ```text
 runtime/
+├─ backgrounds/aquarium-background.png
 ├─ fish/<species-id>/<species-id>-states.png
 ├─ helpers/<helper-id>/
 ├─ devices/<device-id>/
@@ -59,7 +60,10 @@ for (const [state, row] of Object.entries(stateRows)) {
 
 - `runtime/objects/coin-spin.png` 為 `256×64`、4 幀水平 strip。
 - `runtime/decorations/<id>-animated.png` 為 `192×64`、3 幀水平 strip；原本 `64×64` 單圖保留作為輸入源。
+- `runtime/fish/<species-id>/<species-id>-turn.png` 為 `256×64`、4 幀水平回頭 strip。
+- `runtime/backgrounds/aquarium-background.png` 為 `1000×600` 魚缸背景；不包含可互動魚隻或裝飾。
 - `tools/build-animated-assets.py` 會把已核可的金幣圖組正規化為 runtime strip，並從現有裝飾單圖重建三幀水下擺動。
+- `tools/build-turn-and-background-assets.py` 會從已核可的 ImageGen 原稿建立 14 條回頭 strip 與正式背景。
 
 ## 維護
 

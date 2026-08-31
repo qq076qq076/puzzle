@@ -4,6 +4,7 @@ import { createAgent, createHelperAgent, stepAgents, stepHelperAgent } from "../
 import { fallingDropY, fallingFoodY } from "../../core/calculations.js";
 import { isDeviceActive } from "../../core/simulation.js";
 import {
+  backgroundTextureKey,
   decorationTextureKey,
   deviceTextureKey,
   fishTextureKey,
@@ -36,17 +37,10 @@ export class AquariumScene extends Phaser.Scene {
   }
 
   buildTank() {
-    const background = this.add.graphics().setDepth(-100);
-    background.fillGradientStyle(0x0fa5c8, 0x0a87b2, 0x075d82, 0x064768, 1);
-    background.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-    background.fillStyle(0xe4cf91, 1).fillRect(0, 530, GAME_WIDTH, 70);
-    background.fillStyle(0xc4a96b, 0.55).fillEllipse(500, 548, 980, 42);
-    background.lineStyle(8, 0xbaf3ff, 0.48).strokeRoundedRect(18, 24, 964, 552, 30);
-    background.lineStyle(2, 0xffffff, 0.26).lineBetween(30, 72, 970, 72);
-    for (let index = 0; index < 6; index += 1) {
-      const light = this.add.rectangle(120 + index * 180, 210, 70, 520, 0xcaf8ff, 0.045).setAngle(-10).setDepth(-90);
-      this.tweens.add({ targets: light, x: light.x + 45, alpha: { from: 0.025, to: 0.08 }, duration: 4200 + index * 300, yoyo: true, repeat: -1 });
-    }
+    this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, backgroundTextureKey("aquarium")).setDisplaySize(GAME_WIDTH, GAME_HEIGHT).setDepth(-100);
+    const glass = this.add.graphics().setDepth(900);
+    glass.lineStyle(7, 0xc8f8ff, 0.42).strokeRoundedRect(18, 24, 964, 552, 30);
+    glass.lineStyle(2, 0xffffff, 0.30).lineBetween(30, 72, 970, 72);
     this.bubbles = this.add.group();
     this.time.addEvent({ delay: 900, loop: true, callback: () => this.spawnAmbientBubble() });
   }
@@ -79,7 +73,9 @@ export class AquariumScene extends Phaser.Scene {
         const texture = kind === "egg" ? objectTextureKey("fish-egg-hatch") : fishTextureKey(fish.speciesId);
         const sprite = this.add.sprite((fish.position?.x ?? 0.5) * GAME_WIDTH, (fish.position?.y ?? 0.5) * GAME_HEIGHT, this.textures.exists(texture) ? texture : "__AQUARIUM_MISSING");
         sprite.setInteractive({ useHandCursor: true }).on("pointerdown", () => this.ui.selectFish(fish.id));
-        view = { kind, sprite, agent: createAgent(fish), animation: "" };
+        const agent = createAgent(fish);
+        view = { kind, sprite, agent, animation: "", renderFacing: agent.facing, turning: false };
+        sprite.setFlipX(agent.facing < 0);
         this.fishViews.set(fish.id, view);
       }
       view.fish = fish;
@@ -88,12 +84,7 @@ export class AquariumScene extends Phaser.Scene {
       if (kind === "egg") {
         view.sprite.setFrame(Math.min(3, Math.floor(fish.growth / 2.5)));
       } else {
-        const state = fish.health === "dead" ? "death" : fish.health === "sick" ? "sick" : fish.satiety < 25 ? "hungry" : "swim";
-        const key = `${fishTextureKey(fish.speciesId)}:${state}`;
-        if (view.animation !== key) {
-          view.sprite.play(key, true);
-          view.animation = key;
-        }
+        if (!view.turning) this.playFishState(view);
       }
     }
   }
@@ -126,9 +117,24 @@ export class AquariumScene extends Phaser.Scene {
       let sprite = this.decorationViews.get(decoration.id);
       if (!sprite) {
         const texture = decorationTextureKey(decoration.catalogId);
-        sprite = this.add.sprite(decoration.x * GAME_WIDTH, decoration.y * GAME_HEIGHT, this.textures.exists(texture) ? texture : "__AQUARIUM_MISSING").setScale(1.18);
+        sprite = this.add.sprite(decoration.x * GAME_WIDTH, decoration.y * GAME_HEIGHT, this.textures.exists(texture) ? texture : "__AQUARIUM_MISSING").setScale(1.18).setInteractive({ useHandCursor: true, draggable: true });
         applySpriteInset(sprite, ASSET_INSETS.decorations[decoration.catalogId]);
         if (this.anims.exists(`${texture}:play`)) sprite.play(`${texture}:play`, true);
+        this.input.setDraggable(sprite);
+        sprite.on("dragstart", () => {
+          this.draggingDecorationId = decoration.id;
+          if (this.pendingDecorationId === decoration.id) this.pendingDecorationId = null;
+          sprite.setTint(0xbffcff);
+        });
+        sprite.on("drag", (_pointer, dragX, dragY) => {
+          sprite.setPosition(Phaser.Math.Clamp(dragX, 60, 940), Phaser.Math.Clamp(dragY, 120, 540));
+          sprite.setDepth(240 + sprite.y * 0.25);
+        });
+        sprite.on("dragend", () => {
+          this.draggingDecorationId = null;
+          sprite.clearTint();
+          this.ui.runCommand("MOVE_DECORATION", { instanceId: decoration.id, x: sprite.x / GAME_WIDTH, y: sprite.y / GAME_HEIGHT });
+        });
         this.decorationViews.set(decoration.id, sprite);
       }
       sprite.setPosition(decoration.x * GAME_WIDTH, decoration.y * GAME_HEIGHT).setDepth(240 + decoration.y * 150);
@@ -218,9 +224,16 @@ export class AquariumScene extends Phaser.Scene {
   }
 
   handleTankPointer(pointer, currentlyOver = []) {
+    if (this.draggingDecorationId) return;
     if (currentlyOver.length > 0) return;
     const world = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
     if (world.x < 40 || world.x > 960 || world.y < 75 || world.y > 550) return;
+    if (this.pendingDecorationId) {
+      const instanceId = this.pendingDecorationId;
+      this.pendingDecorationId = null;
+      this.ui.runCommand("MOVE_DECORATION", { instanceId, x: world.x / GAME_WIDTH, y: world.y / GAME_HEIGHT });
+      return;
+    }
     this.ui.runCommand("FEED", { x: world.x / GAME_WIDTH, y: world.y / GAME_HEIGHT });
   }
 
@@ -249,7 +262,8 @@ export class AquariumScene extends Phaser.Scene {
         view.sprite.y += (95 - view.sprite.y) * Math.min(1, clamped * 1.8);
         view.sprite.setAngle(180);
       } else {
-        view.sprite.setPosition(view.agent.x, view.agent.y).setFlipX(view.agent.facing < 0).setAngle(view.fish.health === "sick" ? Math.sin(time / 500) * 12 : 0);
+        if (!view.turning && view.renderFacing !== view.agent.facing) this.playTurn(view);
+        view.sprite.setPosition(view.agent.x, view.agent.y).setAngle(view.fish.health === "sick" ? Math.sin(time / 500) * 12 : 0);
       }
       view.sprite.setDepth(100 + Math.floor(view.sprite.y));
     }
@@ -273,15 +287,50 @@ export class AquariumScene extends Phaser.Scene {
     if (event.type === "coinCollected") this.ui.toast(`+${event.value} 金幣`);
     if (event.type === "rewardOpened") this.ui.toast(event.message);
     if (["fishCured", "fishRevived", "fishGrew"].includes(event.type)) this.flash(0x9fffd0);
+    if (event.type === "decorationAdded") {
+      this.pendingDecorationId = event.instanceId;
+      this.decorationViews.get(event.instanceId)?.setTint(0xbffcff);
+      this.ui.toast("點擊魚缸選擇裝飾位置，或直接拖曳調整。");
+    }
+    if (event.type === "decorationMoved") this.decorationViews.get(event.instanceId)?.clearTint();
+  }
+
+  playTurn(view) {
+    const key = `${fishTextureKey(view.fish.speciesId)}:turn`;
+    if (!this.anims.exists(key)) {
+      view.renderFacing = view.agent.facing;
+      view.sprite.setFlipX(view.renderFacing < 0);
+      return;
+    }
+    view.turning = true;
+    const targetFacing = view.agent.facing;
+    view.animation = key;
+    view.sprite.setFlipX(view.renderFacing < 0).play(key, true);
+    view.sprite.once(`animationcomplete-${key}`, () => {
+      view.turning = false;
+      view.renderFacing = targetFacing;
+      view.sprite.setFlipX(view.renderFacing < 0);
+      view.animation = "";
+      this.playFishState(view);
+    });
+  }
+
+  playFishState(view) {
+    const fish = view.fish;
+    const state = fish.health === "dead" ? "death" : fish.health === "sick" ? "sick" : fish.satiety < 25 ? "hungry" : "swim";
+    const key = `${fishTextureKey(fish.speciesId)}:${state}`;
+    if (view.animation === key || !this.anims.exists(key)) return;
+    view.sprite.play(key, true);
+    view.animation = key;
   }
 
   playEating(fishId) {
     const view = this.fishViews.get(fishId);
-    if (!view || view.kind !== "fish") return;
+    if (!view || view.kind !== "fish" || view.turning) return;
     const key = `${fishTextureKey(view.fish.speciesId)}:eat`;
     if (!this.anims.exists(key)) return;
     view.sprite.play(key, true);
-    view.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => { view.animation = ""; });
+    view.sprite.once(`animationcomplete-${key}`, () => { view.animation = ""; this.playFishState(view); });
   }
 
   flash(color) {

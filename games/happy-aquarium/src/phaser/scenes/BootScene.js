@@ -1,9 +1,11 @@
 import Phaser from "phaser";
 import {
   catalog,
+  backgroundTextureKey,
   decorationTextureKey,
   deviceTextureKey,
   fishTextureKey,
+  fishTurnTextureKey,
   helperTextureKey,
   manifest,
   objectTextureKey,
@@ -17,7 +19,9 @@ export class BootScene extends Phaser.Scene {
   preload() {
     for (const species of manifest.species) {
       this.load.spritesheet(fishTextureKey(species.id), runtimeUrl(`fish/${species.id}/${species.id}-states.png`), { frameWidth: 64, frameHeight: 64 });
+      this.load.spritesheet(fishTurnTextureKey(species.id), runtimeUrl(`fish/${species.id}/${species.id}-turn.png`), { frameWidth: 64, frameHeight: 64 });
     }
+    this.load.image(backgroundTextureKey("aquarium"), runtimeUrl("backgrounds/aquarium-background.png"));
     for (const helper of catalog.helpers) {
       for (const state of helper.states) this.load.spritesheet(helperTextureKey(helper.id, state), runtimeUrl(`helpers/${helper.id}/${helper.id}-${state}.png`), { frameWidth: 64, frameHeight: 64 });
     }
@@ -48,6 +52,15 @@ export class BootScene extends Phaser.Scene {
           frames: this.anims.generateFrameNumbers(texture, { start: definition.row * 4, end: definition.row * 4 + definition.frames - 1 }),
           frameRate: definition.fps,
           repeat: definition.mode === "loop" ? -1 : 0,
+        });
+      }
+      const turnKey = `${texture}:turn`;
+      if (!this.anims.exists(turnKey)) {
+        this.anims.create({
+          key: turnKey,
+          frames: this.anims.generateFrameNumbers(fishTurnTextureKey(species.id), { start: 0, end: 3 }),
+          frameRate: 12,
+          repeat: 0,
         });
       }
     }

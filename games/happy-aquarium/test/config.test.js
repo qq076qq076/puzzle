@@ -26,6 +26,13 @@ test("every decoration and collectible coin has a runtime animation strip", () =
   assert.deepEqual(pngSize(new URL("../assets/runtime/objects/coin-spin.png", import.meta.url)), [256, 64]);
 });
 
+test("every fish has a four-frame turn strip and the aquarium has a full background", () => {
+  for (const species of SPECIES) {
+    assert.deepEqual(pngSize(new URL(`../assets/runtime/fish/${species.id}/${species.id}-turn.png`, import.meta.url)), [256, 64], species.id);
+  }
+  assert.deepEqual(pngSize(new URL("../assets/runtime/backgrounds/aquarium-background.png", import.meta.url)), [1000, 600]);
+});
+
 test("fish species have intentional display scales", () => {
   const scales = Object.fromEntries(SPECIES.map((item) => [item.id, item.displayScale]));
   for (const [id, scale] of Object.entries(scales)) assert.ok(scale >= 0.6 && scale <= 1.6, `${id} has an unreasonable scale`);
@@ -45,6 +52,10 @@ test("every helper moves and every device has a valid functional placement", () 
   }
   assert.ok(DEVICE_PLACEMENTS["bubble-stone"].y > DEVICE_PLACEMENTS["basic-feeder"].y);
   assert.ok(DEVICE_PLACEMENTS["hang-on-filter"].x < DEVICE_PLACEMENTS["warm-lamp"].x);
+});
+
+test("ten starter decoration types are immediately available", () => {
+  assert.equal(DECORATIONS.filter((item) => item.requires.length === 0).length, 10);
 });
 
 function pngSize(url) {

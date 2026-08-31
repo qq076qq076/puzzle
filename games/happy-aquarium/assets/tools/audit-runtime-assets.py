@@ -56,15 +56,17 @@ def audit(path: Path) -> dict:
         image = loaded.convert("RGBA")
         alpha = image.getchannel("A")
         corners = [alpha.getpixel(point) for point in ((0, 0), (image.width - 1, 0), (0, image.height - 1), (image.width - 1, image.height - 1))]
+        sprite_grid = path.relative_to(RUNTIME).parts[0] != "backgrounds"
         return {
             "path": path.relative_to(ROOT).as_posix(),
             "size": [image.width, image.height],
             "mode": loaded.mode,
-            "validGrid": image.width % FRAME == 0 and image.height % FRAME == 0,
+            "spriteGrid": sprite_grid,
+            "validGrid": not sprite_grid or (image.width % FRAME == 0 and image.height % FRAME == 0),
             "alphaRange": list(alpha.getextrema()),
             "opaqueCorners": sum(value > 8 for value in corners),
             "checkerboardScore": round(checkerboard_score(image), 4),
-            "frameFindings": frame_findings(image) if image.width % FRAME == 0 and image.height % FRAME == 0 else [],
+            "frameFindings": frame_findings(image) if sprite_grid and image.width % FRAME == 0 and image.height % FRAME == 0 else [],
         }
 
 
@@ -117,7 +119,7 @@ def main() -> None:
     for item in report:
         summary["files"] += 1
         summary["invalidGrid"] += not item["validGrid"]
-        summary["opaqueCorners"] += item["opaqueCorners"] > 0
+        summary["opaqueCorners"] += item["spriteGrid"] and item["opaqueCorners"] > 0
         summary["edgeTouchFiles"] += bool(item["frameFindings"])
         summary["checkerboardSuspects"] += item["checkerboardScore"] > 0.2
     print(json.dumps(summary, ensure_ascii=False, indent=2))

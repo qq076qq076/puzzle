@@ -283,8 +283,21 @@ const COMMANDS = {
     if (!devMode && state.player.coins < config.price) return fail("NOT_ENOUGH_COINS");
     if (!devMode) state.player.coins -= config.price;
     const count = state.tank.decorations.length;
-    state.tank.decorations.push({ id: makeId("decor"), catalogId: decorationId, x: 0.12 + (count % 6) * 0.14, y: 0.86 - Math.floor(count / 6) * 0.10, rotation: 0 });
-    events.push({ type: "decorationAdded", decorationId });
+    const instanceId = makeId("decor");
+    state.tank.decorations.push({ id: instanceId, catalogId: decorationId, x: 0.12 + (count % 6) * 0.14, y: 0.86 - Math.floor(count / 6) * 0.10, rotation: 0 });
+    events.push({ type: "decorationAdded", decorationId, instanceId });
+    return ok();
+  },
+
+  MOVE_DECORATION(state, { instanceId, x, y }, _now, events) {
+    const decoration = state.tank.decorations.find((item) => item.id === instanceId);
+    const normalizedX = Number(x);
+    const normalizedY = Number(y);
+    if (!decoration) return fail("DECORATION_NOT_FOUND");
+    if (!Number.isFinite(normalizedX) || !Number.isFinite(normalizedY)) return fail("INVALID_DECORATION_POSITION");
+    decoration.x = clamp(normalizedX, 0.06, 0.94);
+    decoration.y = clamp(normalizedY, 0.20, 0.90);
+    events.push({ type: "decorationMoved", instanceId });
     return ok();
   },
 
@@ -347,5 +360,5 @@ export const ERROR_MESSAGES = {
   NO_WAFER: "背包沒有藻錠。", NO_HUNGRY_HELPER: "目前沒有需要藻錠的清潔生物。", FISH_NOT_SICK: "這隻魚不需要治療。",
   NO_MEDICINE: "背包沒有藥水。", CANNOT_ACCELERATE: "目前不能加速。", NOT_ENOUGH_GEMS: "寶石不足。", CANNOT_REVIVE: "已超過復活期限。",
   FISH_NOT_FOUND: "找不到這隻魚。", CANNOT_SELL: "目前不能出售。", UNKNOWN_ITEM: "找不到商品。", ALREADY_OWNED: "已經擁有。",
-  NO_FEEDER: "尚未安裝餵食器。", DECORATION_LIMIT: "魚缸最多擺放 10 件裝飾。", NO_REWARD: "目前沒有漂流禮物。", INVALID_NAME: "名稱不能空白。",
+  NO_FEEDER: "尚未安裝餵食器。", DECORATION_LIMIT: "魚缸最多擺放 10 件裝飾。", DECORATION_NOT_FOUND: "找不到這件裝飾。", INVALID_DECORATION_POSITION: "請把裝飾放在魚缸內。", NO_REWARD: "目前沒有漂流禮物。", INVALID_NAME: "名稱不能空白。",
 };

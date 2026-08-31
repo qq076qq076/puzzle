@@ -48,10 +48,10 @@ export const DEVICES = [
 
 export const DECORATIONS = [
   ["anubias-plant", "水榕", [], 100, 2], ["java-fern", "爪哇蕨", [], 150, 3],
-  ["vallisneria-grass", "苦草", ["anubias-plant"], 220, 4], ["moss-ball", "莫絲球", ["anubias-plant"], 300, 5],
-  ["starfish", "海星", ["java-fern"], 500, 6], ["red-seaweed", "紅海藻", ["java-fern"], 450, 7],
-  ["shell-cluster", "貝殼組", ["java-fern"], 600, 7], ["driftwood-arch", "沉木拱", ["java-fern"], 750, 8],
-  ["pink-branch-coral", "粉枝珊瑚", ["red-seaweed"], 800, 9], ["blue-fan-coral", "藍扇珊瑚", ["red-seaweed"], 900, 10],
+  ["vallisneria-grass", "苦草", [], 220, 4], ["moss-ball", "莫絲球", [], 300, 5],
+  ["starfish", "海星", [], 500, 6], ["red-seaweed", "紅海藻", [], 450, 7],
+  ["shell-cluster", "貝殼組", [], 600, 7], ["driftwood-arch", "沉木拱", [], 750, 8],
+  ["pink-branch-coral", "粉枝珊瑚", [], 800, 9], ["blue-fan-coral", "藍扇珊瑚", [], 900, 10],
   ["string-lights", "燈串", ["red-seaweed"], 2800, 17], ["brain-coral", "腦珊瑚", ["driftwood-arch"], 1200, 12],
   ["rock-arch", "岩石拱", ["driftwood-arch"], 1200, 12], ["ceramic-vase", "陶瓷花瓶", ["driftwood-arch"], 1200, 11],
   ["pebble-cave", "礫石洞", ["rock-arch"], 1800, 16], ["bubble-conch", "氣泡海螺", ["rock-arch"], 1500, 14],
