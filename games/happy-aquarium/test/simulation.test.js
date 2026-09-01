@@ -122,19 +122,39 @@ test("animal steering remains finite and inside the aquarium", () => {
   assert.ok(Math.hypot(agent.vx, agent.vy) <= 70.001);
 });
 
-test("one food claim can only be consumed by one fish", () => {
+test("only fish below fifty satiety pursue and eat food", () => {
+  const fish = movingFish("threshold-fish", 50);
+  const agent = createAgent(fish);
+  const fishById = new Map([[fish.id, fish]]);
+  const food = { id: "threshold-food", x: agent.x, y: agent.y, claimedBy: null, consumed: false };
+
+  assert.deepEqual(stepAgents([agent], fishById, [food], 0), []);
+  assert.equal(agent.foodTargetId, null);
+  assert.equal(food.consumed, false);
+
+  fish.satiety = 49;
+  assert.deepEqual(stepAgents([agent], fishById, [food], 0), [{ foodId: "threshold-food", fishId: "threshold-fish" }]);
+  assert.equal(food.consumed, true);
+
+  const secondFood = { id: "second-food", x: agent.x, y: agent.y, claimedBy: null, consumed: false };
+  assert.deepEqual(stepAgents([agent], fishById, [secondFood], 0), []);
+  assert.equal(secondFood.consumed, false);
+});
+
+test("the closest arriving fish consumes an overlapping food exactly once", () => {
   const fishes = [
-    movingFish("fish-1", 20),
-    movingFish("fish-2", 30),
+    movingFish("far-fish", 20),
+    movingFish("near-fish", 30),
   ];
   const agents = fishes.map(createAgent);
+  agents[0].x = 483;
+  agents[1].x = 499;
   const fishById = new Map(fishes.map((fish) => [fish.id, fish]));
   const foods = [{ id: "food-1", x: 500, y: 300, claimedBy: null, consumed: false }];
 
-  const consumed = stepAgents(agents, fishById, foods, 1 / 60);
-  assert.equal(consumed.length, 1);
-  assert.equal(consumed[0].foodId, "food-1");
-  assert.equal(new Set(consumed.map((item) => item.fishId)).size, 1);
+  const consumed = stepAgents(agents, fishById, foods, 0);
+  assert.deepEqual(consumed, [{ foodId: "food-1", fishId: "near-fish" }]);
+  assert.equal(foods[0].consumed, true);
 });
 
 test("helpers patrol the aquarium floor and turn at the edges", () => {

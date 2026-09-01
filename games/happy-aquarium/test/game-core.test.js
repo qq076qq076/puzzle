@@ -39,7 +39,7 @@ test("food has no cooldown and only the fish that eats it recovers satiety", () 
   const state = createFreshState(START);
   state.tank.fishes = [
     fish("hungry", 10),
-    fish("full", 95),
+    fish("full", 50),
   ];
   state.tutorial.step = "complete";
   const core = new GameCore(state);
@@ -50,13 +50,18 @@ test("food has no cooldown and only the fish that eats it recovers satiety", () 
   assert.equal(second.ok, true);
   assert.equal(second.state.tank.foods.length, 2);
   assert.equal(second.state.tank.fishes.find((item) => item.id === "hungry").satiety, 10);
-  assert.equal(second.state.tank.fishes.find((item) => item.id === "full").satiety, 95);
+  assert.equal(second.state.tank.fishes.find((item) => item.id === "full").satiety, 50);
 
   const eaten = core.dispatch("EAT_FOOD", { foodId: first.state.tank.foods[0].id, fishId: "hungry" }, "eat-1", START);
   assert.equal(eaten.ok, true);
   assert.equal(eaten.state.tank.foods.length, 1);
   assert.equal(eaten.state.tank.fishes.find((item) => item.id === "hungry").satiety, 25);
-  assert.equal(eaten.state.tank.fishes.find((item) => item.id === "full").satiety, 95);
+  assert.equal(eaten.state.tank.fishes.find((item) => item.id === "full").satiety, 50);
+
+  const refused = core.dispatch("EAT_FOOD", { foodId: eaten.state.tank.foods[0].id, fishId: "full" }, "eat-full", START);
+  assert.equal(refused.ok, false);
+  assert.equal(refused.errorCode, "FISH_CANNOT_EAT");
+  assert.equal(refused.state.tank.foods.length, 1);
 });
 
 test("collecting a fish coin credits it exactly once", () => {

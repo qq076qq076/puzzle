@@ -45,6 +45,33 @@ def build_coin_strip(source: Path) -> None:
     strip.save(OBJECT_DIR / "coin-spin.png", optimize=True)
 
 
+def build_food_strip(source: Path) -> None:
+    image = transparent_art(Image.open(source))
+    frame_width = image.width / 4
+    frames = []
+    for index in range(4):
+        left = round(index * frame_width)
+        right = round((index + 1) * frame_width)
+        frame = image.crop((left, 0, right, image.height))
+        bounds = frame.getchannel("A").point(lambda alpha: 255 if alpha > 12 else 0).getbbox()
+        if not bounds:
+            raise ValueError(f"Food frame {index} is empty: {source}")
+        frames.append(frame.crop(bounds))
+
+    # One shared scale preserves the pellet's apparent mass across rotations.
+    scale = min(24 / max(frame.width for frame in frames), 24 / max(frame.height for frame in frames))
+    strip = Image.new("RGBA", (256, 64))
+    for index, frame in enumerate(frames):
+        resized = frame.resize(
+            (max(1, round(frame.width * scale)), max(1, round(frame.height * scale))),
+            Image.Resampling.LANCZOS,
+        )
+        x = index * 64 + (64 - resized.width) // 2
+        y = (64 - resized.height) // 2
+        strip.alpha_composite(resized, (x, y))
+    strip.save(OBJECT_DIR / "fish-food-fall.png", optimize=True)
+
+
 def animated_frame(source: Image.Image, shear: float, brightness: float) -> Image.Image:
     # A tiny bottom-anchored shear gives plants and props an underwater sway
     # while keeping the original silhouette and transparent padding intact.
@@ -76,9 +103,12 @@ def build_decoration_strips() -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--coin-source", type=Path)
+    parser.add_argument("--food-source", type=Path)
     args = parser.parse_args()
     if args.coin_source:
         build_coin_strip(args.coin_source)
+    if args.food_source:
+        build_food_strip(args.food_source)
     build_decoration_strips()
 
 

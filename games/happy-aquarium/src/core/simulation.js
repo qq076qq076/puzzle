@@ -94,7 +94,7 @@ function collectDroppedCoins(state, report) {
 
 export function feedHungriestFish(state, pelletCount = 5) {
   const candidates = state.tank.fishes
-    .filter((fish) => fish.stage !== "egg" && fish.health !== "dead" && fish.satiety < 100)
+    .filter((fish) => fish.stage !== "egg" && fish.health === "healthy" && fish.satiety < 50)
     .sort((left, right) => left.satiety - right.satiety || left.id.localeCompare(right.id));
   const fed = [];
   for (const fish of candidates.slice(0, pelletCount)) {

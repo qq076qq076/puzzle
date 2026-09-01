@@ -149,7 +149,7 @@ const COMMANDS = {
     const foodIndex = state.tank.foods.findIndex((item) => item.id === foodId);
     if (foodIndex < 0) return fail("FOOD_NOT_FOUND");
     const fish = state.tank.fishes.find((item) => item.id === fishId);
-    if (!fish || fish.stage === "egg" || fish.health !== "healthy" || fish.satiety >= 100) return fail("FISH_CANNOT_EAT");
+    if (!fish || fish.stage === "egg" || fish.health !== "healthy" || fish.satiety >= 50) return fail("FISH_CANNOT_EAT");
     state.tank.foods.splice(foodIndex, 1);
     fish.satiety = clamp(fish.satiety + FOOD_SATIETY, 0, 100);
     fish.starvingSince = 0;

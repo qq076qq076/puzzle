@@ -213,8 +213,8 @@ export class AquariumScene extends Phaser.Scene {
       if (!view) {
         const texture = objectTextureKey("coin-spin");
         const sprite = this.add.sprite(coin.x * GAME_WIDTH, coinDisplayY(coin), texture).setScale(0.72).setDepth(760).setInteractive({ useHandCursor: true });
+        sprite.setData("coinId", coin.id);
         sprite.play(`${texture}:play`);
-        sprite.on("pointerdown", () => this.ui.runCommand("COLLECT_COIN", { coinId: coin.id }));
         view = { sprite, coin };
         this.coinViews.set(coin.id, view);
       }
@@ -225,6 +225,11 @@ export class AquariumScene extends Phaser.Scene {
 
   handleTankPointer(pointer, currentlyOver = []) {
     if (this.draggingDecorationId) return;
+    const coinHit = currentlyOver.find((object) => object.getData?.("coinId"));
+    if (coinHit) {
+      this.ui.runCommand("COLLECT_COIN", { coinId: coinHit.getData("coinId") });
+      return;
+    }
     if (currentlyOver.length > 0) return;
     const world = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
     if (world.x < 40 || world.x > 960 || world.y < 75 || world.y > 550) return;
