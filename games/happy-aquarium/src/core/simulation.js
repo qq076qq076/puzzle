@@ -1,7 +1,8 @@
 import {
-  COIN_DROP_INTERVAL_MS,
   COIN_DROP_LIFETIME_MS,
   COIN_DROP_LIMIT,
+  COIN_WELL_FED_DURATION_MS,
+  COIN_WELL_FED_SATIETY,
   DEVICE_BY_ID,
   FOOD_LIFETIME_MS,
   HELPER_BY_ID,
@@ -34,8 +35,12 @@ export function simulate(state, now = Date.now(), { offline = false } = {}) {
   const coinCollectorActive = state.tank.helpers.some((helper) => helper.kind === "coin-hermit-crab");
 
   for (const fish of state.tank.fishes) {
+    updateWellFedCoin(state, fish, from, to, offline, coinCollectorActive, report);
     updateFish(state, fish, elapsed, to, warmMultiplier, offline, report);
-    updateFishCoinDrop(state, fish, from, to, offline, coinCollectorActive, report);
+    if (fish.satiety < COIN_WELL_FED_SATIETY) {
+      fish.wellFedSince = 0;
+      fish.wellFedCoinAwarded = false;
+    }
   }
   if (coinCollectorActive) collectDroppedCoins(state, report);
 
@@ -45,32 +50,39 @@ export function simulate(state, now = Date.now(), { offline = false } = {}) {
   return report;
 }
 
-function updateFishCoinDrop(state, fish, from, now, offline, coinCollectorActive, report) {
+function updateWellFedCoin(state, fish, from, now, offline, coinCollectorActive, report) {
   if (fish.stage === "egg" || fish.health === "dead") return;
+  const species = SPECIES_BY_ID[fish.speciesId];
+  if (!species || fish.satiety < COIN_WELL_FED_SATIETY) {
+    fish.wellFedSince = 0;
+    fish.wellFedCoinAwarded = false;
+    return;
+  }
+  fish.wellFedSince ||= from;
+  if (fish.wellFedCoinAwarded) return;
+  const drainMultiplier = state.tank.cleanliness < 40 ? 1.5 : 1;
+  const sickMultiplier = fish.health === "sick" ? 0.75 : 1;
+  const drainPerMs = species.satietyDrainPerHour * drainMultiplier * sickMultiplier / HOUR;
+  const wellFedUntil = drainPerMs > 0 ? from + Math.max(0, fish.satiety - COIN_WELL_FED_SATIETY) / drainPerMs : Infinity;
+  const readyAt = fish.wellFedSince + COIN_WELL_FED_DURATION_MS;
+  if (readyAt > now || readyAt > wellFedUntil) return;
+
   const purchasePrice = Number(SPECIES_BY_ID[fish.speciesId]?.eggPrice);
   const coinValue = Number.isFinite(purchasePrice) && purchasePrice > 0 ? Math.floor(purchasePrice * 0.1) : 0;
-  const nextAt = Number(fish.nextCoinAt);
-  fish.nextCoinAt = Number.isFinite(nextAt) && nextAt > 0 ? nextAt : Math.max(from, Number(fish.acquiredAt) || from) + COIN_DROP_INTERVAL_MS;
-  if (fish.nextCoinAt > now) return;
+  fish.wellFedCoinAwarded = true;
   if (offline) {
     if (coinCollectorActive && coinValue > 0) {
-      const count = Math.floor((now - fish.nextCoinAt) / COIN_DROP_INTERVAL_MS) + 1;
-      const value = count * coinValue;
-      state.player.coins += value;
-      report.coinsCollected += value;
-      report.coinDropsCollected += count;
-      fish.nextCoinAt += count * COIN_DROP_INTERVAL_MS;
-    } else {
-      fish.nextCoinAt = now + COIN_DROP_INTERVAL_MS;
+      state.player.coins += coinValue;
+      report.coinsCollected += coinValue;
+      report.coinDropsCollected += 1;
     }
     return;
   }
   if (coinValue > 0 && state.tank.coinDrops.length < COIN_DROP_LIMIT) {
-    const scheduledAt = fish.nextCoinAt;
     const x = clamp(Number(fish.position?.x) || 0.5, 0.06, 0.94);
     const y = clamp(Number(fish.position?.y) || 0.5, 0.16, 0.86);
     state.tank.coinDrops.push({
-      id: `coin_${fish.id}_${scheduledAt}`,
+      id: `coin_${fish.id}_${readyAt}`,
       fishId: fish.id,
       x,
       y,
@@ -80,7 +92,6 @@ function updateFishCoinDrop(state, fish, from, now, offline, coinCollectorActive
     });
     report.coinsDropped += 1;
   }
-  fish.nextCoinAt = now + COIN_DROP_INTERVAL_MS;
 }
 
 function collectDroppedCoins(state, report) {

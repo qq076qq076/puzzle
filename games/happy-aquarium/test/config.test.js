@@ -56,7 +56,7 @@ test("fish species have intentional display scales", () => {
 test("fish foods and species stomach capacities produce distinct feeding values", () => {
   for (const species of SPECIES) assert.ok(species.stomachCapacity >= 50 && species.stomachCapacity <= 200, species.id);
   assert.ok(SPECIES.find((item) => item.id === "stingray").stomachCapacity > SPECIES.find((item) => item.id === "guppy").stomachCapacity);
-  assert.deepEqual(FISH_FOODS.map((item) => item.nutrition), [15, 30, 50]);
+  assert.deepEqual(FISH_FOODS.map((item) => item.nutrition), [15, 30, 60]);
 });
 
 test("every helper moves and every device has a valid functional placement", () => {

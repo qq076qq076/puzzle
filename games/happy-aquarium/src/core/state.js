@@ -1,6 +1,6 @@
 import { DECORATION_SCALE, DEVICE_SCALE, FISH_FOOD_BY_ID } from "../config/game-config.js";
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export function makeId(prefix = "item") {
   const suffix = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -46,7 +46,13 @@ export function normalizeState(input, now = Date.now()) {
   state.tank = { ...fresh.tank, ...(state.tank ?? {}) };
   delete state.tank.fishLimit;
   delete state.tank.lastFeedAt;
-  state.tank.fishes = Array.isArray(state.tank.fishes) ? state.tank.fishes : [];
+  state.tank.fishes = Array.isArray(state.tank.fishes)
+    ? state.tank.fishes.map((fish) => {
+      const normalized = { ...fish, wellFedSince: Math.min(now, Math.max(0, finiteNumber(fish?.wellFedSince, 0))), wellFedCoinAwarded: Boolean(fish?.wellFedCoinAwarded) };
+      delete normalized.nextCoinAt;
+      return normalized;
+    })
+    : [];
   state.tank.helpers = Array.isArray(state.tank.helpers) ? state.tank.helpers : [];
   state.tank.decorations = Array.isArray(state.tank.decorations)
     ? state.tank.decorations.map((item) => ({ ...item, scale: clamp(finiteNumber(item?.scale, DECORATION_SCALE.default), DECORATION_SCALE.min, DECORATION_SCALE.max) }))

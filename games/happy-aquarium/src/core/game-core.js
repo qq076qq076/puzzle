@@ -1,7 +1,7 @@
 import {
   DECORATION_BY_ID,
   DECORATION_SCALE,
-  COIN_DROP_INTERVAL_MS,
+  COIN_WELL_FED_SATIETY,
   CONSUMABLE_BY_ID,
   DEVICE_BY_ID,
   DEVICE_SCALE,
@@ -121,7 +121,7 @@ const COMMANDS = {
       stage: devMode ? "adult" : "egg", growth: devMode ? 100 : 0, satiety: devMode ? 100 : 0, variant: null, health: "healthy", sickSince: 0, diedAt: 0,
       lastDiseaseCheckAt: now, starvingSince: 0, mateCooldownUntil: 0, skills: [], paidPerformancesOnDay: 0,
       behaviorSeed: randomInt(state.rng, 1, 0x7fffffff), position: { x: 0.2 + nextRandom(state.rng) * 0.6, y: 0.2 + nextRandom(state.rng) * 0.5 }, heading: "right", tutorialEgg,
-      nextCoinAt: now + COIN_DROP_INTERVAL_MS,
+      wellFedSince: 0, wellFedCoinAwarded: false,
     };
     state.tank.fishes.push(fish);
     state.stats.eggsBought += 1;
@@ -176,7 +176,7 @@ const COMMANDS = {
     return ok();
   },
 
-  EAT_FOOD(state, { foodId, fishId }, _now, events) {
+  EAT_FOOD(state, { foodId, fishId }, now, events) {
     const foodIndex = state.tank.foods.findIndex((item) => item.id === foodId);
     if (foodIndex < 0) return fail("FOOD_NOT_FOUND");
     const fish = state.tank.fishes.find((item) => item.id === fishId);
@@ -184,6 +184,10 @@ const COMMANDS = {
     const [food] = state.tank.foods.splice(foodIndex, 1);
     const satietyGain = foodSatietyGain(food.foodTypeId, fish.speciesId);
     fish.satiety = clamp(fish.satiety + satietyGain, 0, 100);
+    if (fish.satiety >= COIN_WELL_FED_SATIETY) {
+      fish.wellFedSince = now;
+      fish.wellFedCoinAwarded = false;
+    }
     fish.starvingSince = 0;
     claimTutorial(state, "feed-first-fish", { coins: 50 }, events);
     events.push({ type: "foodEaten", foodId, fishId, satietyGain });

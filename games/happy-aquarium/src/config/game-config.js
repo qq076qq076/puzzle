@@ -35,7 +35,7 @@ export const SPECIES_BY_ID = Object.fromEntries(SPECIES.map((item) => [item.id, 
 export const FISH_FOODS = [
   { id: "basic-food", name: "基本飼料", nutrition: 15, price: null, tint: 0xffffff },
   { id: "nutritious-food", name: "高營養飼料", nutrition: 30, price: 25, tint: 0x72e6ad },
-  { id: "gourmet-food", name: "豪華飼料", nutrition: 50, price: 50, tint: 0xffd166 },
+  { id: "gourmet-food", name: "豪華飼料", nutrition: 60, price: 50, tint: 0xffd166 },
 ];
 
 export const FISH_FOOD_BY_ID = Object.fromEntries(FISH_FOODS.map((item) => [item.id, item]));
@@ -104,7 +104,8 @@ export const TRANSACTION_LIMIT = 50;
 export const OFFLINE_CAP_MS = 7 * 24 * 3_600_000;
 export const FOOD_LIFETIME_MS = 20_000;
 export const FOOD_FALL_SPEED_PX = 24;
-export const COIN_DROP_INTERVAL_MS = 30_000;
+export const COIN_WELL_FED_SATIETY = 80;
+export const COIN_WELL_FED_DURATION_MS = 60_000;
 export const COIN_DROP_LIFETIME_MS = 120_000;
 export const COIN_DROP_LIMIT = 40;
 export const COIN_FALL_SPEED_PX = 16;

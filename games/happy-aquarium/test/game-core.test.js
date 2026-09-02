@@ -87,6 +87,21 @@ test("purchased premium food is selected, consumed on drop, and restores by stom
   assert.ok(foodSatietyGain("nutritious-food", "goby") > foodSatietyGain("nutritious-food", "stingray"));
 });
 
+test("feeding a fish above eighty starts a new well-fed coin streak", () => {
+  const state = createFreshState(START);
+  state.tank.fishes = [fish("ray", 49, "stingray")];
+  state.inventory.fishFoods["gourmet-food"] = 1;
+  state.inventory.selectedFishFoodId = "gourmet-food";
+  state.tutorial.step = "complete";
+  const core = new GameCore(state);
+
+  const dropped = core.dispatch("FEED", { x: 0.5, y: 0.5 }, "drop-gourmet", START);
+  const eaten = core.dispatch("EAT_FOOD", { foodId: dropped.state.tank.foods[0].id, fishId: "ray" }, "ray-eats", START);
+  assert.ok(eaten.state.tank.fishes[0].satiety >= 80);
+  assert.equal(eaten.state.tank.fishes[0].wellFedSince, START);
+  assert.equal(eaten.state.tank.fishes[0].wellFedCoinAwarded, false);
+});
+
 test("medicine can be purchased and consumed to cure a sick fish", () => {
   const state = createFreshState(START);
   state.inventory.medicines = 0;
@@ -120,10 +135,10 @@ test("collecting a fish coin credits it exactly once", () => {
 
 test("coin drops use the fish live position supplied by the scene", () => {
   const state = createFreshState(START);
-  state.tank.fishes.push({ ...fish("moving", 80), nextCoinAt: START + 1_000 });
+  state.tank.fishes.push({ ...fish("moving", 90), wellFedSince: START, wellFedCoinAwarded: false });
   const core = new GameCore(state);
 
-  core.tick(START + 1_000, { moving: { x: 0.27, y: 0.43, heading: "left" } });
+  core.tick(START + 60_000, { moving: { x: 0.27, y: 0.43, heading: "left" } });
   const snapshot = core.snapshot();
   assert.deepEqual(snapshot.tank.fishes[0].position, { x: 0.27, y: 0.43 });
   assert.equal(snapshot.tank.fishes[0].heading, "left");
@@ -207,16 +222,19 @@ test("legacy level, experience, capacity, and feed cooldown fields are removed d
   legacy.player.exp = 999;
   legacy.tank.fishLimit = 15;
   legacy.tank.lastFeedAt = START;
+  legacy.tank.fishes = [{ ...fish("legacy", 90), nextCoinAt: START + 30_000 }];
   legacy.tank.foods = [{ id: "legacy-food", x: 0.5, y: 0.5, createdAt: START, expiresAt: START + 10_000 }];
   legacy.inventory.selectedFishFoodId = "gourmet-food";
 
   const migrated = normalizeState(legacy, START);
-  assert.equal(migrated.schemaVersion, 4);
+  assert.equal(migrated.schemaVersion, 5);
   assert.deepEqual(migrated.player, { coins: 300, gems: 3 });
   assert.equal("fishLimit" in migrated.tank, false);
   assert.equal("lastFeedAt" in migrated.tank, false);
   assert.deepEqual(migrated.tank.coinDrops, []);
   assert.equal(migrated.tank.foods[0].foodTypeId, "basic-food");
+  assert.equal("nextCoinAt" in migrated.tank.fishes[0], false);
+  assert.equal(migrated.tank.fishes[0].wellFedSince, 0);
   assert.deepEqual(migrated.inventory.fishFoods, { "nutritious-food": 0, "gourmet-food": 0 });
   assert.equal(migrated.inventory.selectedFishFoodId, "basic-food");
 });
