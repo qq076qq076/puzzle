@@ -1,17 +1,20 @@
 import {
   DECORATION_BY_ID,
   DECORATION_SCALE,
-  COIN_WELL_FED_SATIETY,
   CONSUMABLE_BY_ID,
   DEVICE_BY_ID,
   DEVICE_SCALE,
   FISH_FOOD_BY_ID,
   FOOD_LIFETIME_MS,
   HELPER_BY_ID,
+  HAPPINESS_COIN_INTERVAL_MAX_MS,
+  HAPPINESS_COIN_INTERVAL_MIN_MS,
+  PERSONALITIES,
+  SPECIES_HABITAT,
   SPECIES_BY_ID,
   TRANSACTION_LIMIT,
 } from "../config/game-config.js";
-import { clamp, fishSellPrice, foodSatietyGain, stageFromGrowth } from "./calculations.js";
+import { clamp, dayKeyTaipei, fishSellPrice, foodSatietyGain, stageFromGrowth } from "./calculations.js";
 import { nextRandom, randomInt } from "./rng.js";
 import { simulate } from "./simulation.js";
 import { createFreshState, makeId, normalizeState } from "./state.js";
@@ -24,6 +27,7 @@ export class GameCore {
   constructor(state = createFreshState(), { devMode = false } = {}) {
     this.#state = normalizeState(state);
     this.devMode = Boolean(devMode);
+    ensureDailyGoals(this.#state, Date.now());
   }
 
   subscribe(listener) {
@@ -38,6 +42,7 @@ export class GameCore {
 
   replaceState(state, { offline = false, now = Date.now() } = {}) {
     this.#state = normalizeState(state, now);
+    ensureDailyGoals(this.#state, now);
     const report = simulate(this.#state, now, { offline });
     const events = [{ type: "stateRestored", report }];
     if (report.hatched > 0) claimTutorial(this.#state, "hatch-first-egg", { coins: 50 }, events);
@@ -47,13 +52,16 @@ export class GameCore {
 
   reset(now = Date.now()) {
     this.#state = createFreshState(now);
+    ensureDailyGoals(this.#state, now);
     this.#publish([{ type: "stateReset" }]);
   }
 
   tick(now = Date.now(), liveFishPositions = null) {
     syncLiveFishPositions(this.#state, liveFishPositions);
+    const events = [];
+    ensureDailyGoals(this.#state, now, events);
     const report = simulate(this.#state, now);
-    const events = [{ type: "tick", report }];
+    events.unshift({ type: "tick", report });
     if (report.hatched > 0) claimTutorial(this.#state, "hatch-first-egg", { coins: 50 }, events);
     this.#publish(events);
     return report;
@@ -67,8 +75,10 @@ export class GameCore {
     const handler = COMMANDS[type];
     if (!handler) return this.#failure(transactionId, "UNKNOWN_COMMAND");
     const events = [];
+    ensureDailyGoals(this.#state, now, events);
     const result = handler(this.#state, payload, now, events, { devMode: this.devMode });
     if (!result.ok) return this.#failure(transactionId, result.errorCode);
+    tryGrantLegendaryFish(this.#state, now, events);
     this.#recordTransaction(transactionId, type, now);
     events.push({ type: "saveUrgent" });
     this.#publish(events);
@@ -116,13 +126,12 @@ const COMMANDS = {
     if (!devMode) state.player.coins -= species.eggPrice;
     const tutorialEgg = !devMode && speciesId === "guppy" && !state.tutorial.firstEggOverrideConsumed;
     state.tutorial.firstEggOverrideConsumed ||= tutorialEgg;
-    const fish = {
-      id: makeId("fish"), speciesId, name: species.name, acquiredAt: now, acquisitionType: devMode ? "dev" : "shop", acquisitionCost: devMode ? 0 : species.eggPrice,
-      stage: devMode ? "adult" : "egg", growth: devMode ? 100 : 0, satiety: devMode ? 100 : 0, variant: null, health: "healthy", sickSince: 0, diedAt: 0,
-      lastDiseaseCheckAt: now, starvingSince: 0, mateCooldownUntil: 0, skills: [], paidPerformancesOnDay: 0,
-      behaviorSeed: randomInt(state.rng, 1, 0x7fffffff), position: { x: 0.2 + nextRandom(state.rng) * 0.6, y: 0.2 + nextRandom(state.rng) * 0.5 }, heading: "right", tutorialEgg,
-      wellFedSince: 0, wellFedCoinAwarded: false,
-    };
+    const fish = createFishInstance(state, speciesId, now, {
+      acquisitionType: devMode ? "dev" : "shop",
+      acquisitionCost: devMode ? 0 : species.eggPrice,
+      adult: devMode,
+      tutorialEgg,
+    });
     state.tank.fishes.push(fish);
     state.stats.eggsBought += 1;
     if (!devMode) claimTutorial(state, "buy-first-egg", { coins: 30 }, events);
@@ -182,14 +191,12 @@ const COMMANDS = {
     const fish = state.tank.fishes.find((item) => item.id === fishId);
     if (!fish || fish.stage === "egg" || fish.health !== "healthy" || fish.satiety >= 50) return fail("FISH_CANNOT_EAT");
     const [food] = state.tank.foods.splice(foodIndex, 1);
-    const satietyGain = foodSatietyGain(food.foodTypeId, fish.speciesId);
+    const satietyGain = foodSatietyGain(food.foodTypeId, fish.speciesId, fish.preferredFoodTypeId);
     fish.satiety = clamp(fish.satiety + satietyGain, 0, 100);
-    if (fish.satiety >= COIN_WELL_FED_SATIETY) {
-      fish.wellFedSince = now;
-      fish.wellFedCoinAwarded = false;
-    }
+    fish.familiarity = clamp((Number(fish.familiarity) || 0) + 1, 0, 100);
     fish.starvingSince = 0;
     claimTutorial(state, "feed-first-fish", { coins: 50 }, events);
+    progressDailyGoal(state, "feed", 1, now, events);
     events.push({ type: "foodEaten", foodId, fishId, satietyGain });
     return ok();
   },
@@ -200,6 +207,7 @@ const COMMANDS = {
     const [coin] = state.tank.coinDrops.splice(index, 1);
     const value = Math.max(0, Math.floor(Number(coin.value) || 0));
     state.player.coins += value;
+    progressDailyGoal(state, "collect", 1, _now, events);
     events.push({ type: "coinCollected", coinId, value });
     return ok();
   },
@@ -208,6 +216,7 @@ const COMMANDS = {
     if (state.tank.cleanliness >= 100 && state.tutorial.step !== "clean-first-algae") return fail("ALREADY_CLEAN");
     state.tank.cleanliness = clamp(state.tank.cleanliness + 2, 0, 100);
     claimTutorial(state, "clean-first-algae", { coins: 50, decorationId: "anubias-plant" }, events);
+    progressDailyGoal(state, "care", 1, _now, events);
     events.push({ type: "algaeCleaned" });
     return ok();
   },
@@ -231,6 +240,7 @@ const COMMANDS = {
     fish.health = "healthy";
     fish.sickSince = 0;
     fish.satiety = Math.max(25, fish.satiety);
+    progressDailyGoal(state, "care", 1, _now, events);
     events.push({ type: "fishCured", fishId });
     return ok();
   },
@@ -391,6 +401,67 @@ const COMMANDS = {
     return ok();
   },
 };
+
+function createFishInstance(state, speciesId, now, { acquisitionType = "milestone", acquisitionCost = 0, adult = false, tutorialEgg = false } = {}) {
+  const species = SPECIES_BY_ID[speciesId];
+  const personality = PERSONALITIES[randomInt(state.rng, 0, PERSONALITIES.length - 1)];
+  const foodIds = Object.keys(FISH_FOOD_BY_ID);
+  const preferredFoodTypeId = foodIds[randomInt(state.rng, 0, foodIds.length - 1)];
+  return {
+    id: makeId("fish"), speciesId, name: species.name, acquiredAt: now, acquisitionType, acquisitionCost,
+    stage: adult ? "adult" : "egg", growth: adult ? 100 : 0, satiety: adult ? 100 : 0, variant: null,
+    health: "healthy", sickSince: 0, diedAt: 0, lastDiseaseCheckAt: now, starvingSince: 0,
+    skills: [], paidPerformancesOnDay: 0, behaviorSeed: randomInt(state.rng, 1, 0x7fffffff),
+    position: { x: 0.2 + nextRandom(state.rng) * 0.6, y: 0.2 + nextRandom(state.rng) * 0.5 }, heading: "right", tutorialEgg,
+    personalityId: personality.id,
+    preferredFoodTypeId,
+    habitatPreference: SPECIES_HABITAT[speciesId] || "plants",
+    sizePotential: Math.round((0.90 + nextRandom(state.rng) * 0.20) * 1000) / 1000,
+    familiarity: 0,
+    happiness: 0,
+    happinessProgressMs: 0,
+    nextHappinessCoinMs: randomInt(state.rng, HAPPINESS_COIN_INTERVAL_MIN_MS / 1000, HAPPINESS_COIN_INTERVAL_MAX_MS / 1000) * 1000,
+    coinDayKey: dayKeyTaipei(now),
+    coinsEarnedToday: 0,
+    pendingOfflineCoin: false,
+  };
+}
+
+function ensureDailyGoals(state, now, events = []) {
+  const dayKey = dayKeyTaipei(now);
+  if (state.quests.dayKey === dayKey && state.quests.items.length === 3) return;
+  state.quests = {
+    dayKey,
+    items: [
+      { id: "feed", label: "讓魚吃到 3 顆飼料", target: 3, progress: 0, reward: 50, completed: false },
+      { id: "collect", label: "撿起 2 枚金幣", target: 2, progress: 0, reward: 80, completed: false },
+      { id: "care", label: "完成 1 次清潔或治療", target: 1, progress: 0, reward: 60, completed: false },
+    ],
+  };
+  events.push({ type: "dailyGoalsReset", dayKey });
+}
+
+function progressDailyGoal(state, id, amount, now, events) {
+  ensureDailyGoals(state, now, events);
+  const goal = state.quests.items.find((item) => item.id === id);
+  if (!goal || goal.completed) return;
+  goal.progress = Math.min(goal.target, goal.progress + amount);
+  if (goal.progress < goal.target) return;
+  goal.completed = true;
+  state.player.coins += goal.reward;
+  state.stats.dailyGoalsCompleted = (Number(state.stats.dailyGoalsCompleted) || 0) + 1;
+  events.push({ type: "dailyGoalCompleted", goalId: id, label: goal.label, reward: goal.reward });
+}
+
+function tryGrantLegendaryFish(state, now, events) {
+  if (state.achievements.legendaryFishGranted) return;
+  const hasCrystal = state.tank.decorations.some((item) => item.catalogId === "rainbow-crystal");
+  if (!hasCrystal || (Number(state.stats.dailyGoalsCompleted) || 0) < 30) return;
+  const fish = createFishInstance(state, "rainbow-mermaid", now);
+  state.tank.fishes.push(fish);
+  state.achievements.legendaryFishGranted = true;
+  events.push({ type: "fishAdded", fishId: fish.id }, { type: "legendaryFishGranted", fishId: fish.id });
+}
 
 function claimTutorial(state, id, reward, events) {
   if (state.tutorial.claimedRewardIds.includes(id) || state.tutorial.step !== id) return;

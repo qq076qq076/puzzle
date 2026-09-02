@@ -1,6 +1,7 @@
-import { DECORATION_SCALE, DEVICE_SCALE, FISH_FOOD_BY_ID } from "../config/game-config.js";
+import { DECORATION_SCALE, DEVICE_SCALE, FISH_FOOD_BY_ID, PERSONALITIES, PERSONALITY_BY_ID, SPECIES_HABITAT } from "../config/game-config.js";
+import { dayKeyTaipei } from "./calculations.js";
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export function makeId(prefix = "item") {
   const suffix = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -26,7 +27,7 @@ export function createFreshState(now = Date.now()) {
     events: { nextRewardAt: now + 4 * 3_600_000, pendingRewards: 0 },
     quests: { dayKey: "", items: [] },
     achievements: {},
-    stats: { eggsBought: 0, fishSold: 0, fishHatched: 0 },
+    stats: { eggsBought: 0, fishSold: 0, fishHatched: 0, dailyGoalsCompleted: 0 },
     settings: { music: 0.5, effects: 0.7, reducedMotion: false },
     rng: { state: (now ^ 0xa5a5a5a5) >>> 0 },
     transactions: { recentIds: [], recent: [] },
@@ -48,8 +49,28 @@ export function normalizeState(input, now = Date.now()) {
   delete state.tank.lastFeedAt;
   state.tank.fishes = Array.isArray(state.tank.fishes)
     ? state.tank.fishes.map((fish) => {
-      const normalized = { ...fish, wellFedSince: Math.min(now, Math.max(0, finiteNumber(fish?.wellFedSince, 0))), wellFedCoinAwarded: Boolean(fish?.wellFedCoinAwarded) };
+      const traitSeed = stableHash(fish?.id || fish?.speciesId || "fish");
+      const foodIds = Object.keys(FISH_FOOD_BY_ID);
+      const personalityId = PERSONALITY_BY_ID[fish?.personalityId] ? fish.personalityId : PERSONALITIES[traitSeed % PERSONALITIES.length].id;
+      const preferredFoodTypeId = FISH_FOOD_BY_ID[fish?.preferredFoodTypeId] ? fish.preferredFoodTypeId : foodIds[(traitSeed >>> 4) % foodIds.length];
+      const normalized = {
+        ...fish,
+        personalityId,
+        preferredFoodTypeId,
+        habitatPreference: fish?.habitatPreference || SPECIES_HABITAT[fish?.speciesId] || "plants",
+        sizePotential: clamp(finiteNumber(fish?.sizePotential, 0.90 + ((traitSeed >>> 8) % 201) / 1000), 0.90, 1.10),
+        familiarity: clamp(finiteNumber(fish?.familiarity, 0), 0, 100),
+        happiness: clamp(finiteNumber(fish?.happiness, 0), 0, 100),
+        happinessProgressMs: Math.max(0, finiteNumber(fish?.happinessProgressMs, 0)),
+        nextHappinessCoinMs: clamp(finiteNumber(fish?.nextHappinessCoinMs, 45_000 + (traitSeed % 45_001)), 45_000, 90_000),
+        coinDayKey: typeof fish?.coinDayKey === "string" ? fish.coinDayKey : dayKeyTaipei(now),
+        coinsEarnedToday: clamp(finiteInt(fish?.coinsEarnedToday, 0), 0, 12),
+        pendingOfflineCoin: Boolean(fish?.pendingOfflineCoin),
+      };
       delete normalized.nextCoinAt;
+      delete normalized.wellFedSince;
+      delete normalized.wellFedCoinAwarded;
+      delete normalized.mateCooldownUntil;
       return normalized;
     })
     : [];
@@ -77,6 +98,10 @@ export function normalizeState(input, now = Date.now()) {
   if (FISH_FOOD_BY_ID[state.inventory.selectedFishFoodId].price != null && state.inventory.fishFoods[state.inventory.selectedFishFoodId] <= 0) state.inventory.selectedFishFoodId = "basic-food";
   state.tutorial = { ...fresh.tutorial, ...(state.tutorial ?? {}) };
   state.events = { ...fresh.events, ...(state.events ?? {}) };
+  state.quests = state.quests && typeof state.quests === "object" ? state.quests : fresh.quests;
+  state.quests.dayKey = typeof state.quests.dayKey === "string" ? state.quests.dayKey : "";
+  state.quests.items = Array.isArray(state.quests.items) ? state.quests.items : [];
+  state.achievements = state.achievements && typeof state.achievements === "object" ? state.achievements : {};
   state.stats = { ...fresh.stats, ...(state.stats ?? {}) };
   state.settings = { ...fresh.settings, ...(state.settings ?? {}) };
   state.rng = { state: finiteInt(state.rng?.state, fresh.rng.state) >>> 0 };
@@ -103,4 +128,13 @@ function finiteInt(value, fallback) {
 
 function clamp(value, minimum, maximum) {
   return Math.max(minimum, Math.min(maximum, value));
+}
+
+function stableHash(value) {
+  let hash = 2166136261;
+  for (const character of String(value)) {
+    hash ^= character.codePointAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
 }

@@ -16,12 +16,42 @@ test("buying the tutorial guppy is atomic and idempotent", () => {
   assert.deepEqual(bought.state.player, { coins: 285, gems: 3 });
   assert.equal(bought.state.tank.fishes.length, 1);
   assert.equal(bought.state.tank.fishes[0].tutorialEgg, true);
+  assert.ok(bought.state.tank.fishes[0].personalityId);
+  assert.ok(bought.state.tank.fishes[0].preferredFoodTypeId);
+  assert.ok(bought.state.tank.fishes[0].sizePotential >= 0.9 && bought.state.tank.fishes[0].sizePotential <= 1.1);
   assert.equal(bought.state.tutorial.step, "hatch-first-egg");
 
   const duplicate = core.dispatch("BUY_EGG", { speciesId: "guppy" }, "buy-1", START);
   assert.equal(duplicate.duplicate, true);
   assert.equal(duplicate.state.tank.fishes.length, 1);
   assert.equal(duplicate.state.player.coins, 285);
+});
+
+test("daily care goals reward once and track long-term completion", () => {
+  const state = createFreshState(START);
+  state.tutorial.step = "complete";
+  state.tank.fishes = [fish("daily-ray", 0, "stingray")];
+  const core = new GameCore(state);
+  for (let index = 0; index < 3; index += 1) {
+    const dropped = core.dispatch("FEED", { x: 0.5, y: 0.5 }, `daily-drop-${index}`, START);
+    core.dispatch("EAT_FOOD", { foodId: dropped.state.tank.foods.at(-1).id, fishId: "daily-ray" }, `daily-eat-${index}`, START);
+  }
+  const snapshot = core.snapshot();
+  assert.equal(snapshot.quests.items.find((item) => item.id === "feed").completed, true);
+  assert.equal(snapshot.stats.dailyGoalsCompleted, 1);
+  assert.equal(snapshot.player.coins, 350);
+});
+
+test("the care milestone grants one rainbow mermaid egg without breeding", () => {
+  const state = createFreshState(START);
+  state.stats.dailyGoalsCompleted = 30;
+  const core = new GameCore(state, { devMode: true });
+  core.dispatch("BUY_DECORATION", { decorationId: "rainbow-crystal" }, "milestone-crystal", START);
+  const first = core.snapshot();
+  assert.equal(first.tank.fishes.filter((item) => item.speciesId === "rainbow-mermaid").length, 1);
+  assert.equal(first.tank.fishes.find((item) => item.speciesId === "rainbow-mermaid").stage, "egg");
+  core.dispatch("RENAME_TANK", { name: "里程碑魚缸" }, "milestone-repeat", START);
+  assert.equal(core.snapshot().tank.fishes.filter((item) => item.speciesId === "rainbow-mermaid").length, 1);
 });
 
 test("failed purchases never spend coins or enter the transaction ring", () => {
@@ -56,7 +86,7 @@ test("food has no cooldown and only the fish that eats it recovers satiety", () 
   const eaten = core.dispatch("EAT_FOOD", { foodId: first.state.tank.foods[0].id, fishId: "hungry" }, "eat-1", START);
   assert.equal(eaten.ok, true);
   assert.equal(eaten.state.tank.foods.length, 1);
-  assert.equal(eaten.state.tank.fishes.find((item) => item.id === "hungry").satiety, 10 + foodSatietyGain("basic-food", "guppy"));
+  assert.equal(eaten.state.tank.fishes.find((item) => item.id === "hungry").satiety, 10 + foodSatietyGain("basic-food", "guppy", "basic-food"));
   assert.equal(eaten.state.tank.fishes.find((item) => item.id === "full").satiety, 50);
 
   const refused = core.dispatch("EAT_FOOD", { foodId: eaten.state.tank.foods[0].id, fishId: "full" }, "eat-full", START);
@@ -87,9 +117,9 @@ test("purchased premium food is selected, consumed on drop, and restores by stom
   assert.ok(foodSatietyGain("nutritious-food", "goby") > foodSatietyGain("nutritious-food", "stingray"));
 });
 
-test("feeding a fish above eighty starts a new well-fed coin streak", () => {
+test("preferred food restores extra satiety and feeding increases familiarity", () => {
   const state = createFreshState(START);
-  state.tank.fishes = [fish("ray", 49, "stingray")];
+  state.tank.fishes = [{ ...fish("ray", 20, "stingray"), preferredFoodTypeId: "gourmet-food", familiarity: 4 }];
   state.inventory.fishFoods["gourmet-food"] = 1;
   state.inventory.selectedFishFoodId = "gourmet-food";
   state.tutorial.step = "complete";
@@ -97,9 +127,8 @@ test("feeding a fish above eighty starts a new well-fed coin streak", () => {
 
   const dropped = core.dispatch("FEED", { x: 0.5, y: 0.5 }, "drop-gourmet", START);
   const eaten = core.dispatch("EAT_FOOD", { foodId: dropped.state.tank.foods[0].id, fishId: "ray" }, "ray-eats", START);
-  assert.ok(eaten.state.tank.fishes[0].satiety >= 80);
-  assert.equal(eaten.state.tank.fishes[0].wellFedSince, START);
-  assert.equal(eaten.state.tank.fishes[0].wellFedCoinAwarded, false);
+  assert.equal(eaten.state.tank.fishes[0].satiety, 20 + foodSatietyGain("gourmet-food", "stingray", "gourmet-food"));
+  assert.equal(eaten.state.tank.fishes[0].familiarity, 5);
 });
 
 test("medicine can be purchased and consumed to cure a sick fish", () => {
@@ -135,10 +164,10 @@ test("collecting a fish coin credits it exactly once", () => {
 
 test("coin drops use the fish live position supplied by the scene", () => {
   const state = createFreshState(START);
-  state.tank.fishes.push({ ...fish("moving", 90), wellFedSince: START, wellFedCoinAwarded: false });
+  state.tank.fishes.push({ ...fish("moving", 100), familiarity: 100, happinessProgressMs: 0, nextHappinessCoinMs: 45_000 });
   const core = new GameCore(state);
 
-  core.tick(START + 60_000, { moving: { x: 0.27, y: 0.43, heading: "left" } });
+  core.tick(START + 45_000, { moving: { x: 0.27, y: 0.43, heading: "left" } });
   const snapshot = core.snapshot();
   assert.deepEqual(snapshot.tank.fishes[0].position, { x: 0.27, y: 0.43 });
   assert.equal(snapshot.tank.fishes[0].heading, "left");
@@ -227,14 +256,18 @@ test("legacy level, experience, capacity, and feed cooldown fields are removed d
   legacy.inventory.selectedFishFoodId = "gourmet-food";
 
   const migrated = normalizeState(legacy, START);
-  assert.equal(migrated.schemaVersion, 5);
+  assert.equal(migrated.schemaVersion, 6);
   assert.deepEqual(migrated.player, { coins: 300, gems: 3 });
   assert.equal("fishLimit" in migrated.tank, false);
   assert.equal("lastFeedAt" in migrated.tank, false);
   assert.deepEqual(migrated.tank.coinDrops, []);
   assert.equal(migrated.tank.foods[0].foodTypeId, "basic-food");
   assert.equal("nextCoinAt" in migrated.tank.fishes[0], false);
-  assert.equal(migrated.tank.fishes[0].wellFedSince, 0);
+  assert.equal("wellFedSince" in migrated.tank.fishes[0], false);
+  assert.equal("mateCooldownUntil" in migrated.tank.fishes[0], false);
+  assert.ok(migrated.tank.fishes[0].personalityId);
+  assert.ok(migrated.tank.fishes[0].preferredFoodTypeId);
+  assert.ok(migrated.tank.fishes[0].sizePotential >= 0.9 && migrated.tank.fishes[0].sizePotential <= 1.1);
   assert.deepEqual(migrated.inventory.fishFoods, { "nutritious-food": 0, "gourmet-food": 0 });
   assert.equal(migrated.inventory.selectedFishFoodId, "basic-food");
 });
@@ -256,11 +289,21 @@ function fish(id, satiety, speciesId = "guppy") {
     diedAt: 0,
     lastDiseaseCheckAt: START,
     starvingSince: 0,
-    mateCooldownUntil: 0,
     skills: [],
     paidPerformancesOnDay: 0,
     behaviorSeed: 1,
     position: { x: 0.5, y: 0.5 },
     heading: "right",
+    personalityId: "calm",
+    preferredFoodTypeId: "basic-food",
+    habitatPreference: "plants",
+    sizePotential: 1,
+    familiarity: 0,
+    happiness: 0,
+    happinessProgressMs: 0,
+    nextHappinessCoinMs: 45_000,
+    coinDayKey: "",
+    coinsEarnedToday: 0,
+    pendingOfflineCoin: false,
   };
 }

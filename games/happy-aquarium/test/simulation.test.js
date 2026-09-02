@@ -34,64 +34,49 @@ test("offline simulation is capped at seven days", () => {
   assert.equal(state.lastProcessedAt, START + 30 * 24 * 3_600_000);
 });
 
-test("a fish drops one coin only after maintaining eighty satiety for sixty seconds", () => {
+test("a happy fish earns coins on its persisted variable interval", () => {
   const state = createFreshState(START);
-  state.tank.fishes.push({
-    ...movingFish("fish-coin", 90),
-    acquiredAt: START,
-    wellFedSince: START,
-    wellFedCoinAwarded: false,
-  });
+  state.tank.fishes.push(movingFish("fish-coin", 100));
 
-  const early = simulate(state, START + 59_000);
+  const early = simulate(state, START + 44_000);
   assert.equal(early.coinsDropped, 0);
-  const report = simulate(state, START + 60_000);
+  const report = simulate(state, START + 45_000);
   assert.equal(report.coinsDropped, 1);
   assert.equal(state.tank.coinDrops.length, 1);
   assert.equal(state.tank.coinDrops[0].value, 4);
   assert.equal(state.tank.coinDrops[0].x, 0.5);
   assert.equal(state.tank.coinDrops[0].y, 0.5);
 
-  const repeated = simulate(state, START + 180_000);
-  assert.equal(repeated.coinsDropped, 0);
-  assert.equal(state.tank.coinDrops.length, 0);
-
   const offline = createFreshState(START);
-  offline.tank.fishes.push({ ...movingFish("offline-fish", 90), acquiredAt: START, wellFedSince: START, wellFedCoinAwarded: false });
-  const offlineReport = simulate(offline, START + 60_000, { offline: true });
+  offline.tank.fishes.push(movingFish("offline-fish", 100));
+  const offlineReport = simulate(offline, START + 45_000, { offline: true });
   assert.equal(offlineReport.coinsDropped, 0);
   assert.equal(offline.tank.coinDrops.length, 0);
-  assert.equal(offline.tank.fishes[0].wellFedCoinAwarded, true);
+  assert.equal(offline.tank.fishes[0].pendingOfflineCoin, true);
 });
 
-test("well-fed coin value is ten percent of the catalog purchase price", () => {
+test("happiness coin value is ten percent of the catalog purchase price", () => {
   const state = createFreshState(START);
-  state.tank.fishes.push({ ...movingFish("stingray-coin", 90), speciesId: "stingray", acquiredAt: START, wellFedSince: START, wellFedCoinAwarded: false });
+  state.tank.fishes.push({ ...movingFish("stingray-coin", 100), speciesId: "stingray" });
 
-  simulate(state, START + 60_000);
+  simulate(state, START + 45_000);
   assert.equal(state.tank.coinDrops[0].value, 2_000);
 });
 
-test("dropping below eighty rearms the next well-fed coin streak", () => {
+test("low happiness pauses accumulated coin progress without resetting it", () => {
   const state = createFreshState(START);
-  state.tank.fishes.push({ ...movingFish("rearmed-fish", 90), wellFedSince: START, wellFedCoinAwarded: true });
+  state.tank.fishes.push({ ...movingFish("paused-fish", 20), happinessProgressMs: 30_000 });
 
-  simulate(state, START + 2 * 3_600_000);
-  assert.ok(state.tank.fishes[0].satiety < 80);
-  assert.equal(state.tank.fishes[0].wellFedSince, 0);
-  assert.equal(state.tank.fishes[0].wellFedCoinAwarded, false);
-
-  state.tank.fishes[0].satiety = 90;
-  state.tank.fishes[0].wellFedSince = START + 2 * 3_600_000;
-  simulate(state, START + 2 * 3_600_000 + 60_000);
-  assert.equal(state.tank.coinDrops.length, 1);
+  simulate(state, START + 30_000);
+  assert.equal(state.tank.fishes[0].happinessProgressMs, 30_000);
+  assert.equal(state.tank.coinDrops.length, 0);
 });
 
-test("fish without a catalog purchase price do not create well-fed coins", () => {
+test("fish without a catalog purchase price do not create happiness coins", () => {
   const state = createFreshState(START);
-  state.tank.fishes.push({ ...movingFish("mermaid-coin", 90), speciesId: "rainbow-mermaid", acquiredAt: START, wellFedSince: START, wellFedCoinAwarded: false });
+  state.tank.fishes.push({ ...movingFish("mermaid-coin", 100), speciesId: "rainbow-mermaid" });
 
-  simulate(state, START + 60_000);
+  simulate(state, START + 90_000);
   assert.equal(state.tank.coinDrops.length, 0);
 });
 
@@ -110,17 +95,46 @@ test("coin hermit crab automatically collects online coin drops", () => {
 test("coin hermit crab calculates offline income without duplicate payouts", () => {
   const state = createFreshState(START);
   state.tank.helpers.push({ id: "collector", kind: "coin-hermit-crab", satiety: 100 });
-  state.tank.fishes.push({ ...movingFish("offline-collected", 90), acquiredAt: START, wellFedSince: START, wellFedCoinAwarded: false });
+  state.tank.fishes.push(movingFish("offline-collected", 100));
 
-  const report = simulate(state, START + 90_000, { offline: true });
+  const report = simulate(state, START + 45_000, { offline: true });
   assert.equal(report.coinDropsCollected, 1);
   assert.equal(report.coinsCollected, 4);
   assert.equal(state.player.coins, 304);
   assert.equal(state.tank.coinDrops.length, 0);
 
-  const duplicate = simulate(state, START + 90_000, { offline: true });
+  const duplicate = simulate(state, START + 45_000, { offline: true });
   assert.equal(duplicate.coinsCollected, 0);
   assert.equal(state.player.coins, 304);
+});
+
+test("without a collector only one offline happiness reward waits", () => {
+  const state = createFreshState(START);
+  state.tank.fishes.push(movingFish("offline-pending", 100));
+  simulate(state, START + 20 * 60_000, { offline: true });
+  assert.equal(state.tank.fishes[0].pendingOfflineCoin, true);
+  assert.equal(state.tank.fishes[0].coinsEarnedToday, 1);
+  assert.equal(state.tank.fishes[0].happinessProgressMs, 0);
+  simulate(state, START + 20 * 60_000 + 1_000);
+  assert.equal(state.tank.coinDrops.length, 1);
+});
+
+test("each fish respects the daily happiness coin cap", () => {
+  const state = createFreshState(START);
+  state.tank.helpers.push({ id: "collector", kind: "coin-hermit-crab", satiety: 100 });
+  state.tank.fishes.push(movingFish("daily-cap", 100));
+  simulate(state, START + 20 * 60_000);
+  assert.equal(state.tank.fishes[0].coinsEarnedToday, 12);
+  assert.equal(state.player.coins, 348);
+});
+
+test("offline time pauses an existing fish disease countdown", () => {
+  const state = createFreshState(START);
+  state.tank.fishes.push({ ...movingFish("sick-offline", 80), health: "sick", sickSince: START - 23 * 3_600_000 });
+  simulate(state, START + 2 * 3_600_000, { offline: true });
+  assert.equal(state.tank.fishes[0].health, "sick");
+  simulate(state, START + 3 * 3_600_000);
+  assert.equal(state.tank.fishes[0].health, "dead");
 });
 
 test("animal steering remains finite and inside the aquarium", () => {
@@ -200,5 +214,16 @@ function movingFish(id, satiety) {
     behaviorSeed: 42,
     position: { x: 0.5, y: 0.5 },
     heading: "right",
+    personalityId: "playful",
+    preferredFoodTypeId: "basic-food",
+    habitatPreference: "plants",
+    sizePotential: 1,
+    familiarity: 100,
+    happiness: 0,
+    happinessProgressMs: 0,
+    nextHappinessCoinMs: 45_000,
+    coinDayKey: "",
+    coinsEarnedToday: 0,
+    pendingOfflineCoin: false,
   };
 }

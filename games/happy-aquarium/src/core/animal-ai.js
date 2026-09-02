@@ -1,4 +1,4 @@
-import { GAME_HEIGHT, GAME_WIDTH, SPECIES_BY_ID } from "../config/game-config.js";
+import { GAME_HEIGHT, GAME_WIDTH, PERSONALITY_BY_ID, SPECIES_BY_ID } from "../config/game-config.js";
 import { foodSatietyGain } from "./calculations.js";
 
 const WATER = { left: 40, right: 960, top: 75, bottom: 550 };
@@ -12,6 +12,8 @@ export function createAgent(fish) {
   return {
     id: fish.id,
     speciesId: fish.speciesId,
+    personalityId: fish.personalityId,
+    preferredFoodTypeId: fish.preferredFoodTypeId,
     x,
     y,
     vx: species?.movement.maxSpeed * (fish.heading === "left" ? -0.6 : 0.6) || 20,
@@ -69,8 +71,9 @@ export function stepAgents(agents, fishById, foodsOrDt, maybeDt) {
     } else if (agent.retargetIn <= 0) {
       chooseTarget(agent, config);
     }
+    const personality = PERSONALITY_BY_ID[fish.personalityId];
     const speedFactor = fish.health === "sick" ? 0.35 : fish.satiety < 25 ? 0.72 : fish.stage === "fry" ? 0.85 : fish.stage === "juvenile" ? 0.95 : 1;
-    const maxSpeed = Math.max(8, config.movement.maxSpeed * speedFactor);
+    const maxSpeed = Math.max(8, config.movement.maxSpeed * speedFactor * (personality?.speedMultiplier || 1));
     let ax = (agent.targetX - agent.x) * 0.35;
     let ay = (agent.targetY - agent.y) * 0.35;
     for (const neighbor of nearby(grid, agent, 96)) {
@@ -135,7 +138,8 @@ function updateFoodTarget(agent, fish, foods, config) {
 }
 
 function foodScore(agent, food, config) {
-  return Math.hypot(agent.x - food.x, agent.y - food.y) / Math.max(8, config.movement.maxSpeed);
+  const preference = food.foodTypeId === agent.preferredFoodTypeId ? 0.75 : 1;
+  return Math.hypot(agent.x - food.x, agent.y - food.y) / Math.max(8, config.movement.maxSpeed) * preference;
 }
 
 function resolveFoodArrivals(agents, fishById, foods, consumed) {
@@ -153,7 +157,7 @@ function resolveFoodArrivals(agents, fishById, foods, consumed) {
     food.consumed = true;
     consumed.push({ foodId: food.id, fishId: winner.id });
     const fish = fishById.get(winner.id);
-    const nextSatiety = Math.min(100, virtualSatiety.get(winner.id) + foodSatietyGain(food.foodTypeId, fish.speciesId));
+    const nextSatiety = Math.min(100, virtualSatiety.get(winner.id) + foodSatietyGain(food.foodTypeId, fish.speciesId, fish.preferredFoodTypeId));
     virtualSatiety.set(winner.id, nextSatiety);
     winner.foodSatiety = nextSatiety;
     for (const agent of agents) if (agent.foodTargetId === food.id) agent.foodTargetId = null;
@@ -171,7 +175,8 @@ function chooseTarget(agent, config) {
   const ry = agent.seed / 0x1_0000_0000;
   agent.targetX = WATER.left + 70 + rx * (WATER.right - WATER.left - 140);
   agent.targetY = GAME_HEIGHT * (config.movement.depthMin + ry * (config.movement.depthMax - config.movement.depthMin));
-  agent.retargetIn = 2 + rx * 3;
+  const retargetMultiplier = PERSONALITY_BY_ID[agent.personalityId]?.retargetMultiplier || 1;
+  agent.retargetIn = (2 + rx * 3) * retargetMultiplier;
 }
 
 function buildGrid(agents, size) {

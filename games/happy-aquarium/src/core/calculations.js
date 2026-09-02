@@ -1,4 +1,4 @@
-import { FISH_FOOD_BY_ID, SPECIES_BY_ID, STAGE_MULTIPLIER } from "../config/game-config.js";
+import { DECORATION_BY_ID, DECORATION_HABITAT_BY_ID, FISH_FOOD_BY_ID, SPECIES_BY_ID, SPECIES_HABITAT, STAGE_MULTIPLIER } from "../config/game-config.js";
 
 export function stageFromGrowth(growth) {
   if (growth < 10) return "egg";
@@ -16,10 +16,30 @@ export function fishSellPrice(fish) {
   return Math.floor(species.adultSellPrice * stage * variant * condition);
 }
 
-export function foodSatietyGain(foodTypeId, speciesId) {
+export function foodSatietyGain(foodTypeId, speciesId, preferredFoodTypeId = null) {
   const nutrition = Number(FISH_FOOD_BY_ID[foodTypeId]?.nutrition) || FISH_FOOD_BY_ID["basic-food"].nutrition;
   const capacity = Number(SPECIES_BY_ID[speciesId]?.stomachCapacity) || 100;
-  return nutrition / capacity * 100;
+  const preferenceMultiplier = foodTypeId === preferredFoodTypeId ? 1.15 : 1;
+  return nutrition / capacity * 100 * preferenceMultiplier;
+}
+
+export function environmentComfort(state, fish) {
+  const decorations = state?.tank?.decorations || [];
+  const appeal = decorations.reduce((sum, item) => sum + (DECORATION_BY_ID[item.catalogId]?.appeal || 0), 0);
+  const preferredHabitat = fish?.habitatPreference || SPECIES_HABITAT[fish?.speciesId];
+  const matchingCount = decorations.filter((item) => DECORATION_HABITAT_BY_ID[item.catalogId] === preferredHabitat).length;
+  const matchBonus = matchingCount > 0 ? Math.min(20, 10 + (matchingCount - 1) * 5) : 0;
+  return clamp(45 + Math.min(35, appeal * 0.8) + matchBonus, 0, 100);
+}
+
+export function fishHappiness(state, fish) {
+  if (!fish || fish.health === "dead" || fish.stage === "egg") return 0;
+  const satiety = clamp(Number(fish.satiety) || 0, 0, 100);
+  const cleanliness = clamp(Number(state?.tank?.cleanliness) || 0, 0, 100);
+  const comfort = environmentComfort(state, fish);
+  const familiarity = clamp(Number(fish.familiarity) || 0, 0, 100);
+  const happiness = 0.50 * satiety + 0.25 * cleanliness + 0.15 * comfort + 0.10 * familiarity;
+  return clamp(fish.health === "sick" ? Math.min(45, happiness) : happiness, 0, 100);
 }
 
 export function dayKeyTaipei(timestamp) {

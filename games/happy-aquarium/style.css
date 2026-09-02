@@ -57,6 +57,16 @@ button:focus-visible, a:focus-visible, .aquarium-stage:focus-visible { outline: 
 .panel-footer { display: flex; gap: 12px; align-items: center; padding: 10px 12px; border-top: 1px solid #ffffff14; background: #052b3d; }
 .panel-footer button { min-height: 38px; padding: 0 10px; }
 .panel-footer a { margin-left: auto; }
+.care-journal { max-height: min(62vh, 560px); overflow: auto; text-align: left; padding-right: 4px; }
+.care-journal h3 { margin: 16px 0 8px; color: #bcefff; }
+.care-journal ul { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.care-goal, .fish-profile { border: 1px solid #98eaff24; border-radius: 12px; background: #08384b; padding: 10px 12px; }
+.care-goal { display: flex; justify-content: space-between; gap: 14px; }
+.care-goal.is-complete { opacity: .68; }
+.care-total, .care-empty { color: #a9cbd7; }
+.fish-profile-list { display: grid; gap: 8px; }
+.fish-profile header { display: flex; justify-content: space-between; gap: 12px; color: #ffe28a; }
+.fish-profile p { margin: 5px 0 0; color: #c7e5ed; }
 
 .selection-panel { position: absolute; z-index: 30; right: calc(clamp(14px, 2.8vw, 42px) + 376px); bottom: 36px; width: min(340px, calc(100vw - 28px)); padding: 18px; border: 1px solid #9ceeff4a; border-radius: 20px; background: #062b3df2; box-shadow: 0 22px 80px #000a; backdrop-filter: blur(14px); }
 .selection-panel h2 { margin: 2px 0 4px; }

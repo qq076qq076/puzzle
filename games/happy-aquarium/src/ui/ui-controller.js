@@ -1,4 +1,5 @@
-import { ASSET_INSETS, CONSUMABLES, DECORATIONS, DECORATION_SCALE, DEVICES, DEVICE_SCALE, FISH_FOODS, HELPERS, SPECIES } from "../config/game-config.js";
+import { ASSET_INSETS, CONSUMABLES, DECORATIONS, DECORATION_SCALE, DEVICES, DEVICE_SCALE, FISH_FOOD_BY_ID, FISH_FOODS, HABITATS, HELPERS, PERSONALITY_BY_ID, SPECIES, SPECIES_BY_ID } from "../config/game-config.js";
+import { fishHappiness } from "../core/calculations.js";
 import { ERROR_MESSAGES } from "../core/game-core.js";
 import { missingRequirements, requirementNames } from "../core/unlocks.js";
 import { runtimeUrl } from "../phaser/asset-registry.js";
@@ -61,6 +62,7 @@ export class UIController {
       this.runCommand(input.dataset.scaleCommand, { instanceId: this.selected.id, scale: Number(input.value) });
     });
     byId("tank-name-button").addEventListener("click", () => this.renameTank());
+    byId("care-journal-button").addEventListener("click", () => this.openCareJournal());
     byId("settings-button").addEventListener("click", () => this.openSettings());
   }
 
@@ -76,6 +78,8 @@ export class UIController {
     for (const event of events) {
       if (event.type === "saveUrgent") this.saver?.save?.(true);
       if (event.type === "tutorialAdvanced") this.toast(tutorialMessage(event.step));
+      if (event.type === "dailyGoalCompleted") this.toast(`每日目標完成：+${event.reward} 金幣`);
+      if (event.type === "legendaryFishGranted") this.toast("長期照護里程碑完成：獲得彩虹美人魚魚卵！");
     }
   }
 
@@ -210,14 +214,27 @@ export class UIController {
     if (value != null) this.runCommand("RENAME_TANK", { name: value });
   }
 
+  async openCareJournal() {
+    const goals = this.snapshot.quests.items.map((goal) => `<li class="care-goal ${goal.completed ? "is-complete" : ""}"><span>${goal.completed ? "✓" : "○"} ${escapeHtml(goal.label)}</span><strong>${goal.progress}/${goal.target} · ● ${formatNumber(goal.reward)}</strong></li>`).join("");
+    const fishes = this.snapshot.tank.fishes.map((fish) => {
+      const personality = PERSONALITY_BY_ID[fish.personalityId]?.name || "獨特";
+      const food = FISH_FOOD_BY_ID[fish.preferredFoodTypeId]?.name || "基本飼料";
+      const habitat = HABITATS[fish.habitatPreference] || "水草";
+      const happiness = Math.round(fishHappiness(this.snapshot, fish));
+      return `<article class="fish-profile"><header><strong>${escapeHtml(fish.name || SPECIES_BY_ID[fish.speciesId]?.name || "魚")}</strong><span>幸福 ${happiness}</span></header><p>${personality}個性 · 喜歡${food} · 偏好${habitat}</p><p>體型潛力 ${Math.round((fish.sizePotential || 1) * 100)}% · 熟悉度 ${Math.round(fish.familiarity || 0)}</p></article>`;
+    }).join("") || '<p class="care-empty">魚缸裡還沒有魚，先從魚卵開始吧。</p>';
+    await this.ask("照護日誌", `<section class="care-journal"><h3>今日目標</h3><ul>${goals}</ul><p class="care-total">累計完成 ${formatNumber(this.snapshot.stats.dailyGoalsCompleted)} 個目標</p><h3>魚隻檔案</h3><div class="fish-profile-list">${fishes}</div></section>`, "關閉", false);
+  }
+
   async openSettings() {
     const value = await this.ask("設定", '<label class="setting-check"><input id="dialog-reduced" type="checkbox" /> 降低動態效果</label>', "儲存");
     if (value != null) this.toast("設定已儲存。");
   }
 
-  ask(title, body, confirmLabel = "確認") {
+  ask(title, body, confirmLabel = "確認", showCancel = true) {
     this.elements.dialogContent.innerHTML = `<h2>${title}</h2>${body}`;
     byId("dialog-confirm").textContent = confirmLabel;
+    byId("dialog-cancel").hidden = !showCancel;
     this.elements.dialog.showModal();
     return new Promise((resolve) => {
       this.elements.dialog.addEventListener("close", () => {

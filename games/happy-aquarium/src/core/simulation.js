@@ -1,16 +1,18 @@
 import {
   COIN_DROP_LIFETIME_MS,
   COIN_DROP_LIMIT,
-  COIN_WELL_FED_DURATION_MS,
-  COIN_WELL_FED_SATIETY,
   DEVICE_BY_ID,
   FOOD_LIFETIME_MS,
   HELPER_BY_ID,
+  HAPPINESS_COIN_DAILY_LIMIT,
+  HAPPINESS_COIN_INTERVAL_MAX_MS,
+  HAPPINESS_COIN_INTERVAL_MIN_MS,
+  HAPPINESS_COIN_THRESHOLD,
   OFFLINE_CAP_MS,
   SPECIES_BY_ID,
 } from "../config/game-config.js";
-import { clamp, dayKeyTaipei, foodSatietyGain, stageFromGrowth } from "./calculations.js";
-import { nextRandom } from "./rng.js";
+import { clamp, dayKeyTaipei, fishHappiness, foodSatietyGain, stageFromGrowth } from "./calculations.js";
+import { nextRandom, randomInt } from "./rng.js";
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -35,12 +37,9 @@ export function simulate(state, now = Date.now(), { offline = false } = {}) {
   const coinCollectorActive = state.tank.helpers.some((helper) => helper.kind === "coin-hermit-crab");
 
   for (const fish of state.tank.fishes) {
-    updateWellFedCoin(state, fish, from, to, offline, coinCollectorActive, report);
+    const happinessBefore = fishHappiness(state, fish);
     updateFish(state, fish, elapsed, to, warmMultiplier, offline, report);
-    if (fish.satiety < COIN_WELL_FED_SATIETY) {
-      fish.wellFedSince = 0;
-      fish.wellFedCoinAwarded = false;
-    }
+    updateHappinessCoins(state, fish, happinessBefore, elapsed, to, offline, coinCollectorActive, report);
   }
   if (coinCollectorActive) collectDroppedCoins(state, report);
 
@@ -50,48 +49,70 @@ export function simulate(state, now = Date.now(), { offline = false } = {}) {
   return report;
 }
 
-function updateWellFedCoin(state, fish, from, now, offline, coinCollectorActive, report) {
+function updateHappinessCoins(state, fish, happinessBefore, elapsed, now, offline, coinCollectorActive, report) {
+  const happinessAfter = fishHappiness(state, fish);
+  fish.happiness = happinessAfter;
   if (fish.stage === "egg" || fish.health === "dead") return;
   const species = SPECIES_BY_ID[fish.speciesId];
-  if (!species || fish.satiety < COIN_WELL_FED_SATIETY) {
-    fish.wellFedSince = 0;
-    fish.wellFedCoinAwarded = false;
-    return;
-  }
-  fish.wellFedSince ||= from;
-  if (fish.wellFedCoinAwarded) return;
-  const drainMultiplier = state.tank.cleanliness < 40 ? 1.5 : 1;
-  const sickMultiplier = fish.health === "sick" ? 0.75 : 1;
-  const drainPerMs = species.satietyDrainPerHour * drainMultiplier * sickMultiplier / HOUR;
-  const wellFedUntil = drainPerMs > 0 ? from + Math.max(0, fish.satiety - COIN_WELL_FED_SATIETY) / drainPerMs : Infinity;
-  const readyAt = fish.wellFedSince + COIN_WELL_FED_DURATION_MS;
-  if (readyAt > now || readyAt > wellFedUntil) return;
-
-  const purchasePrice = Number(SPECIES_BY_ID[fish.speciesId]?.eggPrice);
+  const purchasePrice = Number(species?.eggPrice);
   const coinValue = Number.isFinite(purchasePrice) && purchasePrice > 0 ? Math.floor(purchasePrice * 0.1) : 0;
-  fish.wellFedCoinAwarded = true;
-  if (offline) {
-    if (coinCollectorActive && coinValue > 0) {
-      state.player.coins += coinValue;
-      report.coinsCollected += coinValue;
-      report.coinDropsCollected += 1;
+  if (coinValue <= 0) return;
+  const dayKey = dayKeyTaipei(now);
+  if (fish.coinDayKey !== dayKey) {
+    fish.coinDayKey = dayKey;
+    fish.coinsEarnedToday = 0;
+  }
+  fish.happinessProgressMs = Math.max(0, Number(fish.happinessProgressMs) || 0);
+  fish.nextHappinessCoinMs = clamp(Number(fish.nextHappinessCoinMs) || HAPPINESS_COIN_INTERVAL_MIN_MS, HAPPINESS_COIN_INTERVAL_MIN_MS, HAPPINESS_COIN_INTERVAL_MAX_MS);
+
+  if (!offline && fish.pendingOfflineCoin && state.tank.coinDrops.length < COIN_DROP_LIMIT) {
+    createCoinDrop(state, fish, coinValue, now, report);
+    fish.pendingOfflineCoin = false;
+  }
+
+  const eligibleMs = eligibleHappinessDuration(happinessBefore, happinessAfter, elapsed);
+  fish.happinessProgressMs += eligibleMs;
+  while (fish.happinessProgressMs >= fish.nextHappinessCoinMs && fish.coinsEarnedToday < HAPPINESS_COIN_DAILY_LIMIT) {
+    if (offline && !coinCollectorActive && fish.pendingOfflineCoin) break;
+    if (!offline && state.tank.coinDrops.length >= COIN_DROP_LIMIT) break;
+    fish.happinessProgressMs -= fish.nextHappinessCoinMs;
+    fish.coinsEarnedToday += 1;
+    if (offline) {
+      if (coinCollectorActive) {
+        state.player.coins += coinValue;
+        report.coinsCollected += coinValue;
+        report.coinDropsCollected += 1;
+      } else {
+        fish.pendingOfflineCoin = true;
+      }
+    } else {
+      createCoinDrop(state, fish, coinValue, now, report);
     }
-    return;
+    fish.nextHappinessCoinMs = randomInt(state.rng, HAPPINESS_COIN_INTERVAL_MIN_MS / 1000, HAPPINESS_COIN_INTERVAL_MAX_MS / 1000) * 1000;
+    if (offline && !coinCollectorActive) {
+      fish.happinessProgressMs = 0;
+      break;
+    }
   }
-  if (coinValue > 0 && state.tank.coinDrops.length < COIN_DROP_LIMIT) {
-    const x = clamp(Number(fish.position?.x) || 0.5, 0.06, 0.94);
-    const y = clamp(Number(fish.position?.y) || 0.5, 0.16, 0.86);
-    state.tank.coinDrops.push({
-      id: `coin_${fish.id}_${readyAt}`,
-      fishId: fish.id,
-      x,
-      y,
-      value: coinValue,
-      createdAt: now,
-      expiresAt: now + COIN_DROP_LIFETIME_MS,
-    });
-    report.coinsDropped += 1;
-  }
+}
+
+function eligibleHappinessDuration(before, after, elapsed) {
+  if (before >= HAPPINESS_COIN_THRESHOLD && after >= HAPPINESS_COIN_THRESHOLD) return elapsed;
+  if (before < HAPPINESS_COIN_THRESHOLD && after < HAPPINESS_COIN_THRESHOLD) return 0;
+  const distance = Math.abs(after - before);
+  if (distance <= 0) return 0;
+  if (before >= HAPPINESS_COIN_THRESHOLD) return elapsed * clamp((before - HAPPINESS_COIN_THRESHOLD) / distance, 0, 1);
+  return elapsed * clamp((after - HAPPINESS_COIN_THRESHOLD) / distance, 0, 1);
+}
+
+function createCoinDrop(state, fish, value, now, report) {
+  const x = clamp(Number(fish.position?.x) || 0.5, 0.06, 0.94);
+  const y = clamp(Number(fish.position?.y) || 0.5, 0.16, 0.86);
+  state.tank.coinDrops.push({
+    id: `coin_${fish.id}_${now}_${fish.coinsEarnedToday}_${state.tank.coinDrops.length}`,
+    fishId: fish.id, x, y, value, createdAt: now, expiresAt: now + COIN_DROP_LIFETIME_MS,
+  });
+  report.coinsDropped += 1;
 }
 
 function collectDroppedCoins(state, report) {
@@ -109,7 +130,8 @@ export function feedHungriestFish(state, pelletCount = 5, foodTypeId = "basic-fo
     .sort((left, right) => left.satiety - right.satiety || left.id.localeCompare(right.id));
   const fed = [];
   for (const fish of candidates.slice(0, pelletCount)) {
-    fish.satiety = clamp(fish.satiety + foodSatietyGain(foodTypeId, fish.speciesId), 0, 100);
+    fish.satiety = clamp(fish.satiety + foodSatietyGain(foodTypeId, fish.speciesId, fish.preferredFoodTypeId), 0, 100);
+    fish.familiarity = clamp((Number(fish.familiarity) || 0) + 1, 0, 100);
     fish.starvingSince = 0;
     fed.push(fish.id);
   }
@@ -121,6 +143,7 @@ function updateFish(state, fish, elapsed, now, growthMultiplier, offline, report
   if (!species) return;
   const startedSatiety = Number(fish.satiety) || 0;
   if (fish.health === "dead") return;
+  if (offline && fish.health === "sick" && fish.sickSince) fish.sickSince += elapsed;
 
   if (fish.stage !== "egg") {
     const drainMultiplier = state.tank.cleanliness < 40 ? 1.5 : 1;
@@ -146,7 +169,7 @@ function updateFish(state, fish, elapsed, now, growthMultiplier, offline, report
     const chance = Math.min(0.35, 0.08 + 0.02 * Math.floor(elapsed / HOUR));
     if (nextRandom(state.rng) < chance) makeSick(fish, now, report);
   }
-  if (fish.health === "sick" && now - fish.sickSince >= DAY) {
+  if (!offline && fish.health === "sick" && now - fish.sickSince >= DAY) {
     fish.health = "dead";
     fish.diedAt = now;
     report.died += 1;

@@ -32,6 +32,28 @@ export const SPECIES = [
 
 export const SPECIES_BY_ID = Object.fromEntries(SPECIES.map((item) => [item.id, item]));
 
+export const PERSONALITIES = [
+  { id: "curious", name: "好奇", speedMultiplier: 1.05, retargetMultiplier: 0.80 },
+  { id: "calm", name: "沉穩", speedMultiplier: 0.90, retargetMultiplier: 1.25 },
+  { id: "playful", name: "活潑", speedMultiplier: 1.15, retargetMultiplier: 0.70 },
+  { id: "shy", name: "害羞", speedMultiplier: 0.95, retargetMultiplier: 1.40 },
+];
+export const PERSONALITY_BY_ID = Object.fromEntries(PERSONALITIES.map((item) => [item.id, item]));
+
+export const HABITATS = {
+  plants: "水草",
+  caves: "洞穴",
+  corals: "珊瑚",
+  relics: "遺跡",
+};
+
+export const SPECIES_HABITAT = {
+  goby: "caves", guppy: "plants", anglerfish: "caves", "golden-koi": "plants",
+  zebrafish: "plants", clownfish: "corals", "blue-devil": "corals", angelfish: "plants",
+  lionfish: "caves", moonfish: "relics", arowana: "plants", "electric-eel": "caves",
+  stingray: "relics", "rainbow-mermaid": "corals",
+};
+
 export const FISH_FOODS = [
   { id: "basic-food", name: "基本飼料", nutrition: 15, price: null, tint: 0xffffff },
   { id: "nutritious-food", name: "高營養飼料", nutrition: 30, price: 25, tint: 0x72e6ad },
@@ -86,6 +108,14 @@ export const HELPER_BY_ID = Object.fromEntries(HELPERS.map((item) => [item.id, i
 export const DEVICE_BY_ID = Object.fromEntries(DEVICES.map((item) => [item.id, item]));
 export const DECORATION_BY_ID = Object.fromEntries(DECORATIONS.map((item) => [item.id, item]));
 
+const PLANT_DECORATIONS = ["anubias-plant", "java-fern", "vallisneria-grass", "moss-ball", "red-seaweed"];
+const CORAL_DECORATIONS = ["starfish", "shell-cluster", "pink-branch-coral", "blue-fan-coral", "brain-coral", "pearl-clam", "coral-gate"];
+const CAVE_DECORATIONS = ["driftwood-arch", "rock-arch", "pebble-cave", "bubble-conch"];
+export const DECORATION_HABITAT_BY_ID = Object.fromEntries(DECORATIONS.map((item) => [
+  item.id,
+  PLANT_DECORATIONS.includes(item.id) ? "plants" : CORAL_DECORATIONS.includes(item.id) ? "corals" : CAVE_DECORATIONS.includes(item.id) ? "caves" : "relics",
+]));
+
 export const DEVICE_PLACEMENTS = {
   "bubble-stone": { x: 0.18, y: 0.86, scale: 1.25, depth: 420 },
   "basic-feeder": { x: 0.84, y: 0.17, scale: 1.25, depth: 420 },
@@ -104,8 +134,10 @@ export const TRANSACTION_LIMIT = 50;
 export const OFFLINE_CAP_MS = 7 * 24 * 3_600_000;
 export const FOOD_LIFETIME_MS = 20_000;
 export const FOOD_FALL_SPEED_PX = 24;
-export const COIN_WELL_FED_SATIETY = 80;
-export const COIN_WELL_FED_DURATION_MS = 60_000;
+export const HAPPINESS_COIN_THRESHOLD = 80;
+export const HAPPINESS_COIN_INTERVAL_MIN_MS = 45_000;
+export const HAPPINESS_COIN_INTERVAL_MAX_MS = 90_000;
+export const HAPPINESS_COIN_DAILY_LIMIT = 12;
 export const COIN_DROP_LIFETIME_MS = 120_000;
 export const COIN_DROP_LIMIT = 40;
 export const COIN_FALL_SPEED_PX = 16;

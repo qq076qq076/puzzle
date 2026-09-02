@@ -62,6 +62,7 @@ export class AquariumScene extends Phaser.Scene {
     for (const [id, view] of this.fishViews) {
       if (!ids.has(id)) {
         view.sprite.destroy();
+        view.statusText?.destroy();
         this.fishViews.delete(id);
       }
     }
@@ -70,16 +71,20 @@ export class AquariumScene extends Phaser.Scene {
       const kind = fish.stage === "egg" ? "egg" : "fish";
       if (!view || view.kind !== kind) {
         view?.sprite.destroy();
+        view?.statusText?.destroy();
         const texture = kind === "egg" ? objectTextureKey("fish-egg-hatch") : fishTextureKey(fish.speciesId);
         const sprite = this.add.sprite((fish.position?.x ?? 0.5) * GAME_WIDTH, (fish.position?.y ?? 0.5) * GAME_HEIGHT, this.textures.exists(texture) ? texture : "__AQUARIUM_MISSING");
         const agent = createAgent(fish);
-        view = { kind, sprite, agent, animation: "", renderFacing: agent.facing, turning: false };
+        const statusText = this.add.text(sprite.x, sprite.y - 30, "", { fontFamily: "system-ui", fontSize: "23px", fontStyle: "bold", stroke: "#073448", strokeThickness: 4 }).setOrigin(0.5).setDepth(850);
+        view = { kind, sprite, statusText, agent, animation: "", renderFacing: agent.facing, turning: false };
         sprite.setFlipX(agent.facing < 0);
         this.fishViews.set(fish.id, view);
       }
       view.fish = fish;
-      const scale = kind === "egg" ? 0.8 : (STAGE_SCALE[fish.stage] || 1) * (SPECIES_BY_ID[fish.speciesId]?.displayScale || 1);
+      const scale = kind === "egg" ? 0.8 : (STAGE_SCALE[fish.stage] || 1) * (SPECIES_BY_ID[fish.speciesId]?.displayScale || 1) * (fish.sizePotential || 1);
       view.sprite.setScale(scale).setAlpha(fish.health === "sick" ? 0.72 : 1);
+      const marker = fish.health === "sick" ? { text: "✚", color: "#ff7272" } : fish.stage !== "egg" && fish.satiety < 30 ? { text: "!", color: "#ffd166" } : fish.happiness >= 80 ? { text: "♥", color: "#ff91bd" } : { text: "", color: "#ffffff" };
+      view.statusText.setText(marker.text).setColor(marker.color).setVisible(Boolean(marker.text));
       if (kind === "egg") {
         view.sprite.setFrame(Math.min(3, Math.floor(fish.growth / 2.5)));
       } else {
@@ -249,7 +254,7 @@ export class AquariumScene extends Phaser.Scene {
     const agents = [...this.fishViews.values()].filter((view) => view.kind === "fish").map((view) => view.agent);
     for (const view of this.foodViews.values()) view.sprite.y = foodDisplayY(view.food);
     for (const view of this.coinViews.values()) view.sprite.y = coinDisplayY(view.coin);
-    const foods = [...this.foodViews.entries()].map(([id, view]) => ({ id, x: view.sprite.x, y: view.sprite.y, claimedBy: view.claimedBy, consumed: view.consumed, view }));
+    const foods = [...this.foodViews.entries()].map(([id, view]) => ({ id, foodTypeId: view.food.foodTypeId, x: view.sprite.x, y: view.sprite.y, claimedBy: view.claimedBy, consumed: view.consumed, view }));
     const consumed = [];
     let steps = 0;
     while (this.accumulator >= 1 / 60 && steps < 5) {
@@ -271,6 +276,7 @@ export class AquariumScene extends Phaser.Scene {
         view.sprite.setPosition(view.agent.x, view.agent.y).setAngle(view.fish.health === "sick" ? Math.sin(time / 500) * 12 : 0);
       }
       view.sprite.setDepth(100 + Math.floor(view.sprite.y));
+      view.statusText.setPosition(view.sprite.x, view.sprite.y - Math.max(26, view.sprite.displayHeight * 0.52)).setDepth(850);
     }
     for (const view of this.helperViews.values()) {
       const speed = HELPERS_BY_KIND[view.helper.kind] || 10;
