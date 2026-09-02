@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 
-import { DECORATIONS, DEVICE_PLACEMENTS, DEVICES, HELPERS, SPECIES } from "../src/config/game-config.js";
+import { CONSUMABLES, DECORATIONS, DEVICE_PLACEMENTS, DEVICES, FISH_FOODS, HELPERS, SPECIES } from "../src/config/game-config.js";
 
 test("every ownership prerequisite references a known catalog item", () => {
   const items = [...SPECIES, ...HELPERS, ...DEVICES, ...DECORATIONS];
@@ -16,6 +16,7 @@ test("every ownership prerequisite references a known catalog item", () => {
       assert.notEqual(requiredId, item.id);
     }
   }
+  for (const item of CONSUMABLES) for (const requiredId of item.requires) assert.equal(ids.has(requiredId), true, `${item.id} requires unknown item ${requiredId}`);
 });
 
 test("every decoration, food pellet, and collectible coin has a runtime animation strip", () => {
@@ -50,6 +51,12 @@ test("fish species have intentional display scales", () => {
   assert.ok(scales.stingray > scales.guppy);
   assert.ok(scales.arowana > scales.clownfish);
   assert.equal(Math.max(...Object.values(scales)), scales.stingray);
+});
+
+test("fish foods and species stomach capacities produce distinct feeding values", () => {
+  for (const species of SPECIES) assert.ok(species.stomachCapacity >= 50 && species.stomachCapacity <= 200, species.id);
+  assert.ok(SPECIES.find((item) => item.id === "stingray").stomachCapacity > SPECIES.find((item) => item.id === "guppy").stomachCapacity);
+  assert.deepEqual(FISH_FOODS.map((item) => item.nutrition), [15, 30, 50]);
 });
 
 test("every helper moves and every device has a valid functional placement", () => {

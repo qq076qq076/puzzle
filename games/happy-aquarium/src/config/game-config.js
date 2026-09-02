@@ -3,21 +3,21 @@ export const GAME_HEIGHT = 600;
 export const TIME_ZONE = "Asia/Taipei";
 
 export const SPECIES = [
-  ["goby", "小蝦虎", [], 30, 60, 30, 10, 35, 0.72, [0.72, 0.92]],
-  ["guppy", "孔雀魚", [], 45, 100, 45, 10, 70, 0.78, [0.20, 0.58]],
-  ["anglerfish", "燈籠魚", ["guppy"], 90, 210, 90, 12, 30, 0.95, [0.58, 0.88]],
-  ["golden-koi", "黃金錦鯉", ["anglerfish"], 260, 600, 180, 12, 45, 1.08, [0.18, 0.78]],
-  ["zebrafish", "斑馬魚", ["guppy"], 150, 360, 120, 14, 95, 0.80, [0.22, 0.62]],
-  ["clownfish", "小丑魚", ["golden-koi"], 500, 1200, 240, 12, 55, 0.90, [0.32, 0.72]],
-  ["blue-devil", "藍魔鬼", ["clownfish"], 520, 1250, 240, 13, 65, 0.88, [0.28, 0.72]],
-  ["angelfish", "神仙魚", ["blue-devil"], 1400, 3400, 360, 12, 35, 1.05, [0.25, 0.75]],
-  ["lionfish", "獅子魚", ["angelfish"], 1800, 4400, 480, 11, 30, 1.12, [0.45, 0.85]],
-  ["moonfish", "月光魚", ["lionfish"], 3200, 8000, 600, 10, 45, 1.00, [0.20, 0.68]],
-  ["arowana", "龍魚", ["moonfish"], 8000, 20000, 960, 9, 60, 1.25, [0.12, 0.42]],
-  ["electric-eel", "電鰻", ["arowana"], 8800, 22000, 1080, 10, 70, 1.22, [0.45, 0.88]],
-  ["stingray", "魟魚", ["electric-eel"], 20000, 52000, 1440, 8, 40, 1.45, [0.76, 0.94]],
-  ["rainbow-mermaid", "彩虹美人魚", ["rainbow-crystal"], null, 120000, 1440, 8, 55, 1.25, [0.15, 0.88]],
-].map(([id, name, requires, eggPrice, adultSellPrice, growthMinutes, satietyDrainPerHour, maxSpeed, displayScale, depth]) => ({
+  ["goby", "小蝦虎", [], 30, 60, 30, 10, 35, 0.72, 60, [0.72, 0.92]],
+  ["guppy", "孔雀魚", [], 45, 100, 45, 10, 70, 0.78, 70, [0.20, 0.58]],
+  ["anglerfish", "燈籠魚", ["guppy"], 90, 210, 90, 12, 30, 0.95, 100, [0.58, 0.88]],
+  ["golden-koi", "黃金錦鯉", ["anglerfish"], 260, 600, 180, 12, 45, 1.08, 130, [0.18, 0.78]],
+  ["zebrafish", "斑馬魚", ["guppy"], 150, 360, 120, 14, 95, 0.80, 75, [0.22, 0.62]],
+  ["clownfish", "小丑魚", ["golden-koi"], 500, 1200, 240, 12, 55, 0.90, 90, [0.32, 0.72]],
+  ["blue-devil", "藍魔鬼", ["clownfish"], 520, 1250, 240, 13, 65, 0.88, 95, [0.28, 0.72]],
+  ["angelfish", "神仙魚", ["blue-devil"], 1400, 3400, 360, 12, 35, 1.05, 110, [0.25, 0.75]],
+  ["lionfish", "獅子魚", ["angelfish"], 1800, 4400, 480, 11, 30, 1.12, 125, [0.45, 0.85]],
+  ["moonfish", "月光魚", ["lionfish"], 3200, 8000, 600, 10, 45, 1.00, 120, [0.20, 0.68]],
+  ["arowana", "龍魚", ["moonfish"], 8000, 20000, 960, 9, 60, 1.25, 160, [0.12, 0.42]],
+  ["electric-eel", "電鰻", ["arowana"], 8800, 22000, 1080, 10, 70, 1.22, 150, [0.45, 0.88]],
+  ["stingray", "魟魚", ["electric-eel"], 20000, 52000, 1440, 8, 40, 1.45, 180, [0.76, 0.94]],
+  ["rainbow-mermaid", "彩虹美人魚", ["rainbow-crystal"], null, 120000, 1440, 8, 55, 1.25, 165, [0.15, 0.88]],
+].map(([id, name, requires, eggPrice, adultSellPrice, growthMinutes, satietyDrainPerHour, maxSpeed, displayScale, stomachCapacity, depth]) => ({
   id,
   name,
   requires,
@@ -26,10 +26,27 @@ export const SPECIES = [
   growthMs: growthMinutes * 60_000,
   satietyDrainPerHour,
   displayScale,
+  stomachCapacity,
   movement: { maxSpeed, depthMin: depth[0], depthMax: depth[1] },
 }));
 
 export const SPECIES_BY_ID = Object.fromEntries(SPECIES.map((item) => [item.id, item]));
+
+export const FISH_FOODS = [
+  { id: "basic-food", name: "基本飼料", nutrition: 15, price: null, tint: 0xffffff },
+  { id: "nutritious-food", name: "高營養飼料", nutrition: 30, price: 25, tint: 0x72e6ad },
+  { id: "gourmet-food", name: "豪華飼料", nutrition: 50, price: 50, tint: 0xffd166 },
+];
+
+export const FISH_FOOD_BY_ID = Object.fromEntries(FISH_FOODS.map((item) => [item.id, item]));
+
+export const CONSUMABLES = [
+  ...FISH_FOODS.filter((item) => item.price != null).map((item) => ({ ...item, kind: "fish-food", requires: [] })),
+  { id: "algae-wafer", name: "藻錠", kind: "algae-wafer", price: 50, requires: ["apple-snail"] },
+  { id: "medicine", name: "藥水", kind: "medicine", price: 100, requires: [] },
+];
+
+export const CONSUMABLE_BY_ID = Object.fromEntries(CONSUMABLES.map((item) => [item.id, item]));
 
 export const HELPERS = [
   { id: "apple-snail", name: "蘋果螺", requires: ["goby"], price: 800, reduction: 0.20, drainPerHour: 0.75, movementSpeed: 10 },
@@ -86,7 +103,6 @@ export const STAGE_SCALE = { egg: 0.75, fry: 0.40, juvenile: 0.70, adult: 1 };
 export const TRANSACTION_LIMIT = 50;
 export const OFFLINE_CAP_MS = 7 * 24 * 3_600_000;
 export const FOOD_LIFETIME_MS = 20_000;
-export const FOOD_SATIETY = 15;
 export const FOOD_FALL_SPEED_PX = 24;
 export const COIN_DROP_INTERVAL_MS = 30_000;
 export const COIN_DROP_LIFETIME_MS = 120_000;

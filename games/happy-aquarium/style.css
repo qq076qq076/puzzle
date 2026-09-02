@@ -37,7 +37,7 @@ button:hover:not(:disabled) { background: #116078; transform: translateY(-1px); 
 button:focus-visible, a:focus-visible, .aquarium-stage:focus-visible { outline: 3px solid #ffe083; outline-offset: 2px; }
 
 .panel-column { display: flex; flex-direction: column; max-height: calc(100vh - 105px); }
-.tabs { display: grid; grid-template-columns: repeat(4, 1fr); padding: 9px; gap: 5px; background: #052b3d; }
+.tabs { display: grid; grid-template-columns: repeat(5, 1fr); padding: 9px; gap: 5px; background: #052b3d; }
 .tabs button { min-height: 40px; border: 0; background: transparent; color: #8ecbd9; }
 .tabs button.is-active { color: #062a38; background: #76e4db; }
 .shop-panel { flex: 1; min-height: 0; padding: 9px; overflow: auto; scrollbar-color: #2f788e transparent; }
@@ -51,8 +51,9 @@ button:focus-visible, a:focus-visible, .aquarium-stage:focus-visible { outline: 
 .sprite-preview--decoration { background-size: 192px 64px; }
 .shop-card h3 { margin: 0 0 4px; font-size: 14px; }
 .shop-card p { margin: 0; color: #8fc8d6; font-size: 11px; }
-.shop-card > button { max-width: 116px; min-width: 72px; min-height: 40px; padding: 6px 10px; border: 0; border-radius: 11px; color: #05303c; background: #ffd771; font-size: 11px; font-weight: 900; line-height: 1.2; cursor: pointer; }
-.shop-card > button:disabled { color: #7b9ba2; background: #173f4c; cursor: not-allowed; }
+.shop-card > button, .shop-card__actions button { max-width: 116px; min-width: 72px; min-height: 36px; padding: 6px 10px; border: 0; border-radius: 11px; color: #05303c; background: #ffd771; font-size: 11px; font-weight: 900; line-height: 1.2; cursor: pointer; }
+.shop-card > button:disabled, .shop-card__actions button:disabled { color: #7b9ba2; background: #173f4c; cursor: not-allowed; }
+.shop-card__actions { display: grid; gap: 5px; justify-items: stretch; }
 .panel-footer { display: flex; gap: 12px; align-items: center; padding: 10px 12px; border-top: 1px solid #ffffff14; background: #052b3d; }
 .panel-footer button { min-height: 38px; padding: 0 10px; }
 .panel-footer a { margin-left: auto; }

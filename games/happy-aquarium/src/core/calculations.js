@@ -1,4 +1,4 @@
-import { SPECIES_BY_ID, STAGE_MULTIPLIER } from "../config/game-config.js";
+import { FISH_FOOD_BY_ID, SPECIES_BY_ID, STAGE_MULTIPLIER } from "../config/game-config.js";
 
 export function stageFromGrowth(growth) {
   if (growth < 10) return "egg";
@@ -14,6 +14,12 @@ export function fishSellPrice(fish) {
   const variant = fish.variant === "shiny" ? 2 : 1;
   const condition = fish.health === "sick" ? 0.5 : 1;
   return Math.floor(species.adultSellPrice * stage * variant * condition);
+}
+
+export function foodSatietyGain(foodTypeId, speciesId) {
+  const nutrition = Number(FISH_FOOD_BY_ID[foodTypeId]?.nutrition) || FISH_FOOD_BY_ID["basic-food"].nutrition;
+  const capacity = Number(SPECIES_BY_ID[speciesId]?.stomachCapacity) || 100;
+  return nutrition / capacity * 100;
 }
 
 export function dayKeyTaipei(timestamp) {

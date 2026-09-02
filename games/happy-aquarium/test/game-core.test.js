@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { GameCore } from "../src/core/game-core.js";
+import { foodSatietyGain } from "../src/core/calculations.js";
 import { createFreshState, normalizeState } from "../src/core/state.js";
 
 const START = Date.UTC(2026, 0, 1);
@@ -55,13 +56,51 @@ test("food has no cooldown and only the fish that eats it recovers satiety", () 
   const eaten = core.dispatch("EAT_FOOD", { foodId: first.state.tank.foods[0].id, fishId: "hungry" }, "eat-1", START);
   assert.equal(eaten.ok, true);
   assert.equal(eaten.state.tank.foods.length, 1);
-  assert.equal(eaten.state.tank.fishes.find((item) => item.id === "hungry").satiety, 25);
+  assert.equal(eaten.state.tank.fishes.find((item) => item.id === "hungry").satiety, 10 + foodSatietyGain("basic-food", "guppy"));
   assert.equal(eaten.state.tank.fishes.find((item) => item.id === "full").satiety, 50);
 
   const refused = core.dispatch("EAT_FOOD", { foodId: eaten.state.tank.foods[0].id, fishId: "full" }, "eat-full", START);
   assert.equal(refused.ok, false);
   assert.equal(refused.errorCode, "FISH_CANNOT_EAT");
   assert.equal(refused.state.tank.foods.length, 1);
+});
+
+test("purchased premium food is selected, consumed on drop, and restores by stomach capacity", () => {
+  const state = createFreshState(START);
+  state.tank.fishes = [fish("small", 10, "goby"), fish("large", 10, "stingray")];
+  state.tutorial.step = "complete";
+  const core = new GameCore(state);
+
+  const bought = core.dispatch("BUY_CONSUMABLE", { itemId: "nutritious-food" }, "buy-food", START);
+  assert.equal(bought.ok, true);
+  assert.equal(bought.state.player.coins, 275);
+  assert.equal(bought.state.inventory.fishFoods["nutritious-food"], 1);
+  assert.equal(core.dispatch("SELECT_FOOD", { foodTypeId: "nutritious-food" }, "select-food", START).ok, true);
+
+  const dropped = core.dispatch("FEED", { x: 0.4, y: 0.4 }, "drop-premium", START);
+  assert.equal(dropped.state.tank.foods[0].foodTypeId, "nutritious-food");
+  assert.equal(dropped.state.inventory.fishFoods["nutritious-food"], 0);
+  assert.equal(dropped.state.inventory.selectedFishFoodId, "basic-food");
+
+  const smallFed = core.dispatch("EAT_FOOD", { foodId: dropped.state.tank.foods[0].id, fishId: "small" }, "small-eats", START);
+  assert.equal(smallFed.state.tank.fishes.find((item) => item.id === "small").satiety, 10 + foodSatietyGain("nutritious-food", "goby"));
+  assert.ok(foodSatietyGain("nutritious-food", "goby") > foodSatietyGain("nutritious-food", "stingray"));
+});
+
+test("medicine can be purchased and consumed to cure a sick fish", () => {
+  const state = createFreshState(START);
+  state.inventory.medicines = 0;
+  state.tank.fishes = [{ ...fish("sick", 5), health: "sick", sickSince: START - 1_000 }];
+  const core = new GameCore(state);
+
+  const bought = core.dispatch("BUY_CONSUMABLE", { itemId: "medicine" }, "buy-medicine", START);
+  assert.equal(bought.ok, true);
+  assert.equal(bought.state.player.coins, 200);
+  assert.equal(bought.state.inventory.medicines, 1);
+  const cured = core.dispatch("USE_MEDICINE", { fishId: "sick" }, "use-medicine", START);
+  assert.equal(cured.ok, true);
+  assert.equal(cured.state.inventory.medicines, 0);
+  assert.equal(cured.state.tank.fishes[0].health, "healthy");
 });
 
 test("collecting a fish coin credits it exactly once", () => {
@@ -168,13 +207,18 @@ test("legacy level, experience, capacity, and feed cooldown fields are removed d
   legacy.player.exp = 999;
   legacy.tank.fishLimit = 15;
   legacy.tank.lastFeedAt = START;
+  legacy.tank.foods = [{ id: "legacy-food", x: 0.5, y: 0.5, createdAt: START, expiresAt: START + 10_000 }];
+  legacy.inventory.selectedFishFoodId = "gourmet-food";
 
   const migrated = normalizeState(legacy, START);
-  assert.equal(migrated.schemaVersion, 3);
+  assert.equal(migrated.schemaVersion, 4);
   assert.deepEqual(migrated.player, { coins: 300, gems: 3 });
   assert.equal("fishLimit" in migrated.tank, false);
   assert.equal("lastFeedAt" in migrated.tank, false);
   assert.deepEqual(migrated.tank.coinDrops, []);
+  assert.equal(migrated.tank.foods[0].foodTypeId, "basic-food");
+  assert.deepEqual(migrated.inventory.fishFoods, { "nutritious-food": 0, "gourmet-food": 0 });
+  assert.equal(migrated.inventory.selectedFishFoodId, "basic-food");
 });
 
 function fish(id, satiety, speciesId = "guppy") {

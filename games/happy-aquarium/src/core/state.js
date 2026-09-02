@@ -1,6 +1,6 @@
-import { DECORATION_SCALE, DEVICE_SCALE } from "../config/game-config.js";
+import { DECORATION_SCALE, DEVICE_SCALE, FISH_FOOD_BY_ID } from "../config/game-config.js";
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export function makeId(prefix = "item") {
   const suffix = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -21,7 +21,7 @@ export function createFreshState(now = Date.now()) {
       foods: [],
       coinDrops: [],
     },
-    inventory: { algaeWafers: 2, medicines: 1, filterCartridges: 0, decorationShards: 0, fertilizerShards: 0 },
+    inventory: { fishFoods: { "nutritious-food": 0, "gourmet-food": 0 }, selectedFishFoodId: "basic-food", algaeWafers: 2, medicines: 1, filterCartridges: 0, decorationShards: 0, fertilizerShards: 0 },
     tutorial: { step: "buy-first-egg", firstEggOverrideConsumed: false, claimedRewardIds: [] },
     events: { nextRewardAt: now + 4 * 3_600_000, pendingRewards: 0 },
     quests: { dayKey: "", items: [] },
@@ -57,13 +57,18 @@ export function normalizeState(input, now = Date.now()) {
     : [];
   state.tank.devices.slots = state.tank.devices.slots && typeof state.tank.devices.slots === "object" ? state.tank.devices.slots : {};
   state.tank.foods = Array.isArray(state.tank.foods)
-    ? state.tank.foods.filter((food) => food && typeof food.id === "string" && finiteNumber(food.expiresAt, 0) > now)
+    ? state.tank.foods
+      .filter((food) => food && typeof food.id === "string" && finiteNumber(food.expiresAt, 0) > now)
+      .map((food) => ({ ...food, foodTypeId: FISH_FOOD_BY_ID[food.foodTypeId] ? food.foodTypeId : "basic-food" }))
     : [];
   state.tank.coinDrops = Array.isArray(state.tank.coinDrops)
     ? state.tank.coinDrops.filter((coin) => coin && typeof coin.id === "string" && finiteNumber(coin.expiresAt, 0) > now)
     : [];
   state.tank.cleanliness = Math.max(0, Math.min(100, finiteNumber(state.tank.cleanliness, 100)));
   state.inventory = { ...fresh.inventory, ...(state.inventory ?? {}) };
+  state.inventory.fishFoods = Object.fromEntries(Object.keys(fresh.inventory.fishFoods).map((foodTypeId) => [foodTypeId, Math.max(0, finiteInt(state.inventory.fishFoods?.[foodTypeId], 0))]));
+  state.inventory.selectedFishFoodId = FISH_FOOD_BY_ID[state.inventory.selectedFishFoodId] ? state.inventory.selectedFishFoodId : "basic-food";
+  if (FISH_FOOD_BY_ID[state.inventory.selectedFishFoodId].price != null && state.inventory.fishFoods[state.inventory.selectedFishFoodId] <= 0) state.inventory.selectedFishFoodId = "basic-food";
   state.tutorial = { ...fresh.tutorial, ...(state.tutorial ?? {}) };
   state.events = { ...fresh.events, ...(state.events ?? {}) };
   state.stats = { ...fresh.stats, ...(state.stats ?? {}) };

@@ -2,15 +2,16 @@ import {
   DECORATION_BY_ID,
   DECORATION_SCALE,
   COIN_DROP_INTERVAL_MS,
+  CONSUMABLE_BY_ID,
   DEVICE_BY_ID,
   DEVICE_SCALE,
+  FISH_FOOD_BY_ID,
   FOOD_LIFETIME_MS,
-  FOOD_SATIETY,
   HELPER_BY_ID,
   SPECIES_BY_ID,
   TRANSACTION_LIMIT,
 } from "../config/game-config.js";
-import { clamp, fishSellPrice, stageFromGrowth } from "./calculations.js";
+import { clamp, fishSellPrice, foodSatietyGain, stageFromGrowth } from "./calculations.js";
 import { nextRandom, randomInt } from "./rng.js";
 import { simulate } from "./simulation.js";
 import { createFreshState, makeId, normalizeState } from "./state.js";
@@ -129,12 +130,42 @@ const COMMANDS = {
     return ok();
   },
 
-  FEED(state, { x, y }, now, events) {
+  BUY_CONSUMABLE(state, { itemId }, _now, events, { devMode }) {
+    const item = CONSUMABLE_BY_ID[itemId];
+    if (!item) return fail("UNKNOWN_ITEM");
+    if (!devMode && !isUnlocked(state, item)) return fail("REQUIREMENTS_LOCKED");
+    if (!devMode && state.player.coins < item.price) return fail("NOT_ENOUGH_COINS");
+    if (!devMode) state.player.coins -= item.price;
+    if (item.kind === "fish-food") state.inventory.fishFoods[item.id] = (state.inventory.fishFoods[item.id] || 0) + 1;
+    if (item.kind === "algae-wafer") state.inventory.algaeWafers += 1;
+    if (item.kind === "medicine") state.inventory.medicines += 1;
+    events.push({ type: "consumablePurchased", itemId });
+    return ok();
+  },
+
+  SELECT_FOOD(state, { foodTypeId }, _now, events, { devMode }) {
+    const food = FISH_FOOD_BY_ID[foodTypeId];
+    if (!food) return fail("UNKNOWN_ITEM");
+    if (!devMode && food.price != null && (state.inventory.fishFoods[foodTypeId] || 0) <= 0) return fail("NO_FISH_FOOD");
+    state.inventory.selectedFishFoodId = foodTypeId;
+    events.push({ type: "foodSelected", foodTypeId });
+    return ok();
+  },
+
+  FEED(state, { x, y }, now, events, { devMode }) {
     const normalizedX = Number(x);
     const normalizedY = Number(y);
     if (!Number.isFinite(normalizedX) || !Number.isFinite(normalizedY)) return fail("INVALID_FOOD_POSITION");
+    const foodTypeId = FISH_FOOD_BY_ID[state.inventory.selectedFishFoodId] ? state.inventory.selectedFishFoodId : "basic-food";
+    const foodConfig = FISH_FOOD_BY_ID[foodTypeId];
+    if (!devMode && foodConfig.price != null && (state.inventory.fishFoods[foodTypeId] || 0) <= 0) return fail("NO_FISH_FOOD");
+    if (!devMode && foodConfig.price != null) {
+      state.inventory.fishFoods[foodTypeId] -= 1;
+      if (state.inventory.fishFoods[foodTypeId] === 0) state.inventory.selectedFishFoodId = "basic-food";
+    }
     const food = {
       id: makeId("food"),
+      foodTypeId,
       x: clamp(normalizedX, 0.04, 0.96),
       y: clamp(normalizedY, 0.125, 0.875),
       createdAt: now,
@@ -150,11 +181,12 @@ const COMMANDS = {
     if (foodIndex < 0) return fail("FOOD_NOT_FOUND");
     const fish = state.tank.fishes.find((item) => item.id === fishId);
     if (!fish || fish.stage === "egg" || fish.health !== "healthy" || fish.satiety >= 50) return fail("FISH_CANNOT_EAT");
-    state.tank.foods.splice(foodIndex, 1);
-    fish.satiety = clamp(fish.satiety + FOOD_SATIETY, 0, 100);
+    const [food] = state.tank.foods.splice(foodIndex, 1);
+    const satietyGain = foodSatietyGain(food.foodTypeId, fish.speciesId);
+    fish.satiety = clamp(fish.satiety + satietyGain, 0, 100);
     fish.starvingSince = 0;
     claimTutorial(state, "feed-first-fish", { coins: 50 }, events);
-    events.push({ type: "foodEaten", foodId, fishId });
+    events.push({ type: "foodEaten", foodId, fishId, satietyGain });
     return ok();
   },
 
@@ -380,7 +412,7 @@ export const ERROR_MESSAGES = {
   INVALID_FOOD_POSITION: "請點擊魚缸水域放置魚糧。", FOOD_NOT_FOUND: "這顆魚糧已經被吃掉了。", FISH_CANNOT_EAT: "這隻魚目前不能進食。", ALREADY_CLEAN: "魚缸已經很乾淨。",
   COIN_NOT_FOUND: "這枚金幣已經被撿走或消失了。",
   NO_WAFER: "背包沒有藻錠。", NO_HUNGRY_HELPER: "目前沒有需要藻錠的清潔生物。", FISH_NOT_SICK: "這隻魚不需要治療。",
-  NO_MEDICINE: "背包沒有藥水。", CANNOT_ACCELERATE: "目前不能加速。", NOT_ENOUGH_GEMS: "寶石不足。", CANNOT_REVIVE: "已超過復活期限。",
+  NO_MEDICINE: "背包沒有藥水。", NO_FISH_FOOD: "這種飼料已經用完，請購買或改用基本飼料。", CANNOT_ACCELERATE: "目前不能加速。", NOT_ENOUGH_GEMS: "寶石不足。", CANNOT_REVIVE: "已超過復活期限。",
   FISH_NOT_FOUND: "找不到這隻魚。", CANNOT_SELL: "目前不能出售。", UNKNOWN_ITEM: "找不到商品。", ALREADY_OWNED: "已經擁有。",
   NO_FEEDER: "尚未安裝餵食器。", DEVICE_NOT_FOUND: "找不到這台設備。", DECORATION_LIMIT: "魚缸最多擺放 10 件裝飾。", DECORATION_NOT_FOUND: "找不到這件裝飾。", INVALID_DECORATION_POSITION: "請把裝飾放在魚缸內。", INVALID_OBJECT_SCALE: "請選擇有效的物件大小。", NO_REWARD: "目前沒有漂流禮物。", INVALID_NAME: "名稱不能空白。",
 };

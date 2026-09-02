@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { ASSET_INSETS, COIN_FALL_SPEED_PX, DECORATION_SCALE, DEVICE_PLACEMENTS, FOOD_FALL_SPEED_PX, GAME_HEIGHT, GAME_WIDTH, HELPERS, SPECIES_BY_ID, STAGE_SCALE } from "../../config/game-config.js";
+import { ASSET_INSETS, COIN_FALL_SPEED_PX, DECORATION_SCALE, DEVICE_PLACEMENTS, FISH_FOOD_BY_ID, FOOD_FALL_SPEED_PX, GAME_HEIGHT, GAME_WIDTH, HELPERS, SPECIES_BY_ID, STAGE_SCALE } from "../../config/game-config.js";
 import { createAgent, createHelperAgent, stepAgents, stepHelperAgent } from "../../core/animal-ai.js";
 import { fallingDropY, fallingFoodY } from "../../core/calculations.js";
 import { isDeviceActive } from "../../core/simulation.js";
@@ -190,7 +190,7 @@ export class AquariumScene extends Phaser.Scene {
     for (const food of this.snapshot.tank.foods) {
       let view = this.foodViews.get(food.id);
       if (!view) {
-        const sprite = this.add.sprite(food.x * GAME_WIDTH, food.y * GAME_HEIGHT, objectTextureKey("fish-food-fall")).setScale(0.55).setDepth(700);
+        const sprite = this.add.sprite(food.x * GAME_WIDTH, food.y * GAME_HEIGHT, objectTextureKey("fish-food-fall")).setScale(0.55).setDepth(700).setTint(FISH_FOOD_BY_ID[food.foodTypeId]?.tint ?? 0xffffff);
         sprite.play(`${objectTextureKey("fish-food-fall")}:play`);
         view = { sprite, food, claimedBy: null, consumed: false };
         this.foodViews.set(food.id, view);

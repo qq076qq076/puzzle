@@ -8,7 +8,7 @@ import {
   OFFLINE_CAP_MS,
   SPECIES_BY_ID,
 } from "../config/game-config.js";
-import { clamp, dayKeyTaipei, stageFromGrowth } from "./calculations.js";
+import { clamp, dayKeyTaipei, foodSatietyGain, stageFromGrowth } from "./calculations.js";
 import { nextRandom } from "./rng.js";
 
 const HOUR = 3_600_000;
@@ -92,13 +92,13 @@ function collectDroppedCoins(state, report) {
   state.tank.coinDrops = [];
 }
 
-export function feedHungriestFish(state, pelletCount = 5) {
+export function feedHungriestFish(state, pelletCount = 5, foodTypeId = "basic-food") {
   const candidates = state.tank.fishes
     .filter((fish) => fish.stage !== "egg" && fish.health === "healthy" && fish.satiety < 50)
     .sort((left, right) => left.satiety - right.satiety || left.id.localeCompare(right.id));
   const fed = [];
   for (const fish of candidates.slice(0, pelletCount)) {
-    fish.satiety = clamp(fish.satiety + 15, 0, 100);
+    fish.satiety = clamp(fish.satiety + foodSatietyGain(foodTypeId, fish.speciesId), 0, 100);
     fish.starvingSince = 0;
     fed.push(fish.id);
   }
@@ -209,6 +209,7 @@ function dropAutomaticFood(state, feederId, createdAt, count) {
   for (let index = 0; index < count; index += 1) {
     state.tank.foods.push({
       id: `food_auto_${feederId}_${createdAt}_${index}`,
+      foodTypeId: "basic-food",
       x: 0.46 + index * 0.02,
       y: 0.18,
       createdAt,

@@ -1,4 +1,4 @@
-import { ASSET_INSETS, DECORATIONS, DECORATION_SCALE, DEVICES, DEVICE_SCALE, HELPERS, SPECIES } from "../config/game-config.js";
+import { ASSET_INSETS, CONSUMABLES, DECORATIONS, DECORATION_SCALE, DEVICES, DEVICE_SCALE, FISH_FOODS, HELPERS, SPECIES } from "../config/game-config.js";
 import { ERROR_MESSAGES } from "../core/game-core.js";
 import { missingRequirements, requirementNames } from "../core/unlocks.js";
 import { runtimeUrl } from "../phaser/asset-registry.js";
@@ -93,10 +93,41 @@ export class UIController {
       items = HELPERS.map((item) => card({ preview: imagePreview(runtimeUrl(`helpers/${item.id}/${item.id}-idle.png`), ASSET_INSETS.helpers[`${item.id}-idle`]), title: item.name, subtitle: helperDescription(item), price: item.price, missing: this.devMode ? [] : missingRequirements(this.snapshot, item), owned: ownedHelpers.has(item.id), command: "BUY_HELPER", field: "helperId", id: item.id, devMode: this.devMode }));
     } else if (this.currentTab === "devices") {
       items = DEVICES.map((item) => card({ preview: spritePreview(runtimeUrl(`devices/${item.id}/${item.id}-active.png`), "strip", ASSET_INSETS.devices[item.id]), title: item.name, subtitle: deviceDescription(item), price: item.price, missing: this.devMode ? [] : missingRequirements(this.snapshot, item), owned: ownedDevices.has(item.id), command: "BUY_DEVICE", field: "deviceId", id: item.id, devMode: this.devMode }));
-    } else {
+    } else if (this.currentTab === "decorations") {
       items = DECORATIONS.map((item) => card({ preview: spritePreview(runtimeUrl(`decorations/${item.id}-animated.png`), "decoration", ASSET_INSETS.decorations[item.id]), title: item.name, subtitle: `吸引力 ${item.appeal}`, price: item.price, missing: this.devMode ? [] : missingRequirements(this.snapshot, item), owned: false, command: "BUY_DECORATION", field: "decorationId", id: item.id, devMode: this.devMode }));
+    } else {
+      items = this.renderConsumables();
     }
     this.elements.shop.innerHTML = items.join("");
+  }
+
+  renderConsumables() {
+    const selectedFoodId = this.snapshot.inventory.selectedFishFoodId;
+    const foodCards = FISH_FOODS.map((item) => {
+      const count = item.price == null ? Infinity : this.snapshot.inventory.fishFoods[item.id] || 0;
+      const selected = selectedFoodId === item.id;
+      const cannotSelect = !this.devMode && item.price != null && count <= 0;
+      const purchase = item.price == null ? "" : `<button type="button" data-command="BUY_CONSUMABLE" data-field="itemId" data-id="${item.id}">${this.devMode ? "免費取得" : `購買 ● ${formatNumber(item.price)}`}</button>`;
+      const countLabel = Number.isFinite(count) ? `庫存 ${count}` : "無限供應";
+      return consumableCard({
+        preview: imagePreview(runtimeUrl("ui/fish-food.png")),
+        title: item.name,
+        subtitle: `營養值 ${item.nutrition} · ${countLabel}`,
+        actions: `${purchase}<button type="button" data-command="SELECT_FOOD" data-field="foodTypeId" data-id="${item.id}" ${selected || cannotSelect ? "disabled" : ""}>${selected ? "使用中" : "選用"}</button>`,
+      });
+    });
+    const utilityCards = CONSUMABLES.filter((item) => item.kind !== "fish-food").map((item) => {
+      const missing = this.devMode ? [] : missingRequirements(this.snapshot, item);
+      const count = item.kind === "medicine" ? this.snapshot.inventory.medicines : this.snapshot.inventory.algaeWafers;
+      const icon = item.kind === "medicine" ? "medicine" : "algae-wafer";
+      return consumableCard({
+        preview: imagePreview(runtimeUrl(`ui/${icon}.png`)),
+        title: item.name,
+        subtitle: `庫存 ${count}`,
+        actions: `<button type="button" data-command="BUY_CONSUMABLE" data-field="itemId" data-id="${item.id}" ${missing.length ? "disabled" : ""}>${missing.length ? `需 ${requirementNames(missing).join("＋")}` : this.devMode ? "免費取得" : `購買 ● ${formatNumber(item.price)}`}</button>`,
+      });
+    });
+    return [...foodCards, ...utilityCards];
   }
 
   renderSelection() {
@@ -202,6 +233,10 @@ function card({ preview, title, subtitle, price, missing = [], owned, command, f
   const missingLabel = requirementNames(missing).join("＋");
   const availableLabel = devMode ? command === "BUY_EGG" ? "生成成魚" : "免費使用" : `● ${formatNumber(price)}`;
   return `<article class="shop-card"><div class="shop-art">${preview}</div><div><h3>${title}</h3>${subtitle ? `<p>${subtitle}</p>` : ""}</div><button type="button" data-command="${command}" data-field="${field}" data-id="${id}" ${disabled ? "disabled" : ""}>${locked ? `需 ${missingLabel}` : owned ? "已擁有" : availableLabel}</button></article>`;
+}
+
+function consumableCard({ preview, title, subtitle, actions }) {
+  return `<article class="shop-card"><div class="shop-art">${preview}</div><div><h3>${title}</h3><p>${subtitle}</p></div><div class="shop-card__actions">${actions}</div></article>`;
 }
 
 function spritePreview(url, layout, inset) { return `<span class="sprite-preview sprite-preview--${layout}" style="background-image:url('${url}');${clipStyle(inset)}"></span>`; }

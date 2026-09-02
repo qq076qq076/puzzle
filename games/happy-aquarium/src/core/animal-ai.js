@@ -1,4 +1,5 @@
-import { FOOD_SATIETY, GAME_HEIGHT, GAME_WIDTH, SPECIES_BY_ID } from "../config/game-config.js";
+import { GAME_HEIGHT, GAME_WIDTH, SPECIES_BY_ID } from "../config/game-config.js";
+import { foodSatietyGain } from "./calculations.js";
 
 const WATER = { left: 40, right: 960, top: 75, bottom: 550 };
 const HELPER_PATROL = { left: 55, right: 945, floor: 512, bob: 4 };
@@ -151,7 +152,8 @@ function resolveFoodArrivals(agents, fishById, foods, consumed) {
     if (!winner) continue;
     food.consumed = true;
     consumed.push({ foodId: food.id, fishId: winner.id });
-    const nextSatiety = Math.min(100, virtualSatiety.get(winner.id) + FOOD_SATIETY);
+    const fish = fishById.get(winner.id);
+    const nextSatiety = Math.min(100, virtualSatiety.get(winner.id) + foodSatietyGain(food.foodTypeId, fish.speciesId));
     virtualSatiety.set(winner.id, nextSatiety);
     winner.foodSatiety = nextSatiety;
     for (const agent of agents) if (agent.foodTargetId === food.id) agent.foodTargetId = null;
