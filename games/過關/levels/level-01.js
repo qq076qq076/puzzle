@@ -360,13 +360,15 @@ class Level01Scene extends Phaser.Scene {
   }
 
   playResultZoom() {
-    const duration = 10000;
+    const holdDuration = 5000;
+    const zoomDuration = 3000;
+    const whiteoutDuration = 650;
     const width = Math.max(1, this.scale.width);
     const height = Math.max(1, this.scale.height);
     const fillScale = Math.max(width / Math.max(1, this.result.width), height / Math.max(1, this.result.height));
     const targetScale = Math.max(24, fillScale * 10);
 
-    this.result.setAlpha(0).setScale(0.72).setPosition(this.centerX, this.centerY);
+    this.result.setAlpha(0).setScale(1).setPosition(this.centerX, this.centerY);
     this.resultWhiteout.setAlpha(0);
 
     this.tweens.add({
@@ -379,14 +381,15 @@ class Level01Scene extends Phaser.Scene {
       targets: this.result,
       scaleX: targetScale,
       scaleY: targetScale,
-      duration,
+      delay: holdDuration,
+      duration: zoomDuration,
       ease: "Cubic.In"
     });
     this.tweens.add({
       targets: this.resultWhiteout,
       alpha: 1,
-      delay: duration - 1300,
-      duration: 1300,
+      delay: holdDuration + zoomDuration - whiteoutDuration,
+      duration: whiteoutDuration,
       ease: "Cubic.In"
     });
   }
