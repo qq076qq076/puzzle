@@ -117,9 +117,9 @@ test("purchased premium food is selected, consumed on drop, and restores by stom
   assert.ok(foodSatietyGain("nutritious-food", "goby") > foodSatietyGain("nutritious-food", "stingray"));
 });
 
-test("preferred food restores extra satiety and feeding increases familiarity", () => {
+test("preferred food restores extra satiety without a familiarity system", () => {
   const state = createFreshState(START);
-  state.tank.fishes = [{ ...fish("ray", 20, "stingray"), preferredFoodTypeId: "gourmet-food", familiarity: 4 }];
+  state.tank.fishes = [{ ...fish("ray", 20, "stingray"), preferredFoodTypeId: "gourmet-food" }];
   state.inventory.fishFoods["gourmet-food"] = 1;
   state.inventory.selectedFishFoodId = "gourmet-food";
   state.tutorial.step = "complete";
@@ -128,7 +128,7 @@ test("preferred food restores extra satiety and feeding increases familiarity", 
   const dropped = core.dispatch("FEED", { x: 0.5, y: 0.5 }, "drop-gourmet", START);
   const eaten = core.dispatch("EAT_FOOD", { foodId: dropped.state.tank.foods[0].id, fishId: "ray" }, "ray-eats", START);
   assert.equal(eaten.state.tank.fishes[0].satiety, 20 + foodSatietyGain("gourmet-food", "stingray", "gourmet-food"));
-  assert.equal(eaten.state.tank.fishes[0].familiarity, 5);
+  assert.equal("familiarity" in eaten.state.tank.fishes[0], false);
 });
 
 test("medicine can be purchased and consumed to cure a sick fish", () => {
@@ -164,7 +164,7 @@ test("collecting a fish coin credits it exactly once", () => {
 
 test("coin drops use the fish live position supplied by the scene", () => {
   const state = createFreshState(START);
-  state.tank.fishes.push({ ...fish("moving", 100), familiarity: 100, happinessProgressMs: 0, nextHappinessCoinMs: 45_000 });
+  state.tank.fishes.push({ ...fish("moving", 100), happinessProgressMs: 0, nextHappinessCoinMs: 45_000 });
   const core = new GameCore(state);
 
   core.tick(START + 45_000, { moving: { x: 0.27, y: 0.43, heading: "left" } });
@@ -256,7 +256,7 @@ test("legacy level, experience, capacity, and feed cooldown fields are removed d
   legacy.inventory.selectedFishFoodId = "gourmet-food";
 
   const migrated = normalizeState(legacy, START);
-  assert.equal(migrated.schemaVersion, 6);
+  assert.equal(migrated.schemaVersion, 7);
   assert.deepEqual(migrated.player, { coins: 300, gems: 3 });
   assert.equal("fishLimit" in migrated.tank, false);
   assert.equal("lastFeedAt" in migrated.tank, false);
@@ -265,6 +265,7 @@ test("legacy level, experience, capacity, and feed cooldown fields are removed d
   assert.equal("nextCoinAt" in migrated.tank.fishes[0], false);
   assert.equal("wellFedSince" in migrated.tank.fishes[0], false);
   assert.equal("mateCooldownUntil" in migrated.tank.fishes[0], false);
+  assert.equal("familiarity" in migrated.tank.fishes[0], false);
   assert.ok(migrated.tank.fishes[0].personalityId);
   assert.ok(migrated.tank.fishes[0].preferredFoodTypeId);
   assert.ok(migrated.tank.fishes[0].sizePotential >= 0.9 && migrated.tank.fishes[0].sizePotential <= 1.1);
@@ -298,7 +299,6 @@ function fish(id, satiety, speciesId = "guppy") {
     preferredFoodTypeId: "basic-food",
     habitatPreference: "plants",
     sizePotential: 1,
-    familiarity: 0,
     happiness: 0,
     happinessProgressMs: 0,
     nextHappinessCoinMs: 45_000,

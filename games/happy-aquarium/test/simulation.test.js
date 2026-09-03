@@ -218,7 +218,6 @@ function movingFish(id, satiety) {
     preferredFoodTypeId: "basic-food",
     habitatPreference: "plants",
     sizePotential: 1,
-    familiarity: 100,
     happiness: 0,
     happinessProgressMs: 0,
     nextHappinessCoinMs: 45_000,

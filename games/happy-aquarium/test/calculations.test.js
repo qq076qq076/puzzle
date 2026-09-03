@@ -21,12 +21,20 @@ test("growth stages and sale multipliers are deterministic", () => {
 });
 
 test("matching habitat decorations raise comfort and happiness", () => {
-  const fish = { speciesId: "clownfish", stage: "adult", health: "healthy", satiety: 100, familiarity: 50, habitatPreference: "corals" };
+  const fish = { speciesId: "clownfish", stage: "adult", health: "healthy", satiety: 100, habitatPreference: "corals" };
   const bare = { tank: { cleanliness: 100, decorations: [] } };
   const decorated = { tank: { cleanliness: 100, decorations: [{ catalogId: "pink-branch-coral" }] } };
   assert.ok(environmentComfort(decorated, fish) > environmentComfort(bare, fish));
   assert.ok(fishHappiness(decorated, fish) > fishHappiness(bare, fish));
   assert.equal(fishHappiness(decorated, { ...fish, health: "sick" }), 45);
+});
+
+test("happiness weights satiety at eighty percent without familiarity", () => {
+  const state = { tank: { cleanliness: 100, decorations: [] } };
+  const fish = { speciesId: "guppy", stage: "adult", health: "healthy", satiety: 60, habitatPreference: "plants" };
+  assert.equal(environmentComfort(state, fish), 45);
+  assert.equal(fishHappiness(state, fish), 62.5);
+  assert.equal(fishHappiness(state, { ...fish, familiarity: 100 }), 62.5);
 });
 
 test("coins sink more slowly and stop above the sand", () => {

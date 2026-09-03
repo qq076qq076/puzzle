@@ -221,7 +221,7 @@ export class UIController {
       const food = FISH_FOOD_BY_ID[fish.preferredFoodTypeId]?.name || "基本飼料";
       const habitat = HABITATS[fish.habitatPreference] || "水草";
       const happiness = Math.round(fishHappiness(this.snapshot, fish));
-      return `<article class="fish-profile"><header><strong>${escapeHtml(fish.name || SPECIES_BY_ID[fish.speciesId]?.name || "魚")}</strong><span>幸福 ${happiness}</span></header><p>${personality}個性 · 喜歡${food} · 偏好${habitat}</p><p>體型潛力 ${Math.round((fish.sizePotential || 1) * 100)}% · 熟悉度 ${Math.round(fish.familiarity || 0)}</p></article>`;
+      return `<article class="fish-profile"><header><strong>${escapeHtml(fish.name || SPECIES_BY_ID[fish.speciesId]?.name || "魚")}</strong><span>幸福 ${happiness}</span></header><p>${personality}個性 · 喜歡${food} · 偏好${habitat}</p><p>體型潛力 ${Math.round((fish.sizePotential || 1) * 100)}%</p></article>`;
     }).join("") || '<p class="care-empty">魚缸裡還沒有魚，先從魚卵開始吧。</p>';
     await this.ask("照護日誌", `<section class="care-journal"><h3>今日目標</h3><ul>${goals}</ul><p class="care-total">累計完成 ${formatNumber(this.snapshot.stats.dailyGoalsCompleted)} 個目標</p><h3>魚隻檔案</h3><div class="fish-profile-list">${fishes}</div></section>`, "關閉", false);
   }

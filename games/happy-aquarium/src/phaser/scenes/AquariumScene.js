@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { ASSET_INSETS, COIN_FALL_SPEED_PX, DECORATION_SCALE, DEVICE_PLACEMENTS, FISH_FOOD_BY_ID, FOOD_FALL_SPEED_PX, GAME_HEIGHT, GAME_WIDTH, HELPERS, SPECIES_BY_ID, STAGE_SCALE } from "../../config/game-config.js";
+import { ASSET_INSETS, COIN_FALL_SPEED_PX, DECORATION_SCALE, DEVICE_PLACEMENTS, FISH_FOOD_BY_ID, FOOD_FALL_SPEED_PX, GAME_HEIGHT, GAME_WIDTH, HAPPINESS_COIN_THRESHOLD, HELPERS, SPECIES_BY_ID, STAGE_SCALE } from "../../config/game-config.js";
 import { createAgent, createHelperAgent, stepAgents, stepHelperAgent } from "../../core/animal-ai.js";
 import { fallingDropY, fallingFoodY } from "../../core/calculations.js";
 import { isDeviceActive } from "../../core/simulation.js";
@@ -83,7 +83,7 @@ export class AquariumScene extends Phaser.Scene {
       view.fish = fish;
       const scale = kind === "egg" ? 0.8 : (STAGE_SCALE[fish.stage] || 1) * (SPECIES_BY_ID[fish.speciesId]?.displayScale || 1) * (fish.sizePotential || 1);
       view.sprite.setScale(scale).setAlpha(fish.health === "sick" ? 0.72 : 1);
-      const marker = fish.health === "sick" ? { text: "✚", color: "#ff7272" } : fish.stage !== "egg" && fish.satiety < 30 ? { text: "!", color: "#ffd166" } : fish.happiness >= 80 ? { text: "♥", color: "#ff91bd" } : { text: "", color: "#ffffff" };
+      const marker = fish.health === "sick" ? { text: "✚", color: "#ff7272" } : fish.stage !== "egg" && fish.satiety < 30 ? { text: "!", color: "#ffd166" } : fish.happiness >= HAPPINESS_COIN_THRESHOLD ? { text: "♥", color: "#ff91bd" } : { text: "", color: "#ffffff" };
       view.statusText.setText(marker.text).setColor(marker.color).setVisible(Boolean(marker.text));
       if (kind === "egg") {
         view.sprite.setFrame(Math.min(3, Math.floor(fish.growth / 2.5)));

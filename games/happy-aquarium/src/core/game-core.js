@@ -193,7 +193,6 @@ const COMMANDS = {
     const [food] = state.tank.foods.splice(foodIndex, 1);
     const satietyGain = foodSatietyGain(food.foodTypeId, fish.speciesId, fish.preferredFoodTypeId);
     fish.satiety = clamp(fish.satiety + satietyGain, 0, 100);
-    fish.familiarity = clamp((Number(fish.familiarity) || 0) + 1, 0, 100);
     fish.starvingSince = 0;
     claimTutorial(state, "feed-first-fish", { coins: 50 }, events);
     progressDailyGoal(state, "feed", 1, now, events);
@@ -417,7 +416,6 @@ function createFishInstance(state, speciesId, now, { acquisitionType = "mileston
     preferredFoodTypeId,
     habitatPreference: SPECIES_HABITAT[speciesId] || "plants",
     sizePotential: Math.round((0.90 + nextRandom(state.rng) * 0.20) * 1000) / 1000,
-    familiarity: 0,
     happiness: 0,
     happinessProgressMs: 0,
     nextHappinessCoinMs: randomInt(state.rng, HAPPINESS_COIN_INTERVAL_MIN_MS / 1000, HAPPINESS_COIN_INTERVAL_MAX_MS / 1000) * 1000,

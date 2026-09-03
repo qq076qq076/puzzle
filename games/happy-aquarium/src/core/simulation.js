@@ -131,7 +131,6 @@ export function feedHungriestFish(state, pelletCount = 5, foodTypeId = "basic-fo
   const fed = [];
   for (const fish of candidates.slice(0, pelletCount)) {
     fish.satiety = clamp(fish.satiety + foodSatietyGain(foodTypeId, fish.speciesId, fish.preferredFoodTypeId), 0, 100);
-    fish.familiarity = clamp((Number(fish.familiarity) || 0) + 1, 0, 100);
     fish.starvingSince = 0;
     fed.push(fish.id);
   }

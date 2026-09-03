@@ -37,8 +37,7 @@ export function fishHappiness(state, fish) {
   const satiety = clamp(Number(fish.satiety) || 0, 0, 100);
   const cleanliness = clamp(Number(state?.tank?.cleanliness) || 0, 0, 100);
   const comfort = environmentComfort(state, fish);
-  const familiarity = clamp(Number(fish.familiarity) || 0, 0, 100);
-  const happiness = 0.50 * satiety + 0.25 * cleanliness + 0.15 * comfort + 0.10 * familiarity;
+  const happiness = 0.80 * satiety + 0.10 * cleanliness + 0.10 * comfort;
   return clamp(fish.health === "sick" ? Math.min(45, happiness) : happiness, 0, 100);
 }
 

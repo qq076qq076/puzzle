@@ -1,7 +1,7 @@
 import { DECORATION_SCALE, DEVICE_SCALE, FISH_FOOD_BY_ID, PERSONALITIES, PERSONALITY_BY_ID, SPECIES_HABITAT } from "../config/game-config.js";
 import { dayKeyTaipei } from "./calculations.js";
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 export function makeId(prefix = "item") {
   const suffix = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -59,7 +59,6 @@ export function normalizeState(input, now = Date.now()) {
         preferredFoodTypeId,
         habitatPreference: fish?.habitatPreference || SPECIES_HABITAT[fish?.speciesId] || "plants",
         sizePotential: clamp(finiteNumber(fish?.sizePotential, 0.90 + ((traitSeed >>> 8) % 201) / 1000), 0.90, 1.10),
-        familiarity: clamp(finiteNumber(fish?.familiarity, 0), 0, 100),
         happiness: clamp(finiteNumber(fish?.happiness, 0), 0, 100),
         happinessProgressMs: Math.max(0, finiteNumber(fish?.happinessProgressMs, 0)),
         nextHappinessCoinMs: clamp(finiteNumber(fish?.nextHappinessCoinMs, 45_000 + (traitSeed % 45_001)), 45_000, 90_000),
@@ -71,6 +70,7 @@ export function normalizeState(input, now = Date.now()) {
       delete normalized.wellFedSince;
       delete normalized.wellFedCoinAwarded;
       delete normalized.mateCooldownUntil;
+      delete normalized.familiarity;
       return normalized;
     })
     : [];
