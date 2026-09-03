@@ -194,12 +194,17 @@ class Level01Scene extends Phaser.Scene {
 
   createResultText() {
     this.result = this.add.text(0, 0, "過關", {
-      color: INTERNAL.colors.text,
+      color: "#ffffff",
       fontFamily: "-apple-system, BlinkMacSystemFont, 'PingFang TC', 'Noto Sans TC', sans-serif",
       fontSize: "82px",
       fontStyle: "700",
-      shadow: { color: "#5b2e25", fill: true, blur: 18, offsetX: 0, offsetY: 8, stroke: true, distance: 4 }
+      shadow: { color: "#ffffff", fill: true, blur: 18, offsetX: 0, offsetY: 0, stroke: true, distance: 2 }
     }).setOrigin(0.5).setAlpha(0).setScale(0.72).setDepth(10);
+
+    this.resultWhiteout = this.add.rectangle(0, 0, 1, 1, 0xffffff, 1)
+      .setOrigin(0.5)
+      .setAlpha(0)
+      .setDepth(11);
   }
 
   handleResize(size) {
@@ -222,6 +227,10 @@ class Level01Scene extends Phaser.Scene {
     if (this.result) {
       this.result.setPosition(this.centerX, this.centerY);
       this.result.setFontSize(Math.min(96, Math.max(52, width * 0.16)));
+    }
+    if (this.resultWhiteout) {
+      this.resultWhiteout.setPosition(this.centerX, this.centerY);
+      this.resultWhiteout.setSize(width, height);
     }
   }
 
@@ -346,7 +355,39 @@ class Level01Scene extends Phaser.Scene {
     this.time.delayedCall(780, () => {
       this.status = "complete";
       this.statusElement.textContent = "已過關";
-      this.tweens.add({ targets: this.result, alpha: 1, scale: 1, duration: 360, ease: "Back.Out" });
+      this.playResultZoom();
+    });
+  }
+
+  playResultZoom() {
+    const duration = 10000;
+    const width = Math.max(1, this.scale.width);
+    const height = Math.max(1, this.scale.height);
+    const fillScale = Math.max(width / Math.max(1, this.result.width), height / Math.max(1, this.result.height));
+    const targetScale = Math.max(24, fillScale * 10);
+
+    this.result.setAlpha(0).setScale(0.72).setPosition(this.centerX, this.centerY);
+    this.resultWhiteout.setAlpha(0);
+
+    this.tweens.add({
+      targets: this.result,
+      alpha: 1,
+      duration: 360,
+      ease: "Sine.Out"
+    });
+    this.tweens.add({
+      targets: this.result,
+      scaleX: targetScale,
+      scaleY: targetScale,
+      duration,
+      ease: "Cubic.In"
+    });
+    this.tweens.add({
+      targets: this.resultWhiteout,
+      alpha: 1,
+      delay: duration - 1300,
+      duration: 1300,
+      ease: "Cubic.In"
     });
   }
 
