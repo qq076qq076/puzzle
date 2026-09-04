@@ -3,6 +3,7 @@ import { foodSatietyGain } from "./calculations.js";
 
 const WATER = { left: 40, right: 960, top: 75, bottom: 550 };
 const HELPER_PATROL = { left: 55, right: 945, floor: 512, bob: 4 };
+const FOOD_SEEK_SPEED_MULTIPLIER = 1.35;
 
 export function createAgent(fish) {
   const species = SPECIES_BY_ID[fish.speciesId];
@@ -72,7 +73,9 @@ export function stepAgents(agents, fishById, foodsOrDt, maybeDt) {
       chooseTarget(agent, config);
     }
     const personality = PERSONALITY_BY_ID[fish.personalityId];
-    const speedFactor = fish.health === "sick" ? 0.35 : fish.satiety < 25 ? 0.72 : fish.stage === "fry" ? 0.85 : fish.stage === "juvenile" ? 0.95 : 1;
+    const stageSpeedFactor = fish.stage === "fry" ? 0.85 : fish.stage === "juvenile" ? 0.95 : 1;
+    const behaviorSpeedFactor = foodTarget ? FOOD_SEEK_SPEED_MULTIPLIER : fish.satiety < 25 ? 0.72 : 1;
+    const speedFactor = fish.health === "sick" ? 0.35 : stageSpeedFactor * behaviorSpeedFactor;
     const maxSpeed = Math.max(8, config.movement.maxSpeed * speedFactor * (personality?.speedMultiplier || 1));
     let ax = (agent.targetX - agent.x) * 0.35;
     let ay = (agent.targetY - agent.y) * 0.35;

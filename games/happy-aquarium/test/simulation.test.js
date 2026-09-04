@@ -209,6 +209,21 @@ test("only fish below fifty satiety pursue and eat food", () => {
   assert.equal(secondFood.consumed, false);
 });
 
+test("a hungry fish accelerates when pursuing food", () => {
+  const fish = movingFish("speedy-hungry-fish", 20);
+  const fishById = new Map([[fish.id, fish]]);
+  const wandering = createAgent(fish);
+  const seeking = createAgent(fish);
+  wandering.vx = 200;
+  seeking.vx = 200;
+
+  stepAgents([wandering], fishById, [], 0);
+  stepAgents([seeking], fishById, [{ id: "distant-food", x: seeking.x + 100, y: seeking.y, foodTypeId: "basic-food", consumed: false }], 0);
+
+  assert.ok(Math.hypot(seeking.vx, seeking.vy) > Math.hypot(wandering.vx, wandering.vy));
+  assert.ok(Math.hypot(seeking.vx, seeking.vy) > 70);
+});
+
 test("the closest arriving fish consumes an overlapping food exactly once", () => {
   const fishes = [
     movingFish("far-fish", 20),
