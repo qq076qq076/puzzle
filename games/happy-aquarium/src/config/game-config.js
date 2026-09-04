@@ -129,7 +129,6 @@ export const DECORATION_SCALE = { min: 0.75, max: 2.50, default: 1.45 };
 export const DEVICE_SCALE = { min: 0.75, max: 2.00, default: 1.25 };
 
 export const STAGE_MULTIPLIER = { egg: 0, fry: 0.25, juvenile: 0.60, adult: 1 };
-export const STAGE_SCALE = { egg: 0.75, fry: 0.40, juvenile: 0.70, adult: 1 };
 export const TRANSACTION_LIMIT = 50;
 export const OFFLINE_CAP_MS = 7 * 24 * 3_600_000;
 export const FOOD_LIFETIME_MS = 20_000;

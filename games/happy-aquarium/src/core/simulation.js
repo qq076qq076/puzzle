@@ -140,6 +140,14 @@ export function feedHungriestFish(state, pelletCount = 5, foodTypeId = "basic-fo
 function updateFish(state, fish, elapsed, now, growthMultiplier, offline, report) {
   const species = SPECIES_BY_ID[fish.speciesId];
   if (!species) return;
+  const startedAsEgg = fish.stage === "egg";
+  if (startedAsEgg) {
+    fish.health = "healthy";
+    fish.sickSince = 0;
+    fish.diedAt = 0;
+    fish.starvingSince = 0;
+    fish.lastDiseaseCheckAt = now;
+  }
   const startedSatiety = Number(fish.satiety) || 0;
   if (fish.health === "dead") return;
   if (offline && fish.health === "sick" && fish.sickSince) fish.sickSince += elapsed;
@@ -154,6 +162,7 @@ function updateFish(state, fish, elapsed, now, growthMultiplier, offline, report
 
   const canGrow = fish.stage === "egg" || (fish.satiety > 30 && fish.health === "healthy");
   if (canGrow && fish.growth < 100) advanceGrowth(fish, species, elapsed * growthMultiplier, report);
+  if (startedAsEgg) return;
 
   if (fish.satiety <= 0) {
     fish.starvingSince ||= now - elapsed;

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { createAgent, createHelperAgent, stepAgents, stepHelperAgent } from "../src/core/animal-ai.js";
 import { simulate } from "../src/core/simulation.js";
-import { createFreshState } from "../src/core/state.js";
+import { createFreshState, normalizeState } from "../src/core/state.js";
 
 const START = Date.UTC(2026, 0, 1);
 
@@ -25,6 +25,37 @@ test("the first tutorial egg hatches after one minute", () => {
   assert.equal(state.tank.fishes[0].stage, "fry");
   assert.equal(state.tank.fishes[0].growth, 10);
   assert.equal(state.tank.fishes[0].satiety, 80);
+});
+
+test("fish eggs cannot become or remain sick", () => {
+  const state = createFreshState(START);
+  state.tank.cleanliness = 0;
+  state.tank.fishes.push({
+    id: "protected-egg",
+    speciesId: "guppy",
+    stage: "egg",
+    growth: 0,
+    satiety: 0,
+    health: "sick",
+    sickSince: START - 2 * 24 * 3_600_000,
+    starvingSince: START - 2 * 3_600_000,
+    lastDiseaseCheckAt: 0,
+  });
+
+  const report = simulate(state, START + 30_000);
+  const egg = state.tank.fishes[0];
+  assert.equal(egg.stage, "egg");
+  assert.equal(egg.health, "healthy");
+  assert.equal(egg.sickSince, 0);
+  assert.equal(egg.starvingSince, 0);
+  assert.equal(report.becameSick, 0);
+  assert.equal(report.died, 0);
+
+  const normalized = normalizeState({ ...state, lastProcessedAt: START + 30_000 }, START + 30_000);
+  normalized.tank.fishes[0].health = "sick";
+  const restored = normalizeState(normalized, START + 30_000).tank.fishes[0];
+  assert.equal(restored.health, "healthy");
+  assert.equal(restored.sickSince, 0);
 });
 
 test("offline simulation is capped at seven days", () => {

@@ -7,6 +7,27 @@ export function stageFromGrowth(growth) {
   return "adult";
 }
 
+const FISH_GROWTH_SCALE_POINTS = [
+  [10, 0.40],
+  [25, 0.52],
+  [45, 0.70],
+  [70, 0.84],
+  [90, 0.95],
+  [100, 1],
+];
+
+export function fishGrowthScale(growth) {
+  const value = clamp(Number(growth) || 10, 10, 100);
+  for (let index = 1; index < FISH_GROWTH_SCALE_POINTS.length; index += 1) {
+    const [endGrowth, endScale] = FISH_GROWTH_SCALE_POINTS[index];
+    if (value > endGrowth) continue;
+    const [startGrowth, startScale] = FISH_GROWTH_SCALE_POINTS[index - 1];
+    const progress = (value - startGrowth) / (endGrowth - startGrowth);
+    return startScale + (endScale - startScale) * progress;
+  }
+  return 1;
+}
+
 export function fishSellPrice(fish) {
   const species = SPECIES_BY_ID[fish.speciesId];
   if (!species || fish.health === "dead" || fish.stage === "egg") return 0;

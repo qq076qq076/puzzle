@@ -71,6 +71,12 @@ export function normalizeState(input, now = Date.now()) {
       delete normalized.wellFedCoinAwarded;
       delete normalized.mateCooldownUntil;
       delete normalized.familiarity;
+      if (normalized.stage === "egg") {
+        normalized.health = "healthy";
+        normalized.sickSince = 0;
+        normalized.diedAt = 0;
+        normalized.starvingSince = 0;
+      }
       return normalized;
     })
     : [];
