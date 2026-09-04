@@ -52,10 +52,27 @@ export class GameCore {
 
   reset(now = Date.now()) {
     const launchGiftClaimed = Boolean(this.#state.achievements.launchGiftClaimed);
+    const balanceReset20260904Claimed = Boolean(this.#state.achievements.balanceReset20260904Claimed);
     this.#state = createFreshState(now);
     this.#state.achievements.launchGiftClaimed = launchGiftClaimed;
+    this.#state.achievements.balanceReset20260904Claimed = balanceReset20260904Claimed;
     ensureDailyGoals(this.#state, now);
     this.#publish([{ type: "stateReset" }]);
+  }
+
+  claimBalanceReset20260904(now = Date.now()) {
+    if (this.devMode || dayKeyTaipei(now) !== "2026-09-04" || this.#state.achievements.balanceReset20260904Claimed) return false;
+    this.#state.achievements.balanceReset20260904Claimed = true;
+    for (const fish of this.#state.tank.fishes) {
+      fish.health = "healthy";
+      fish.satiety = 100;
+      fish.sickSince = 0;
+      fish.diedAt = 0;
+      fish.starvingSince = 0;
+      fish.lastDiseaseCheckAt = now;
+    }
+    this.#publish([{ type: "balanceReset20260904Claimed", fishCount: this.#state.tank.fishes.length }, { type: "saveUrgent" }]);
+    return true;
   }
 
   claimLaunchGift() {

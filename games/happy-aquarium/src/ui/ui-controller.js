@@ -81,6 +81,7 @@ export class UIController {
       if (event.type === "dailyGoalCompleted") this.toast(`每日目標完成：+${event.reward} 金幣`);
       if (event.type === "legendaryFishGranted") this.toast("長期照護里程碑完成：獲得彩虹美人魚魚卵！");
       if (event.type === "launchGiftClaimed") this.toast(`開缸禮物：獲得 ${formatNumber(event.amount)} 金幣！`);
+      if (event.type === "balanceReset20260904Claimed") void this.showBalanceResetPopup(event.fishCount);
     }
   }
 
@@ -221,6 +222,11 @@ export class UIController {
   }
 
   setSaveStatus(text) { this.saveStatus = text; }
+
+  async showBalanceResetPopup(fishCount) {
+    const fishMessage = fishCount > 0 ? `已將你擁有的 ${formatNumber(fishCount)} 隻魚恢復為健康狀態，並補滿飽食度。` : "目前魚缸中沒有需要恢復的魚。";
+    await this.ask("平衡性調整", `<p>為了讓照護節奏更友善，我們進行了一次性狀態重置。</p><p>${fishMessage}</p>`, "我知道了", false);
+  }
 
   async renameTank() {
     const value = await this.ask("魚缿名稱", `<input id="dialog-input" maxlength="24" value="${escapeHtml(this.snapshot.tank.name)}" />`);

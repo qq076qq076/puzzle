@@ -6,6 +6,42 @@ import { foodSatietyGain } from "../src/core/calculations.js";
 import { createFreshState, normalizeState } from "../src/core/state.js";
 
 const START = Date.UTC(2026, 0, 1);
+const BALANCE_RESET_DAY = Date.UTC(2026, 8, 4, 4);
+
+test("the September 4 balance reset fully restores every fish exactly once", () => {
+  const state = createFreshState(BALANCE_RESET_DAY);
+  state.tank.fishes = [
+    { ...fish("sick-fish", 12), health: "sick", sickSince: BALANCE_RESET_DAY - 1_000, starvingSince: BALANCE_RESET_DAY - 2_000 },
+    { ...fish("dead-fish", 0), health: "dead", diedAt: BALANCE_RESET_DAY - 3_000 },
+  ];
+  const core = new GameCore(state);
+  const received = [];
+  core.subscribe((_snapshot, events) => received.push(...events));
+
+  assert.equal(core.claimBalanceReset20260904(BALANCE_RESET_DAY), true);
+  assert.equal(core.snapshot().achievements.balanceReset20260904Claimed, true);
+  for (const restored of core.snapshot().tank.fishes) {
+    assert.equal(restored.health, "healthy");
+    assert.equal(restored.satiety, 100);
+    assert.equal(restored.sickSince, 0);
+    assert.equal(restored.diedAt, 0);
+    assert.equal(restored.starvingSince, 0);
+    assert.equal(restored.lastDiseaseCheckAt, BALANCE_RESET_DAY);
+  }
+  assert.equal(received.some((event) => event.type === "balanceReset20260904Claimed" && event.fishCount === 2), true);
+  assert.equal(received.some((event) => event.type === "saveUrgent"), true);
+  assert.equal(core.claimBalanceReset20260904(BALANCE_RESET_DAY + 1), false);
+
+  core.reset(BALANCE_RESET_DAY + 2);
+  assert.equal(core.claimBalanceReset20260904(BALANCE_RESET_DAY + 2), false);
+});
+
+test("the September 4 balance reset is unavailable outside the Taipei calendar day", () => {
+  const before = new GameCore(createFreshState(BALANCE_RESET_DAY));
+  const after = new GameCore(createFreshState(BALANCE_RESET_DAY));
+  assert.equal(before.claimBalanceReset20260904(Date.UTC(2026, 8, 3, 15, 59, 59)), false);
+  assert.equal(after.claimBalanceReset20260904(Date.UTC(2026, 8, 4, 16)), false);
+});
 
 test("the launch gift grants one thousand coins exactly once", () => {
   const core = new GameCore(createFreshState(START));

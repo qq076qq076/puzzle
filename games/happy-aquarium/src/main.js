@@ -40,6 +40,7 @@ async function attemptStart() {
   const saver = createSaveAdapter(core, ui);
   ui.setSaver(saver);
   await saver.ready;
+  core.claimBalanceReset20260904();
   core.claimLaunchGift();
   startGame(core, ui, writer);
 }
