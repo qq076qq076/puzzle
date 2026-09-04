@@ -77,12 +77,17 @@ export class AquariumScene extends Phaser.Scene {
         const agent = createAgent(fish);
         const statusText = this.add.text(sprite.x, sprite.y - 30, "", { fontFamily: "system-ui", fontSize: "23px", fontStyle: "bold", stroke: "#073448", strokeThickness: 4 }).setOrigin(0.5).setDepth(850);
         view = { kind, sprite, statusText, agent, animation: "", renderFacing: agent.facing, turning: false };
+        sprite.on("pointerdown", () => {
+          if (view.fish.health === "dead") this.ui.selectFish(view.fish.id);
+        });
         sprite.setFlipX(agent.facing < 0);
         this.fishViews.set(fish.id, view);
       }
       view.fish = fish;
       const scale = kind === "egg" ? 0.8 : (STAGE_SCALE[fish.stage] || 1) * (SPECIES_BY_ID[fish.speciesId]?.displayScale || 1) * (fish.sizePotential || 1);
       view.sprite.setScale(scale).setAlpha(fish.health === "sick" ? 0.72 : 1);
+      if (fish.health === "dead" && !view.sprite.input?.enabled) view.sprite.setInteractive({ useHandCursor: true });
+      if (fish.health !== "dead" && view.sprite.input?.enabled) view.sprite.disableInteractive();
       const marker = fish.health === "sick" ? { text: "✚", color: "#ff7272" } : fish.stage !== "egg" && fish.satiety < 30 ? { text: "!", color: "#ffd166" } : fish.happiness >= HAPPINESS_COIN_THRESHOLD ? { text: "♥", color: "#ff91bd" } : { text: "", color: "#ffffff" };
       view.statusText.setText(marker.text).setColor(marker.color).setVisible(Boolean(marker.text));
       if (kind === "egg") {

@@ -36,6 +36,7 @@ test("save adapter automatically restores progress before startup", async () => 
     assert.equal(createSaveAdapter(core, ui), controller);
     assert.equal(receivedOptions.key, "happy-aquarium");
     assert.equal(receivedOptions.autoRestore, true);
+    assert.equal(receivedOptions.hasProgress({ achievements: { launchGiftClaimed: true }, tank: { fishes: [] }, stats: {}, transactions: { recentIds: [] } }), true);
     assert.deepEqual(statuses, ["雲端已同步"]);
     await controller.ready;
   } finally {

@@ -7,6 +7,23 @@ import { createFreshState, normalizeState } from "../src/core/state.js";
 
 const START = Date.UTC(2026, 0, 1);
 
+test("the launch gift grants one thousand coins exactly once", () => {
+  const core = new GameCore(createFreshState(START));
+  const received = [];
+  core.subscribe((_snapshot, events) => received.push(...events));
+
+  assert.equal(core.claimLaunchGift(), true);
+  assert.equal(core.snapshot().player.coins, 1_300);
+  assert.equal(core.snapshot().achievements.launchGiftClaimed, true);
+  assert.equal(received.some((event) => event.type === "saveUrgent"), true);
+  assert.equal(core.claimLaunchGift(), false);
+  assert.equal(core.snapshot().player.coins, 1_300);
+
+  core.reset(START + 1);
+  assert.equal(core.claimLaunchGift(), false);
+  assert.equal(core.snapshot().player.coins, 300);
+});
+
 test("buying the tutorial guppy is atomic and idempotent", () => {
   const core = new GameCore(createFreshState(START));
   const bought = core.dispatch("BUY_EGG", { speciesId: "guppy" }, "buy-1", START);
@@ -145,6 +162,28 @@ test("medicine can be purchased and consumed to cure a sick fish", () => {
   assert.equal(cured.ok, true);
   assert.equal(cured.state.inventory.medicines, 0);
   assert.equal(cured.state.tank.fishes[0].health, "healthy");
+});
+
+test("dead fish can be revived within a day or removed exactly once", () => {
+  const reviveState = createFreshState(START);
+  reviveState.tank.fishes = [{ ...fish("revivable", 0), health: "dead", diedAt: START }];
+  const reviveCore = new GameCore(reviveState);
+  const revived = reviveCore.dispatch("REVIVE_FISH", { fishId: "revivable" }, "revive-dead", START + 60_000);
+  assert.equal(revived.ok, true);
+  assert.equal(revived.state.player.gems, 0);
+  assert.equal(revived.state.tank.fishes[0].health, "healthy");
+  assert.equal(revived.state.tank.fishes[0].satiety, 40);
+
+  const removeState = createFreshState(START);
+  removeState.tank.fishes = [{ ...fish("remove-me", 0), health: "dead", diedAt: START }];
+  const removeCore = new GameCore(removeState);
+  const removed = removeCore.dispatch("REMOVE_DEAD_FISH", { fishId: "remove-me" }, "remove-dead", START + 60_000);
+  assert.equal(removed.ok, true);
+  assert.equal(removed.state.tank.fishes.length, 0);
+  assert.equal(removed.state.inventory.fertilizerShards, 1);
+  const repeated = removeCore.dispatch("REMOVE_DEAD_FISH", { fishId: "remove-me" }, "remove-dead-again", START + 60_000);
+  assert.equal(repeated.ok, false);
+  assert.equal(repeated.state.inventory.fertilizerShards, 1);
 });
 
 test("collecting a fish coin credits it exactly once", () => {

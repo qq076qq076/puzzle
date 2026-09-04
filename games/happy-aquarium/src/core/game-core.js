@@ -51,9 +51,19 @@ export class GameCore {
   }
 
   reset(now = Date.now()) {
+    const launchGiftClaimed = Boolean(this.#state.achievements.launchGiftClaimed);
     this.#state = createFreshState(now);
+    this.#state.achievements.launchGiftClaimed = launchGiftClaimed;
     ensureDailyGoals(this.#state, now);
     this.#publish([{ type: "stateReset" }]);
+  }
+
+  claimLaunchGift() {
+    if (this.devMode || this.#state.achievements.launchGiftClaimed) return false;
+    this.#state.achievements.launchGiftClaimed = true;
+    this.#state.player.coins += 1_000;
+    this.#publish([{ type: "launchGiftClaimed", amount: 1_000 }, { type: "saveUrgent" }]);
+    return true;
   }
 
   tick(now = Date.now(), liveFishPositions = null) {
@@ -266,6 +276,15 @@ const COMMANDS = {
     fish.diedAt = 0;
     fish.satiety = 40;
     events.push({ type: "fishRevived", fishId });
+    return ok();
+  },
+
+  REMOVE_DEAD_FISH(state, { fishId }, _now, events) {
+    const index = state.tank.fishes.findIndex((item) => item.id === fishId);
+    if (index < 0 || state.tank.fishes[index].health !== "dead") return fail("FISH_NOT_DEAD");
+    state.tank.fishes.splice(index, 1);
+    state.inventory.fertilizerShards = (Number(state.inventory.fertilizerShards) || 0) + 1;
+    events.push({ type: "deadFishRemoved", fishId });
     return ok();
   },
 
@@ -486,6 +505,7 @@ export const ERROR_MESSAGES = {
   COIN_NOT_FOUND: "這枚金幣已經被撿走或消失了。",
   NO_WAFER: "背包沒有藻錠。", NO_HUNGRY_HELPER: "目前沒有需要藻錠的清潔生物。", FISH_NOT_SICK: "這隻魚不需要治療。",
   NO_MEDICINE: "背包沒有藥水。", NO_FISH_FOOD: "這種飼料已經用完，請購買或改用基本飼料。", CANNOT_ACCELERATE: "目前不能加速。", NOT_ENOUGH_GEMS: "寶石不足。", CANNOT_REVIVE: "已超過復活期限。",
+  FISH_NOT_DEAD: "只有死亡的魚可以移除。",
   FISH_NOT_FOUND: "找不到這隻魚。", CANNOT_SELL: "目前不能出售。", UNKNOWN_ITEM: "找不到商品。", ALREADY_OWNED: "已經擁有。",
   NO_FEEDER: "尚未安裝餵食器。", DEVICE_NOT_FOUND: "找不到這台設備。", DECORATION_LIMIT: "魚缸最多擺放 10 件裝飾。", DECORATION_NOT_FOUND: "找不到這件裝飾。", INVALID_DECORATION_POSITION: "請把裝飾放在魚缸內。", INVALID_OBJECT_SCALE: "請選擇有效的物件大小。", NO_REWARD: "目前沒有漂流禮物。", INVALID_NAME: "名稱不能空白。",
 };

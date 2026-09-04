@@ -80,6 +80,7 @@ export class UIController {
       if (event.type === "tutorialAdvanced") this.toast(tutorialMessage(event.step));
       if (event.type === "dailyGoalCompleted") this.toast(`每日目標完成：+${event.reward} 金幣`);
       if (event.type === "legendaryFishGranted") this.toast("長期照護里程碑完成：獲得彩虹美人魚魚卵！");
+      if (event.type === "launchGiftClaimed") this.toast(`開缸禮物：獲得 ${formatNumber(event.amount)} 金幣！`);
     }
   }
 
@@ -140,7 +141,19 @@ export class UIController {
       return;
     }
     if (this.selected.type === "fish") {
-      this.elements.selection.hidden = true;
+      const fish = this.snapshot.tank.fishes.find((item) => item.id === this.selected.id);
+      if (!fish || fish.health !== "dead") {
+        this.selected = null;
+        this.elements.selection.hidden = true;
+        return;
+      }
+      const species = SPECIES_BY_ID[fish.speciesId];
+      const reviveRemaining = Math.max(0, 24 * 3_600_000 - (Date.now() - fish.diedAt));
+      const canRevive = reviveRemaining > 0;
+      const hours = Math.max(1, Math.ceil(reviveRemaining / 3_600_000));
+      this.elements.selection.innerHTML = `<button class="selection-close" type="button" data-close>×</button><span class="eyebrow">已死亡魚隻</span><h2>${escapeHtml(fish.name || species?.name || "魚")}</h2><p>${canRevive ? `可在 ${hours} 小時內花費 3 顆寶石復活` : "已超過復活期限，只能移除"}</p><div class="selection-actions"><button data-command="REVIVE_FISH" ${canRevive ? "" : "disabled"}>復活・◆ 3</button><button data-command="REMOVE_DEAD_FISH">移除</button></div>`;
+      this.elements.selection.querySelector("[data-close]").addEventListener("click", () => { this.selected = null; this.renderSelection(); });
+      this.elements.selection.hidden = false;
       return;
     }
     if (this.selected.type === "helper") {
@@ -173,7 +186,7 @@ export class UIController {
     }
   }
 
-  selectFish(id) { this.selected = { type: "fish", id }; this.elements.selection.hidden = true; }
+  selectFish(id) { this.selected = { type: "fish", id }; this.renderSelection(); }
   selectHelper(id) { this.selected = { type: "helper", id }; this.renderSelection(); }
   selectDevice(id) { this.selected = { type: "device", id }; this.renderSelection(); }
   selectDecoration(id) { this.selected = { type: "decoration", id }; this.renderSelection(); }

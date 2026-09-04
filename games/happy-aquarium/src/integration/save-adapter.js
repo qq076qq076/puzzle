@@ -11,7 +11,7 @@ export function createSaveAdapter(core, ui) {
     },
     validate: isValidCheckpoint,
     getState: () => core.snapshot(),
-    hasProgress: (data) => Boolean(data?.tank?.fishes?.length || data?.stats?.eggsBought || data?.transactions?.recentIds?.length),
+    hasProgress: (data) => Boolean(data?.achievements?.launchGiftClaimed || data?.tank?.fishes?.length || data?.stats?.eggsBought || data?.transactions?.recentIds?.length),
     autoRestore: true,
     interval: 2000,
     cloudInterval: 5000,
