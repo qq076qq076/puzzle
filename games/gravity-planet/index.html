@@ -19,6 +19,7 @@
           <p class="game-tagline">吸收碎石，變成宇宙裡更大的存在。</p>
         </div>
         <div class="header-actions">
+          <button class="button button-quiet" id="fullscreen-button" type="button" aria-pressed="false" aria-controls="canvas-frame">全螢幕 ⛶</button>
           <button class="button button-quiet" id="codex-button" type="button">星體圖鑑 <span id="codex-count">0/10</span></button>
           <button class="button button-quiet" id="pause-button" type="button">暫停</button>
           <button class="button button-primary" id="restart-button" type="button">重新開始 <span aria-hidden="true">↗</span></button>
@@ -27,6 +28,10 @@
 
       <section class="game-shell" aria-label="重力星球遊戲">
         <div class="canvas-frame" id="canvas-frame">
+          <div class="fullscreen-toolbar">
+            <button class="button button-quiet" id="fullscreen-pause" type="button">暫停</button>
+            <button class="button button-quiet" id="fullscreen-exit" type="button">退出全螢幕 ↙</button>
+          </div>
           <div id="scene-container" aria-label="3D 宇宙遊戲場景"></div>
           <div class="scene-vignette" aria-hidden="true"></div>
           <div class="mobile-joystick" id="mobile-joystick" aria-label="手機虛擬搖桿" role="application">

@@ -133,6 +133,9 @@ let joystickPointerId = null;
 const ui = {
   container: document.querySelector("#scene-container"),
   canvasFrame: document.querySelector("#canvas-frame"),
+  fullscreenButton: document.querySelector("#fullscreen-button"),
+  fullscreenExit: document.querySelector("#fullscreen-exit"),
+  fullscreenPause: document.querySelector("#fullscreen-pause"),
   mobileJoystick: document.querySelector("#mobile-joystick"),
   joystickBase: document.querySelector("#joystick-base"),
   joystickStick: document.querySelector("#joystick-stick"),
@@ -2882,6 +2885,7 @@ function updateUi(force = false) {
   ui.timeValue.textContent = formatTime(state.time);
   ui.bestValue.textContent = formatNumber(Math.max(getBestMass(), state.highMass));
   ui.pauseButton.textContent = state.status === "paused" ? "繼續" : "暫停";
+  ui.fullscreenPause.textContent = ui.pauseButton.textContent;
   const comboValue = Math.max(state.player.combo, state.chainCombo);
   ui.comboValue.textContent = comboValue;
   ui.comboPill.hidden = comboValue < 3;
@@ -3247,9 +3251,77 @@ function setupInput() {
 function resize() {
   const width = ui.container.clientWidth;
   const height = ui.container.clientHeight;
+  if (!width || !height) return;
   renderer.setSize(width, height, false);
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
+}
+
+let fullscreenBusy = false;
+let nativeFullscreenActive = false;
+let fullscreenScrollY = 0;
+
+function setFullscreenLayout(active) {
+  if (active && !ui.canvasFrame.classList.contains("is-fullscreen")) fullscreenScrollY = window.scrollY;
+  ui.canvasFrame.classList.toggle("is-fullscreen", active);
+  document.body.classList.toggle("game-fullscreen", active);
+  ui.fullscreenButton.setAttribute("aria-pressed", String(active));
+  input.clear();
+  resetJoystick();
+  requestAnimationFrame(() => {
+    resize();
+    if (!active) {
+      window.scrollTo(0, fullscreenScrollY);
+      ui.fullscreenButton.focus({ preventScroll: true });
+    }
+  });
+}
+
+async function toggleFullscreen() {
+  if (fullscreenBusy) return;
+  fullscreenBusy = true;
+  try {
+    if (ui.canvasFrame.classList.contains("is-fullscreen")) {
+      const nativeElement = document.fullscreenElement || document.webkitFullscreenElement;
+      if (nativeElement === ui.canvasFrame) {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        try {
+          if (exit) await exit.call(document);
+        } catch {
+          // Keep the exit control available if the browser rejects the request.
+          if ((document.fullscreenElement || document.webkitFullscreenElement) === ui.canvasFrame) return;
+        }
+      }
+      nativeFullscreenActive = false;
+      setFullscreenLayout(false);
+    } else {
+      setFullscreenLayout(true);
+      const request = ui.canvasFrame.requestFullscreen || ui.canvasFrame.webkitRequestFullscreen;
+      if (request) {
+        try {
+          await request.call(ui.canvasFrame);
+          nativeFullscreenActive = (document.fullscreenElement || document.webkitFullscreenElement) === ui.canvasFrame;
+        } catch {
+          // iPhone and embedded browsers may only support viewport-filling mode.
+          nativeFullscreenActive = false;
+        }
+      }
+      ui.fullscreenExit.focus({ preventScroll: true });
+    }
+  } finally {
+    fullscreenBusy = false;
+  }
+}
+
+function syncNativeFullscreen() {
+  const active = (document.fullscreenElement || document.webkitFullscreenElement) === ui.canvasFrame;
+  if (active) {
+    nativeFullscreenActive = true;
+    setFullscreenLayout(true);
+  } else if (nativeFullscreenActive) {
+    nativeFullscreenActive = false;
+    setFullscreenLayout(false);
+  }
 }
 
 function animate() {
@@ -3293,6 +3365,16 @@ function init() {
   rebuildPlayerModel();
   renderCodex();
   setupInput();
+  ui.fullscreenButton.addEventListener("click", toggleFullscreen);
+  ui.fullscreenExit.addEventListener("click", toggleFullscreen);
+  ui.fullscreenPause.addEventListener("click", togglePause);
+  document.addEventListener("fullscreenchange", syncNativeFullscreen);
+  document.addEventListener("webkitfullscreenchange", syncNativeFullscreen);
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && ui.canvasFrame.classList.contains("is-fullscreen") && !nativeFullscreenActive) toggleFullscreen();
+  });
+  new ResizeObserver(resize).observe(ui.container);
+  window.visualViewport?.addEventListener("resize", resize);
   ui.pauseButton.addEventListener("click", togglePause);
   ui.codexButton.addEventListener("click", openCodex);
   ui.codexClose.addEventListener("click", closeCodex);
