@@ -286,6 +286,66 @@ let glowTexture;
 let planetBandTexture;
 let cometTailGeometry;
 let timeFrame = 0;
+const surfaceTextures = new Map();
+const impactFeedback = { strength: 0, cooldown: 0 };
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// Shared, seamless spherical textures: one pair per family, never per spawned body.
+function celestialSurface(family) {
+  if (surfaceTextures.has(family)) return surfaceTextures.get(family);
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 128;
+  const context = canvas.getContext("2d");
+  const pixels = context.createImageData(canvas.width, canvas.height);
+  const gas = ["gas-giant", "substellar", "ice-giant"].includes(family);
+  for (let y = 0; y < canvas.height; y += 1) {
+    const latitude = y / (canvas.height - 1) * Math.PI;
+    for (let x = 0; x < canvas.width; x += 1) {
+      const longitude = x / (canvas.width - 1) * Math.PI * 2;
+      const sx = Math.sin(latitude) * Math.cos(longitude);
+      const sy = Math.cos(latitude);
+      const sz = Math.sin(latitude) * Math.sin(longitude);
+      const coarse = Math.sin(sx * 9 + Math.sin(sz * 7)) * Math.cos(sy * 11 - sz * 5);
+      const detail = Math.sin(sx * 47 + sz * 23) * Math.cos(sz * 39 - sy * 41);
+      let value = 0.62 + coarse * 0.23 + detail * 0.1;
+      if (gas) value = 0.62 + Math.sin(sy * 38 + coarse * 2.6) * 0.22 + detail * 0.045;
+      const offset = (y * canvas.width + x) * 4;
+      const land = family === "terrestrial" && coarse > 0.12;
+      pixels.data[offset] = Math.round(255 * value * (land ? 0.56 : 1));
+      pixels.data[offset + 1] = Math.round(255 * value);
+      pixels.data[offset + 2] = Math.round(255 * value * (land ? 0.55 : 1));
+      pixels.data[offset + 3] = 255;
+    }
+  }
+  context.putImageData(pixels, 0, 0);
+  const map = new THREE.CanvasTexture(canvas);
+  map.wrapS = THREE.RepeatWrapping;
+  map.encoding = THREE.sRGBEncoding;
+  const bump = new THREE.CanvasTexture(canvas);
+  bump.wrapS = THREE.RepeatWrapping;
+  const result = { map, bump };
+  surfaceTextures.set(family, result);
+  return result;
+}
+
+function addAtmosphere(group, radius, color) {
+  const atmosphere = new THREE.Mesh(
+    new THREE.SphereGeometry(radius * 1.065, 24, 16),
+    new THREE.ShaderMaterial({
+      uniforms: { tint: { value: new THREE.Color(color) } },
+      vertexShader: `varying vec3 vNormal; varying vec3 vView;
+        void main() { vec4 p = modelViewMatrix * vec4(position, 1.0);
+          vNormal = normalize(normalMatrix * normal); vView = -p.xyz;
+          gl_Position = projectionMatrix * p; }`,
+      fragmentShader: `uniform vec3 tint; varying vec3 vNormal; varying vec3 vView;
+        void main() { float edge = pow(1.0 - max(0.0, dot(normalize(vNormal), normalize(vView))), 3.5);
+          gl_FragColor = vec4(tint, edge * 0.48); }`,
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    }),
+  );
+  group.add(atmosphere);
+}
 
 function rand(min, max) {
   return min + Math.random() * (max - min);
@@ -915,7 +975,7 @@ function createCelestialModel(level, isPlayer = false) {
     if (advanced) {
     const cloud = new THREE.Mesh(
       new THREE.SphereGeometry(radius * 1.025, 32, 20),
-      new THREE.MeshStandardMaterial({ color: 0x9be7ec, transparent: true, opacity: 0.29, roughness: 1, depthWrite: false }),
+      new THREE.MeshStandardMaterial({ color: 0x9be7ec, transparent: true, opacity: 0.12, roughness: 1, depthWrite: false }),
     );
     cloud.userData.spinSpeed = -0.16;
     group.add(cloud);
@@ -1026,6 +1086,18 @@ function createCelestialModel(level, isPlayer = false) {
   }
 
   group.add(core);
+  if (modelLevel < 9) {
+    const surface = celestialSurface(data.family);
+    core.material.map = surface.map;
+    core.material.color.setHex(data.color);
+    core.material.bumpMap = surface.bump;
+    core.material.bumpScale = radius * (modelLevel <= 4 ? 0.065 : 0.012);
+    core.material.roughness = modelLevel === 5 ? 0.52 : 0.82;
+    core.material.emissiveIntensity = modelLevel === 4 ? 0.18 : modelLevel === 8 ? 0.32 : 0.025;
+    if (modelLevel >= 5) addAtmosphere(group, radius, data.accent);
+  } else if (level < MAX_LEVEL) {
+    core.material.map = celestialSurface(data.family).map;
+  }
   group.userData.core = core;
   group.userData.glow = group.children.find((child) => child.isSprite) || null;
   if (isPlayer) {
@@ -1033,7 +1105,7 @@ function createCelestialModel(level, isPlayer = false) {
     playerGlow.position.y = -0.03;
     group.add(playerGlow);
     group.userData.glow = playerGlow;
-    if (modelLevel >= 5) {
+    if (modelLevel >= 8) {
       const light = new THREE.PointLight(data.accent, modelLevel >= 9 ? 3.1 : 1.3, radius * 7, 2);
       light.position.y = 1.2;
       group.add(light);
@@ -1066,26 +1138,39 @@ function createGravityField() {
 }
 
 function createStars() {
-  const positions = new Float32Array(1100 * 3);
-  const colors = new Float32Array(1100 * 3);
+  const sky = new THREE.Group();
+  scene.add(camera);
+  camera.add(sky);
+  infiniteWorld.starfield = sky;
   const colorOptions = [new THREE.Color(0x91bbff), new THREE.Color(0xc4a5ff), new THREE.Color(0xffd9a3), new THREE.Color(0xeef8ff)];
-  for (let index = 0; index < 1100; index += 1) {
-    const radius = rand(55, 150);
-    const angle = rand(0, Math.PI * 2);
-    positions[index * 3] = Math.cos(angle) * radius;
-    positions[index * 3 + 1] = rand(-25, 75);
-    positions[index * 3 + 2] = Math.sin(angle) * radius - 25;
-    const color = colorOptions[index % colorOptions.length];
-    colors[index * 3] = color.r;
-    colors[index * 3 + 1] = color.g;
-    colors[index * 3 + 2] = color.b;
+  for (let layer = 0; layer < 3; layer += 1) {
+    const count = Math.round((layer === 0 ? 1500 : layer === 1 ? 500 : 100) * (IS_MOBILE_LAYOUT ? 0.65 : 1));
+    const positions = new Float32Array(count * 3);
+    const colors = new Float32Array(count * 3);
+    for (let index = 0; index < count; index += 1) {
+      positions[index * 3] = rand(-260, 260);
+      positions[index * 3 + 1] = rand(-130, 130);
+      positions[index * 3 + 2] = -220 + layer * 35;
+      const color = colorOptions[index % colorOptions.length];
+      const brightness = rand(0.4, 1);
+      colors[index * 3] = color.r * brightness;
+      colors[index * 3 + 1] = color.g * brightness;
+      colors[index * 3 + 2] = color.b * brightness;
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    const stars = new THREE.Points(geometry, new THREE.PointsMaterial({ size: 0.85 + layer * 0.65, vertexColors: true, transparent: true, opacity: 0.9, map: glowTexture, depthWrite: false, toneMapped: false, blending: THREE.AdditiveBlending }));
+    stars.userData.skyLayer = layer;
+    sky.add(stars);
   }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-  const stars = new THREE.Points(geometry, new THREE.PointsMaterial({ size: 0.28, vertexColors: true, transparent: true, opacity: 0.75, map: glowTexture, depthWrite: false, blending: THREE.AdditiveBlending }));
-  infiniteWorld.starfield = stars;
-  worldGroup.add(stars);
+  // Soft overlapping nebulae sit behind the star layers, without a visible plane edge.
+  for (let index = 0; index < 7; index += 1) {
+    const cloud = makeSprite(index % 2 ? 0x573ea6 : 0x235991, 110 + index * 8, 0.065);
+    cloud.position.set(-110 + index * 34, Math.sin(index * 1.7) * 30, -245);
+    cloud.scale.y *= 0.55;
+    sky.add(cloud);
+  }
 
   const gridDivisions = currentGridDivisions();
   const gridGroup = new THREE.Group();
@@ -1094,13 +1179,6 @@ function createStars() {
       const tile = new THREE.Group();
       const grid = createWorldGrid(gridDivisions);
       tile.add(grid);
-      const floor = new THREE.Mesh(
-        new THREE.PlaneGeometry(WORLD.gridTileSize, WORLD.gridTileSize),
-        new THREE.MeshBasicMaterial({ color: 0x08112b, transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false }),
-      );
-      floor.rotation.x = -Math.PI / 2;
-      floor.position.y = -0.82;
-      tile.add(floor);
       tile.userData.offsetX = gridX;
       tile.userData.offsetZ = gridZ;
       tile.userData.grid = grid;
@@ -1281,7 +1359,7 @@ function createWorldGrid(divisions) {
   const grid = new THREE.GridHelper(WORLD.gridTileSize, divisions, 0x203f69, 0x15294e);
   grid.position.y = -0.8;
   grid.material.transparent = true;
-  grid.material.opacity = 0.22;
+  grid.material.opacity = 0.045;
   return grid;
 }
 
@@ -1314,7 +1392,7 @@ function updateRegionVisuals() {
     const materials = Array.isArray(grid?.material) ? grid.material : [grid?.material];
     materials.filter(Boolean).forEach((material) => {
       material.color.setHex(region.gridColor);
-      material.opacity = region.id === "nebula" ? 0.17 : 0.22;
+      material.opacity = region.id === "nebula" ? 0.028 : 0.045;
     });
   });
   if (ui.regionBadge) {
@@ -1350,10 +1428,6 @@ function updateInfiniteWorld() {
         (chunkZ + tile.userData.offsetZ) * tileSize,
       );
     });
-    if (infiniteWorld.starfield) {
-      infiniteWorld.starfield.position.x = Math.round(state.player.position.x / 100) * 100;
-      infiniteWorld.starfield.position.z = Math.round(state.player.position.z / 100) * 100;
-    }
   }
   updateRegionForPosition(chunkX, chunkZ);
 }
@@ -1666,6 +1740,33 @@ function createBurst(position, color, count = 24, power = 2.4) {
   state.effects.push({ points, geometry, material, velocities, life: 0, maxLife: rand(0.45, 0.9) });
 }
 
+function createImpact(position, normal, speed, radius, color, playerHit = false) {
+  const distance = position.distanceTo(state.player.position);
+  if (distance > 48) return;
+  const strength = clamp(speed / 8 + radius * 0.16, 0.25, 1.6);
+  // Cap overlapping shockwaves during dense chain collisions.
+  if (state.effects.filter((effect) => effect.isImpact).length >= (IS_MOBILE_LAYOUT ? 5 : 9)) return;
+  const group = new THREE.Group();
+  group.position.copy(position);
+  group.position.y = 0.35;
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 48),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
+  ring.rotation.x = -Math.PI / 2;
+  group.add(ring);
+  const flash = makeSprite(0xfff0d5, 1, 0.9);
+  group.add(flash);
+  effectGroup.add(group);
+  state.effects.push({ group, ring, flash, strength, life: 0, maxLife: 0.48, isImpact: true });
+  createBurst(position, color, Math.round(10 + strength * 14), 3 + strength * 4);
+  // Stretch the new burst along the contact normal for directional ejecta.
+  const burst = state.effects[state.effects.length - 1];
+  burst.velocities.forEach((velocity, index) => velocity.addScaledVector(normal, (index % 2 ? 1 : -1) * strength * 3));
+  if (impactFeedback.cooldown <= 0 || playerHit) {
+    impactFeedback.strength = Math.max(impactFeedback.strength, strength * (playerHit ? 0.3 : 0.12) * Math.max(0, 1 - distance / 35));
+    impactFeedback.cooldown = 0.12;
+  }
+}
+
 function createDamageFragments(position, impactDirection, level) {
   const group = new THREE.Group();
   const data = LEVELS[level - 1];
@@ -1720,7 +1821,12 @@ function updateEffects(delta) {
     const effect = state.effects[index];
     effect.life += delta;
     const ratio = effect.life / effect.maxLife;
-    if (effect.isFragments) {
+    if (effect.isImpact) {
+      effect.ring.scale.setScalar(0.3 + (1 - Math.pow(1 - ratio, 3)) * (2 + effect.strength * 3));
+      effect.ring.material.opacity = Math.pow(1 - ratio, 2) * 0.8;
+      effect.flash.scale.setScalar((1 + effect.strength * 3) * (1 + ratio));
+      effect.flash.material.opacity = Math.max(0, 1 - ratio * 4) * 0.9;
+    } else if (effect.isFragments) {
       effect.fragments.forEach((fragment) => {
         fragment.mesh.position.addScaledVector(fragment.velocity, delta);
         fragment.velocity.y -= 3.2 * delta;
@@ -1747,6 +1853,7 @@ function updateEffects(delta) {
       effectGroup.remove(effect.points || effect.halo || effect.group);
       effect.geometry?.dispose();
       effect.material?.dispose();
+      if (effect.isImpact) disposeObject3D(effect.group);
       if (effect.isFragments) effect.fragments.forEach((fragment) => {
         fragment.mesh.geometry.dispose();
         fragment.mesh.material.dispose();
@@ -1836,6 +1943,7 @@ function resolveSolidCollision(first, second) {
   if (distance >= minimumDistance) return null;
 
   const normal = distance > 0.0001 ? offset.multiplyScalar(1 / distance) : new THREE.Vector3(1, 0, 0);
+  const impactSpeed = Math.max(0, first.velocity.clone().sub(second.velocity).dot(normal));
   const firstInverseMass = inverseMassFor(first);
   const secondInverseMass = inverseMassFor(second);
   const inverseMassTotal = firstInverseMass + secondInverseMass;
@@ -1862,6 +1970,7 @@ function resolveSolidCollision(first, second) {
   return {
     position: first.position.clone().lerp(second.position, 0.5),
     normal,
+    impactSpeed,
   };
 }
 
@@ -2169,6 +2278,7 @@ function takeHit(body) {
   state.player.velocity.add(impactDirection.clone().multiplyScalar(5));
   createBurst(state.player.position, 0xff7b8b, 42, 4.6);
   createDamageFragments(state.player.position, impactDirection, state.player.level);
+  createImpact(state.player.position, impactDirection, body.velocity.clone().sub(state.player.velocity).length(), PLAYER_RADIUS, 0xff9566, true);
   addToast(`引力撞擊 · 護盾 -${damage}`, "#ff9ca8");
   const newLevel = levelForMass(state.player.mass);
   if (newLevel < state.player.level) {
@@ -2636,7 +2746,7 @@ function updateBodyCollisions() {
       if (!collision) continue;
       if (first.collisionCooldown > 0 || second.collisionCooldown > 0) continue;
       const level = Math.max(first.level, second.level);
-      createBurst(collision.position, LEVELS[level - 1].accent, 7, 0.75);
+      createImpact(collision.position, collision.normal, collision.impactSpeed, Math.min(first.radius, second.radius), LEVELS[level - 1].accent);
       first.collisionCooldown = 0.14;
       second.collisionCooldown = 0.14;
       if (first.isBoss || second.isBoss) {
@@ -2719,6 +2829,19 @@ function updateCamera(delta) {
   const desired = new THREE.Vector3(target.x, 33, target.z + 28);
   camera.position.lerp(desired, 1 - Math.pow(0.001, delta));
   camera.lookAt(target.x, 0, target.z);
+  impactFeedback.cooldown = Math.max(0, impactFeedback.cooldown - delta);
+  impactFeedback.strength *= Math.exp(-12 * delta);
+  if (!reducedMotion && impactFeedback.strength > 0.002) {
+    camera.position.x += Math.sin(state.time * 91) * impactFeedback.strength;
+    camera.position.y += Math.cos(state.time * 73) * impactFeedback.strength * 0.55;
+  }
+  infiniteWorld.starfield?.children.forEach((layer) => {
+    if (layer.userData.skyLayer === undefined) return;
+    const depth = layer.userData.skyLayer + 1;
+    layer.position.x = -Math.sin(target.x / 220) * depth * 2.5;
+    layer.position.y = Math.sin(target.z / 220) * depth * 1.7;
+    layer.material.opacity = reducedMotion ? 0.85 : 0.78 + Math.sin(state.time * 0.6 + depth) * 0.07;
+  });
 }
 
 function updateStageUi() {
@@ -2849,7 +2972,13 @@ function restartGame() {
   state.chainCombo = 0;
   state.chainTimer = 0;
   state.lastUiUpdate = 0;
-  state.effects.forEach((effect) => effectGroup.remove(effect.points || effect.halo || effect.group));
+  impactFeedback.strength = 0;
+  impactFeedback.cooldown = 0;
+  state.effects.forEach((effect) => {
+    const root = effect.points || effect.halo || effect.group;
+    effectGroup.remove(root);
+    disposeObject3D(root);
+  });
   state.effects.length = 0;
   [...state.bodies].forEach(removeBody);
   state.player.mass = 1;
@@ -3152,10 +3281,13 @@ function animate() {
 function init() {
   glowTexture = makeGlowTexture();
   createStars();
-  scene.add(new THREE.HemisphereLight(0x9bb9ff, 0x07091d, 1.25));
-  const keyLight = new THREE.DirectionalLight(0x99baff, 1.6);
-  keyLight.position.set(-12, 24, 16);
+  scene.add(new THREE.HemisphereLight(0x7e9cc8, 0x090917, 0.38));
+  const keyLight = new THREE.DirectionalLight(0xffdfb3, 2.25);
+  keyLight.position.set(-24, 18, 14);
   scene.add(keyLight);
+  const rimLight = new THREE.DirectionalLight(0x628fff, 0.95);
+  rimLight.position.set(18, 5, -22);
+  scene.add(rimLight);
   migrateLegacyBestLevel();
   loadCosmeticCollection();
   rebuildPlayerModel();
