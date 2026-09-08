@@ -11,7 +11,7 @@ import {
   OFFLINE_CAP_MS,
   SPECIES_BY_ID,
 } from "../config/game-config.js";
-import { clamp, dayKeyTaipei, fishHappiness, foodSatietyGain, stageFromGrowth } from "./calculations.js";
+import { clamp, dayKeyTaipei, fishHappiness, foodSatietyGain, stageFromGrowth, wantsFood, fishCoinValue } from "./calculations.js";
 import { nextRandom, randomInt } from "./rng.js";
 
 const HOUR = 3_600_000;
@@ -39,6 +39,7 @@ export function simulate(state, now = Date.now(), { offline = false } = {}) {
   for (const fish of state.tank.fishes) {
     const happinessBefore = fishHappiness(state, fish);
     updateFish(state, fish, elapsed, to, warmMultiplier, offline, report);
+    fish.feeding = wantsFood(fish);
     updateHappinessCoins(state, fish, happinessBefore, elapsed, to, offline, coinCollectorActive, report);
   }
   if (coinCollectorActive) collectDroppedCoins(state, report);
@@ -53,9 +54,7 @@ function updateHappinessCoins(state, fish, happinessBefore, elapsed, now, offlin
   const happinessAfter = fishHappiness(state, fish);
   fish.happiness = happinessAfter;
   if (fish.stage === "egg" || fish.health === "dead") return;
-  const species = SPECIES_BY_ID[fish.speciesId];
-  const purchasePrice = Number(species?.eggPrice);
-  const coinValue = Number.isFinite(purchasePrice) && purchasePrice > 0 ? Math.floor(purchasePrice * 0.1) : 0;
+  const coinValue = fishCoinValue(fish);
   if (coinValue <= 0) return;
   const dayKey = dayKeyTaipei(now);
   if (fish.coinDayKey !== dayKey) {
@@ -126,11 +125,12 @@ function collectDroppedCoins(state, report) {
 
 export function feedHungriestFish(state, pelletCount = 5, foodTypeId = "basic-food") {
   const candidates = state.tank.fishes
-    .filter((fish) => fish.stage !== "egg" && fish.health === "healthy" && fish.satiety < 50)
+    .filter((fish) => wantsFood(fish))
     .sort((left, right) => left.satiety - right.satiety || left.id.localeCompare(right.id));
   const fed = [];
   for (const fish of candidates.slice(0, pelletCount)) {
     fish.satiety = clamp(fish.satiety + foodSatietyGain(foodTypeId, fish.speciesId, fish.preferredFoodTypeId), 0, 100);
+    fish.feeding = fish.satiety < 80;
     fish.starvingSince = 0;
     fed.push(fish.id);
   }

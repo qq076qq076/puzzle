@@ -1,5 +1,5 @@
 import { GAME_HEIGHT, GAME_WIDTH, PERSONALITY_BY_ID, SPECIES_BY_ID } from "../config/game-config.js";
-import { foodSatietyGain } from "./calculations.js";
+import { foodSatietyGain, wantsFood } from "./calculations.js";
 
 const WATER = { left: 40, right: 960, top: 75, bottom: 550 };
 const HELPER_PATROL = { left: 55, right: 945, floor: 512, bob: 4 };
@@ -27,6 +27,7 @@ export function createAgent(fish) {
     facingTimer: 0,
     foodTargetId: null,
     foodSatiety: Number(fish.satiety) || 0,
+    feeding: wantsFood(fish),
     lastObservedSatiety: Number(fish.satiety) || 0,
   };
 }
@@ -63,6 +64,7 @@ export function stepAgents(agents, fishById, foodsOrDt, maybeDt) {
     if (agent.lastObservedSatiety !== fish.satiety) {
       agent.foodSatiety = Number(fish.satiety) || 0;
       agent.lastObservedSatiety = Number(fish.satiety) || 0;
+      agent.feeding = wantsFood(fish);
     }
     const foodTarget = updateFoodTarget(agent, fish, foods, config);
     agent.retargetIn -= dt;
@@ -121,7 +123,8 @@ export function stepAgents(agents, fishById, foodsOrDt, maybeDt) {
 }
 
 function updateFoodTarget(agent, fish, foods, config) {
-  const canEat = canPursueFood(fish, agent.foodSatiety);
+  agent.feeding = wantsFood(fish, agent.foodSatiety, agent.feeding);
+  const canEat = agent.feeding;
   let target = foods.find((food) => food.id === agent.foodTargetId && !food.consumed);
   if (!canEat) {
     agent.foodTargetId = null;
@@ -152,7 +155,7 @@ function resolveFoodArrivals(agents, fishById, foods, consumed) {
     const arrivals = agents
       .filter((agent) => {
         const fish = fishById.get(agent.id);
-        return canPursueFood(fish, virtualSatiety.get(agent.id)) && Math.hypot(agent.x - food.x, agent.y - food.y) < 18;
+        return wantsFood(fish, virtualSatiety.get(agent.id), agent.feeding) && Math.hypot(agent.x - food.x, agent.y - food.y) < 18;
       })
       .sort((left, right) => Math.hypot(left.x - food.x, left.y - food.y) - Math.hypot(right.x - food.x, right.y - food.y) || left.id.localeCompare(right.id));
     const winner = arrivals[0];
@@ -163,12 +166,9 @@ function resolveFoodArrivals(agents, fishById, foods, consumed) {
     const nextSatiety = Math.min(100, virtualSatiety.get(winner.id) + foodSatietyGain(food.foodTypeId, fish.speciesId, fish.preferredFoodTypeId));
     virtualSatiety.set(winner.id, nextSatiety);
     winner.foodSatiety = nextSatiety;
+    winner.feeding = nextSatiety < 80;
     for (const agent of agents) if (agent.foodTargetId === food.id) agent.foodTargetId = null;
   }
-}
-
-function canPursueFood(fish, satiety = fish?.satiety) {
-  return Boolean(fish && fish.health === "healthy" && fish.stage !== "egg" && satiety < 50);
 }
 
 function chooseTarget(agent, config) {

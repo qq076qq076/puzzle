@@ -14,7 +14,7 @@ import {
   SPECIES_BY_ID,
   TRANSACTION_LIMIT,
 } from "../config/game-config.js";
-import { clamp, dayKeyTaipei, fishSellPrice, foodSatietyGain, stageFromGrowth } from "./calculations.js";
+import { clamp, dayKeyTaipei, fishSellPrice, foodSatietyGain, stageFromGrowth, wantsFood } from "./calculations.js";
 import { nextRandom, randomInt } from "./rng.js";
 import { simulate } from "./simulation.js";
 import { createFreshState, makeId, normalizeState } from "./state.js";
@@ -216,10 +216,11 @@ const COMMANDS = {
     const foodIndex = state.tank.foods.findIndex((item) => item.id === foodId);
     if (foodIndex < 0) return fail("FOOD_NOT_FOUND");
     const fish = state.tank.fishes.find((item) => item.id === fishId);
-    if (!fish || fish.stage === "egg" || fish.health !== "healthy" || fish.satiety >= 50) return fail("FISH_CANNOT_EAT");
+    if (!wantsFood(fish)) return fail("FISH_CANNOT_EAT");
     const [food] = state.tank.foods.splice(foodIndex, 1);
     const satietyGain = foodSatietyGain(food.foodTypeId, fish.speciesId, fish.preferredFoodTypeId);
     fish.satiety = clamp(fish.satiety + satietyGain, 0, 100);
+    fish.feeding = fish.satiety < 80;
     fish.starvingSince = 0;
     claimTutorial(state, "feed-first-fish", { coins: 50 }, events);
     progressDailyGoal(state, "feed", 1, now, events);

@@ -6,6 +6,8 @@ import {
   fallingDropY,
   fallingFoodY,
   fishGrowthScale,
+  wantsFood,
+  fishCoinValue,
   fishSellPrice,
   fishHappiness,
   stageFromGrowth,
@@ -19,6 +21,23 @@ test("growth stages and sale multipliers are deterministic", () => {
   assert.equal(fishSellPrice({ speciesId: "guppy", stage: "juvenile", health: "healthy" }), 60);
   assert.equal(fishSellPrice({ speciesId: "guppy", stage: "adult", health: "sick", variant: "shiny" }), 100);
   assert.equal(fishSellPrice({ speciesId: "guppy", stage: "egg", health: "healthy" }), 0);
+});
+
+test("feeding starts below fifty and continues until eighty", () => {
+  const fish = { health: "healthy", stage: "adult", satiety: 49 };
+  assert.equal(wantsFood(fish), true);
+  assert.equal(wantsFood({ ...fish, satiety: 60 }), false);
+  assert.equal(wantsFood({ ...fish, satiety: 60, feeding: true }), true);
+  assert.equal(wantsFood({ ...fish, satiety: 80, feeding: true }), false);
+  assert.equal(wantsFood({ ...fish, stage: "egg", feeding: true }), false);
+  assert.equal(wantsFood({ ...fish, health: "sick", feeding: true }), false);
+});
+
+test("growing fish earn progressively more per coin", () => {
+  assert.equal(fishCoinValue({ speciesId: "clownfish", stage: "fry" }), 25);
+  assert.equal(fishCoinValue({ speciesId: "clownfish", stage: "juvenile" }), 37);
+  assert.equal(fishCoinValue({ speciesId: "clownfish", stage: "adult" }), 50);
+  assert.equal(fishCoinValue({ speciesId: "clownfish", stage: "egg" }), 0);
 });
 
 test("fish size grows smoothly through multiple visual checkpoints", () => {

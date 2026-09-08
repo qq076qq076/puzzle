@@ -1,5 +1,5 @@
 import { DECORATION_SCALE, DEVICE_SCALE, FISH_FOOD_BY_ID, PERSONALITIES, PERSONALITY_BY_ID, SPECIES_HABITAT } from "../config/game-config.js";
-import { dayKeyTaipei } from "./calculations.js";
+import { dayKeyTaipei, wantsFood } from "./calculations.js";
 
 export const SCHEMA_VERSION = 7;
 
@@ -77,6 +77,7 @@ export function normalizeState(input, now = Date.now()) {
         normalized.diedAt = 0;
         normalized.starvingSince = 0;
       }
+      normalized.feeding = wantsFood(normalized);
       return normalized;
     })
     : [];

@@ -6,6 +6,21 @@ import { foodSatietyGain } from "../src/core/calculations.js";
 import { createFreshState, normalizeState } from "../src/core/state.js";
 
 const START = Date.UTC(2026, 0, 1);
+
+test("feeding survives a save reload and stops after reaching eighty", () => {
+  const state = createFreshState(START);
+  state.tank.fishes = [fish("meal", 49)];
+  let core = new GameCore(state);
+  for (let i = 0; i < 2; i += 1) {
+    const drop = core.dispatch("FEED", { x: 0.5, y: 0.5 }, "meal-drop-" + i, START);
+    const result = core.dispatch("EAT_FOOD", { fishId: "meal", foodId: drop.state.tank.foods.at(-1).id }, "meal-eat-" + i, START);
+    assert.equal(result.ok, true);
+    core = new GameCore(result.state);
+  }
+  assert.ok(core.snapshot().tank.fishes[0].satiety >= 80);
+  const drop = core.dispatch("FEED", { x: 0.5, y: 0.5 }, "meal-extra", START);
+  assert.equal(core.dispatch("EAT_FOOD", { fishId: "meal", foodId: drop.state.tank.foods.at(-1).id }, "meal-stop", START).ok, false);
+});
 const BALANCE_RESET_DAY = Date.UTC(2026, 8, 4, 4);
 
 test("the September 4 balance reset fully restores every fish exactly once", () => {

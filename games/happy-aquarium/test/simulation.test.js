@@ -205,8 +205,11 @@ test("only fish below fifty satiety pursue and eat food", () => {
   assert.equal(food.consumed, true);
 
   const secondFood = { id: "second-food", x: agent.x, y: agent.y, claimedBy: null, consumed: false };
-  assert.deepEqual(stepAgents([agent], fishById, [secondFood], 0), []);
-  assert.equal(secondFood.consumed, false);
+  assert.deepEqual(stepAgents([agent], fishById, [secondFood], 0), [{ foodId: "second-food", fishId: fish.id }]);
+  assert.equal(secondFood.consumed, true);
+  const thirdFood = { id: "third-food", x: agent.x, y: agent.y, consumed: false };
+  assert.deepEqual(stepAgents([agent], fishById, [thirdFood], 0), []);
+  assert.equal(thirdFood.consumed, false);
 });
 
 test("a hungry fish accelerates when pursuing food", () => {

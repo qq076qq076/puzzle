@@ -44,6 +44,16 @@ export function foodSatietyGain(foodTypeId, speciesId, preferredFoodTypeId = nul
   return nutrition / capacity * 100 * preferenceMultiplier;
 }
 
+export function wantsFood(fish, satiety = fish?.satiety, feeding = fish?.feeding) {
+  return Boolean(fish && fish.health === "healthy" && fish.stage !== "egg" && (satiety < 50 || (feeding && satiety < 80)));
+}
+
+export function fishCoinValue(fish) {
+  const price = SPECIES_BY_ID[fish.speciesId]?.eggPrice;
+  const multiplier = { fry: 0.5, juvenile: 0.75, adult: 1 }[fish.stage] || 0;
+  return Math.floor((Number(price) || 0) * 0.1 * multiplier);
+}
+
 export function environmentComfort(state, fish) {
   const decorations = state?.tank?.decorations || [];
   const appeal = decorations.reduce((sum, item) => sum + (DECORATION_BY_ID[item.catalogId]?.appeal || 0), 0);
