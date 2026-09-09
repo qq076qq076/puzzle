@@ -22,6 +22,7 @@ import { buildCorridorWorld } from "../world/corridor-world.js";
 import { getSideVector } from "../data/rooms.js";
 import { resolveBottleHits, updateBottlePickups } from "../systems/destructible-system.js";
 import { resetTrapVictims, resolveActiveTrapHits } from "../systems/trap-damage.js";
+import { releaseCombatHitStop, triggerCombatImpact, updateCombatHitStop } from "../systems/combat-feedback.js";
 
 export class CorridorScene extends Phaser.Scene {
   constructor() {
@@ -58,6 +59,7 @@ export class CorridorScene extends Phaser.Scene {
     this.player = new Player(this, this.worldLayout.spawn[0], this.worldLayout.spawn[1], {
       level: Math.min(3, Math.floor(this.corridorIndex / 2) + 1),
     });
+    this.player.getMeleeTargets = () => this.enemies;
     this.enemyGroup = this.physics.add.group({ allowGravity: false });
     this.physics.add.collider(this.enemyGroup, this.enemyGroup);
     const [entryOutX, entryOutY] = getSideVector(this.currentCorridor.entrySide);
@@ -132,7 +134,7 @@ export class CorridorScene extends Phaser.Scene {
     return {
       moveX: this.touchControls?.enabled && Math.hypot(touchMove.x, touchMove.y) > 0.08 ? touchMove.x : moveX,
       moveY: this.touchControls?.enabled && Math.hypot(touchMove.x, touchMove.y) > 0.08 ? touchMove.y : moveY,
-      attack: actions.attack || buffered.attack || Phaser.Input.Keyboard.JustDown(this.keyboard.SPACE),
+      attack: actions.attack || buffered.attack || this.keyboard.SPACE.isDown,
       dodge: actions.dodge || buffered.dodge || Phaser.Input.Keyboard.JustDown(this.keyboard.SHIFT),
       usePotion: actions.potion || buffered.potion || Phaser.Input.Keyboard.JustDown(this.keyboard.Q),
       buff: actions.buff,
@@ -149,11 +151,19 @@ export class CorridorScene extends Phaser.Scene {
       return;
     }
     if (this.corridorStatus !== "active") return;
+    if (updateCombatHitStop(this, delta)) {
+      this.updateHud();
+      return;
+    }
     const input = this.readInput();
     if (input.buff) toggleBuffPanel(this, this.hud, this.player);
     if (input.usePotion) this.player.consumePotion();
     this.player.updateActor({ moveX: input.moveX, moveY: input.moveY, attack: input.attack, dodge: input.dodge }, delta);
     if (this.player.attackHitWindow) resolveMeleeAttack(this.player, this.enemies);
+    if (this.combatHitStopRemaining > 0) {
+      this.updateHud();
+      return;
+    }
     resolveBottleHits(this.player, this.bottles);
     updateBottlePickups(this, this.player);
     this.enemies.forEach((enemy) => enemy.updateAI(this.player, delta));
@@ -294,6 +304,20 @@ export class CorridorScene extends Phaser.Scene {
     playEnvironmentAnimation(effect, "hit-spark-burst");
   }
 
+  onEnemyDefeated(enemy) {
+    this.showHitEffect(enemy.x, enemy.y);
+  }
+
+  onPlayerMeleeHit({ hits, killed }) {
+    triggerCombatImpact(this, killed ? "kill" : hits > 1 ? "heavy" : "hit");
+  }
+
+  onPlayerDamaged(amount) {
+    triggerCombatImpact(this, "damage");
+    this.audio.beep("damage");
+    this.showDamageNumber(this.player.x, this.player.y - 26, amount, "#e17b70");
+  }
+
   openDefeat() {
     if (this.corridorStatus !== "active") return;
     this.corridorStatus = "defeat";
@@ -337,6 +361,7 @@ export class CorridorScene extends Phaser.Scene {
   }
 
   shutdown() {
+    releaseCombatHitStop(this);
     if (this.keyHandlers) {
       this.input.keyboard.off("keydown-ESC", this.keyHandlers.pause);
       this.input.keyboard.off("keydown-P", this.keyHandlers.pause);

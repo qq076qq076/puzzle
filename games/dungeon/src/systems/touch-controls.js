@@ -11,6 +11,7 @@ export class TouchControls {
     this.moveX = 0;
     this.moveY = 0;
     this.attackPressed = false;
+    this.attackHeld = false;
     this.dodgePressed = false;
     this.potionPressed = false;
     this.buffPressed = false;
@@ -40,7 +41,15 @@ export class TouchControls {
       .setStrokeStyle(2, 0xe2dfca, 0.9)
       .setScrollFactor(0)
       .setDepth(101);
-    const attack = this.makeButton(126, 358, 54, 0xb94d45, "ATTACK", () => { this.attackPressed = true; });
+    const attack = this.makeButton(
+      126,
+      358,
+      54,
+      0xb94d45,
+      "ATTACK",
+      () => { this.attackPressed = true; this.attackHeld = true; },
+      () => { this.attackHeld = false; },
+    );
     const dodge = this.makeButton(126, 458, 48, 0x4f79a8, "DODGE", () => { this.dodgePressed = true; });
     const potion = this.makeButton(235, 458, 42, 0x4f8a62, "POTION", () => { this.potionPressed = true; });
     const buff = this.makeButton(690, 462, 42, 0x6e5b9b, "BUFF", () => { this.buffPressed = true; });
@@ -62,7 +71,7 @@ export class TouchControls {
     scene.input.on("pointerupoutside", this.handlers.pointerupoutside);
   }
 
-  makeButton(x, y, radius, color, label, onPress) {
+  makeButton(x, y, radius, color, label, onPress, onRelease = null) {
     const button = this.scene.add
       .circle(x, y, radius, color, 0.92)
       .setStrokeStyle(3, 0xe2dfca, 0.86)
@@ -83,6 +92,11 @@ export class TouchControls {
       if (!isTouchPointer(pointer)) return;
       onPress();
     });
+    if (onRelease) {
+      button.on("pointerup", onRelease);
+      button.on("pointerout", onRelease);
+      button.on("pointerupoutside", onRelease);
+    }
     this.elements.push(text);
     return button;
   }
@@ -109,7 +123,7 @@ export class TouchControls {
 
   consumeActions() {
     const actions = {
-      attack: this.attackPressed,
+      attack: this.attackPressed || this.attackHeld,
       dodge: this.dodgePressed,
       potion: this.potionPressed,
       buff: this.buffPressed,
@@ -122,6 +136,7 @@ export class TouchControls {
   }
 
   destroy() {
+    this.attackHeld = false;
     this.elements.forEach((element) => element.destroy());
     if (this.handlers.pointermove) this.scene.input.off("pointermove", this.handlers.pointermove);
     if (this.handlers.pointerup) this.scene.input.off("pointerup", this.handlers.pointerup);

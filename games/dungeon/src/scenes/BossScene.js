@@ -21,6 +21,7 @@ import { bindPauseKeyboard, createPauseKeyboardHandlers, unbindPauseKeyboard } f
 import { constrainActorToBounds } from "../systems/knockback.js";
 import { generateFloorMap } from "../systems/room-generator.js";
 import { getBoundarySeamRects, getBoundaryWallRects } from "../systems/room-boundary-layout.js";
+import { releaseCombatHitStop, triggerCombatImpact, updateCombatHitStop } from "../systems/combat-feedback.js";
 
 export class BossScene extends Phaser.Scene {
   constructor() {
@@ -55,6 +56,7 @@ export class BossScene extends Phaser.Scene {
     this.applyBuild();
     this.physics.add.collider(this.player, this.walls);
     this.boss = new Boss(this, GAME_WIDTH / 2, 168);
+    this.player.getMeleeTargets = () => [this.boss, ...this.enemies];
     this.physics.add.collider(this.boss, this.walls);
     this.physics.add.collider(this.player, this.boss, () => this.boss.tryContactDamage(this.player));
     this.keyboard = this.input.keyboard.addKeys("W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,SHIFT,ENTER,R,ESC,P,M,B,Q");
@@ -160,7 +162,7 @@ export class BossScene extends Phaser.Scene {
     return {
       moveX: this.touchControls?.enabled && Math.hypot(touchMove.x, touchMove.y) > 0.08 ? touchMove.x : moveX,
       moveY: this.touchControls?.enabled && Math.hypot(touchMove.x, touchMove.y) > 0.08 ? touchMove.y : moveY,
-      attack: actions.attack || buffered.attack || Phaser.Input.Keyboard.JustDown(this.keyboard.SPACE),
+      attack: actions.attack || buffered.attack || this.keyboard.SPACE.isDown,
       dodge: actions.dodge || buffered.dodge || Phaser.Input.Keyboard.JustDown(this.keyboard.SHIFT),
       usePotion: actions.potion || buffered.potion || Phaser.Input.Keyboard.JustDown(this.keyboard.Q),
       buff: actions.buff,
@@ -228,11 +230,13 @@ export class BossScene extends Phaser.Scene {
   }
 
   updateCombat(delta) {
+    if (updateCombatHitStop(this, delta)) return;
     const input = this.readInput();
     if (input.buff) toggleBuffPanel(this, this.hud, this.player);
     if (input.usePotion) this.player.consumePotion();
     this.player.updateActor(input, delta);
     if (this.player.attackHitWindow) resolveMeleeAttack(this.player, [this.boss, ...this.enemies]);
+    if (this.combatHitStopRemaining > 0) return;
     this.boss.updateAI(this.player, delta);
     this.enemies.forEach((enemy) => enemy.updateAI(this.player, delta));
     updateBleed([this.boss, ...this.enemies], delta);
@@ -372,6 +376,10 @@ export class BossScene extends Phaser.Scene {
     this.showHitEffect(enemy.x, enemy.y);
   }
 
+  onPlayerMeleeHit({ hits, killed }) {
+    triggerCombatImpact(this, killed ? "kill" : hits > 1 ? "heavy" : "hit");
+  }
+
   onBossDefeated() {
     this.enemies.forEach((enemy) => {
       enemy.setActive(false).setVisible(false);
@@ -383,6 +391,7 @@ export class BossScene extends Phaser.Scene {
   }
 
   onPlayerDamaged(amount) {
+    triggerCombatImpact(this, "damage");
     this.audio.beep("damage");
     this.showDamageNumber(this.player.x, this.player.y - 26, amount, "#e17b70");
   }
@@ -456,6 +465,7 @@ export class BossScene extends Phaser.Scene {
   }
 
   shutdown() {
+    releaseCombatHitStop(this);
     if (this.keyHandlers) {
       this.input.keyboard.off("keydown-ESC", this.keyHandlers.pause);
       this.input.keyboard.off("keydown-P", this.keyHandlers.pause);

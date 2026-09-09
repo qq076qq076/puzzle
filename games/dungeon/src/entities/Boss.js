@@ -193,6 +193,10 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     this.health = Math.max(0, this.health - damage);
     this.sustainedDamage += damage;
     this.hitFlashRemaining = 110;
+    this.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
+    this.scene.time.delayedCall(58, () => {
+      if (this.active) this.setTint(this.definition.color ?? 0xffffff).setTintMode(Phaser.TintModes.MULTIPLY);
+    });
     if (this.sustainedDamage >= 80) {
       this.sustainedDamage = 0;
       this.staggerRemaining = 360;

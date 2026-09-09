@@ -2,6 +2,14 @@ import Phaser from "phaser";
 import { playActorAnimation } from "../systems/actor-animations.js";
 import { useEmergencyPotion } from "../systems/consumable-system.js";
 import { startKnockback, updateKnockback } from "../systems/knockback.js";
+import {
+  ATTACK_INPUT_BUFFER_MS,
+  DODGE_INPUT_BUFFER_MS,
+  canDodgeCancelAttack,
+  getAssistedAttackFacing,
+  getAttackMoveMultiplier,
+  getMoveIntent,
+} from "../systems/player-control.js";
 
 const EPSILON = 0.001;
 
@@ -28,16 +36,19 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.attackRange = 88;
     this.attackArcDeg = 100;
     this.moveSpeed = 192;
-    this.attackCooldownMs = 450;
+    this.attackCooldownMs = 360;
     this.attackCooldownRemaining = 0;
+    this.attackBufferRemaining = 0;
     this.attackRemaining = 0;
     this.attackElapsed = 0;
+    this.attackLungeRemaining = 0;
     this.attackStarted = false;
     this.attackHitWindow = false;
     this.attackHitResolved = false;
     this.attackAnimationState = "attack";
-    this.dodgeCooldownMs = 1200;
+    this.dodgeCooldownMs = 1000;
     this.dodgeCooldownRemaining = 0;
+    this.dodgeBufferRemaining = 0;
     this.dodgeRemaining = 0;
     this.dodgeChainRemaining = 0;
     this.hurtAnimationRemaining = 0;
@@ -73,12 +84,19 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.attackStarted = false;
     this.attackHitWindow = false;
     this.attackCooldownRemaining = Math.max(0, this.attackCooldownRemaining - dt);
+    this.attackBufferRemaining = Math.max(0, this.attackBufferRemaining - dt);
+    this.dodgeBufferRemaining = Math.max(0, this.dodgeBufferRemaining - dt);
+    this.attackLungeRemaining = Math.max(0, this.attackLungeRemaining - dt);
     this.dodgeCooldownRemaining = Math.max(0, this.dodgeCooldownRemaining - dt);
     this.dodgeChainRemaining = Math.max(0, this.dodgeChainRemaining - dt);
     this.hurtAnimationRemaining = Math.max(0, this.hurtAnimationRemaining - dt);
     this.invulnerableRemaining = Math.max(0, this.invulnerableRemaining - dt);
+    if (input.attack) this.attackBufferRemaining = ATTACK_INPUT_BUFFER_MS;
+    if (input.dodge) this.dodgeBufferRemaining = DODGE_INPUT_BUFFER_MS;
 
     if (this.health <= 0) {
+      this.attackBufferRemaining = 0;
+      this.dodgeBufferRemaining = 0;
       this.setVelocity(0, 0);
       this.updateVisuals();
       return;
@@ -99,22 +117,29 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       return;
     }
 
-    const move = new Phaser.Math.Vector2(input.moveX, input.moveY);
-    if (move.lengthSq() > EPSILON) {
-      move.normalize();
+    const intent = getMoveIntent(input.moveX, input.moveY);
+    const move = new Phaser.Math.Vector2(intent.x, intent.y);
+    if (intent.magnitude > EPSILON) {
       this.facing.copy(move);
-      this.setVelocity(move.x * this.moveSpeed, move.y * this.moveSpeed);
+      const speed = this.moveSpeed * intent.magnitude * getAttackMoveMultiplier(this);
+      this.setVelocity(move.x * speed, move.y * speed);
+    } else if (this.attackLungeRemaining > 0) {
+      this.setVelocity(this.attackFacing.x * 92, this.attackFacing.y * 92);
     } else {
       this.setVelocity(0, 0);
     }
 
-    if (input.dodge) this.tryDodge(move.lengthSq() > EPSILON ? move : this.facing);
-    if (input.attack) this.tryAttack();
+    if (this.dodgeBufferRemaining > 0 && this.tryDodge(intent.magnitude > EPSILON ? move : this.facing)) {
+      this.dodgeBufferRemaining = 0;
+      this.updateVisuals();
+      return;
+    }
+    if (this.attackBufferRemaining > 0 && this.tryAttack()) this.attackBufferRemaining = 0;
 
     if (this.attackRemaining > 0) {
       this.attackRemaining = Math.max(0, this.attackRemaining - dt);
       this.attackElapsed += dt;
-      if (!this.attackHitResolved && this.attackElapsed >= 58) {
+      if (!this.attackHitResolved && this.attackElapsed >= 82) {
         this.attackHitResolved = true;
         this.attackHitWindow = true;
       }
@@ -127,21 +152,29 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.attackCooldownRemaining = this.attackCooldownMs;
     this.attackRemaining = 220;
     this.attackElapsed = 0;
+    this.attackLungeRemaining = 86;
     this.attackStarted = true;
     this.attackHitResolved = false;
-    this.attackFacing.copy(this.facing);
+    const assistedFacing = getAssistedAttackFacing(this, this.getMeleeTargets?.() || []);
+    this.attackFacing.set(assistedFacing.x, assistedFacing.y);
     const moving = this.body.velocity.lengthSq() > 16;
     this.attackAnimationState = this.dodgeChainRemaining > 0 ? "runAttack" : moving ? "walkAttack" : "attack";
     this.dodgeChainRemaining = 0;
+    if (!moving) this.setVelocity(this.attackFacing.x * 92, this.attackFacing.y * 92);
     this.scene.audio?.beep("attack");
     return true;
   }
 
   tryDodge(direction) {
-    if (this.dodgeCooldownRemaining > 0 || this.dodgeRemaining > 0 || this.health <= 0) return false;
+    if (this.dodgeCooldownRemaining > 0 || this.dodgeRemaining > 0 || this.hurtAnimationRemaining > 0 || this.health <= 0) return false;
+    if (!canDodgeCancelAttack(this)) return false;
     this.dodgeCooldownRemaining = this.dodgeCooldownMs;
     this.dodgeRemaining = 220;
-    this.invulnerableRemaining = 180;
+    this.invulnerableRemaining = 240;
+    this.attackRemaining = 0;
+    this.attackLungeRemaining = 0;
+    this.attackHitWindow = false;
+    this.attackHitResolved = true;
     this.setVelocity(direction.x * 500, direction.y * 500);
     this.scene.audio?.beep("dodge");
     return true;
@@ -155,13 +188,15 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (context.knockback) startKnockback(this, context.knockback, { distance: 14, durationMs: 110 });
     this.attackRemaining = 0;
     this.attackElapsed = 0;
+    this.attackLungeRemaining = 0;
+    this.attackBufferRemaining = 0;
     this.attackHitWindow = false;
     this.attackHitResolved = true;
     this.hurtAnimationRemaining = this.health > 0 ? 230 : 0;
     this.scene.runStats && (this.scene.runStats.damageTaken += dealt);
     this.scene.onPlayerDamaged?.(dealt);
-    this.setTint(0xffffff);
-    this.scene.time.delayedCall(90, () => this.active && this.clearTint());
+    this.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
+    this.scene.time.delayedCall(72, () => this.active && this.setTint(0xffffff).setTintMode(Phaser.TintModes.MULTIPLY));
     playActorAnimation(this, this.assetId, this.health > 0 ? "hurt" : "death", this.facing, { restart: true });
     if (this.health <= 0) this.deathAnimationPlayed = true;
     return true;

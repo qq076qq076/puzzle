@@ -220,6 +220,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     const damage = Math.max(1, Math.round(amount * multiplier - (this.definition.armor || 0)));
     this.health = Math.max(0, this.health - damage);
     this.hitFlashRemaining = 110;
+    this.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
+    this.scene.time.delayedCall(58, () => {
+      if (this.active) this.setTint(this.definition.color ?? 0xffffff).setTintMode(Phaser.TintModes.MULTIPLY);
+    });
     if (context.knockback) {
       this.dashRemaining = 0;
       this.attackActiveRemaining = 0;

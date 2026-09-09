@@ -14,6 +14,9 @@ export function resolveMeleeAttack(player, enemies) {
   const maxDistance = player.attackRange;
   const halfArc = Phaser.Math.DegToRad(player.attackArcDeg / 2);
   let hits = 0;
+  let killed = false;
+  let impactX = player.x + facing.x * Math.min(48, maxDistance);
+  let impactY = player.y + facing.y * Math.min(48, maxDistance);
   enemies.forEach((enemy) => {
     if (!enemy.active) return;
     const dx = enemy.x - player.x;
@@ -50,10 +53,14 @@ export function resolveMeleeAttack(player, enemies) {
       player.lifestealTriggers += 1;
     }
     player.scene.showDamageNumber?.(enemy.x, enemy.y - 22, result.damage, result.killed ? "#f6d36c" : "#f5f1da");
-    player.scene.showHitEffect?.(enemy.x, enemy.y);
+    if (!result.killed) player.scene.showHitEffect?.(enemy.x, enemy.y);
     player.scene.audio?.beep("hit");
+    killed ||= result.killed;
+    impactX = enemy.x;
+    impactY = enemy.y;
     hits += 1;
   });
+  if (hits > 0) player.scene.onPlayerMeleeHit?.({ x: impactX, y: impactY, hits, killed });
   return hits;
 }
 
