@@ -317,6 +317,10 @@ function hasCloudSaveInProgress() {
   return Boolean(cloudSavePending || cloudSaveTimer || cloudSaveOperations > 0);
 }
 
+function hasUnsyncedCloudChanges() {
+  return localRevision > localSyncedRevision;
+}
+
 function remoteSaveIsNewer(remote) {
   if (!remote?.data) return false;
   const remoteRevision = Number(remote.serverRevision) || 0;
@@ -367,7 +371,7 @@ function applyRemoteCloudSave(remote, showMessage = true) {
 function handleRemoteCloudSave(remote) {
   if (READ_ONLY || !remoteSaveIsNewer(remote)) return;
   if (remote.clientWriterId && remote.clientWriterId === TAB_ID) return;
-  if (hasCloudSaveInProgress()) {
+  if (hasCloudSaveInProgress() || hasUnsyncedCloudChanges()) {
     pendingRemoteSave = remote;
     if (!isActiveTab()) return;
     const shouldLoad = window.confirm("其他裝置已更新農場進度。\n\n要立即載入最新狀態嗎？尚未同步的本機操作會被覆蓋。");
@@ -394,7 +398,7 @@ function handleRemoteCloudSave(remote) {
 }
 
 function applyPendingRemoteSave() {
-  if (!pendingRemoteSave || hasCloudSaveInProgress()) return;
+  if (!pendingRemoteSave || hasCloudSaveInProgress() || !isActiveTab()) return;
   const remote = pendingRemoteSave;
   pendingRemoteSave = null;
   handleRemoteCloudSave(remote);
@@ -495,6 +499,11 @@ function flushCloudSave() {
           }));
         } catch (error) { /* Local storage is optional. */ }
       }
+    } else if (result?.accepted === false && result.checkpoint) {
+      // A different device advanced the cloud revision before this write.
+      // Keep the local checkpoint intact and resolve the conflict when this
+      // tab is visible instead of silently dropping the rejected changes.
+      pendingRemoteSave = result.checkpoint;
     }
     if (result?.shareSyncFailed && shareActive && Date.now() - lastShareSyncErrorToastAt > 30000) {
       lastShareSyncErrorToastAt = Date.now();

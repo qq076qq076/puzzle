@@ -287,7 +287,11 @@
     return Promise.all(saves.map(function (entry) {
       if (!entry.checkpoint) return null;
       return readSaveForUser(targetUser, entry.gameKey).then(function (targetCheckpoint) {
-        if (targetCheckpoint && targetCheckpoint.savedAt >= entry.checkpoint.savedAt) return false;
+        // Signing in to an existing account must never let a newly-touched
+        // anonymous checkpoint overwrite that account's cross-device save.
+        // Anonymous progress is migrated only when the account has no save;
+        // creating/linking an account still keeps the anonymous user's data.
+        if (targetCheckpoint) return false;
         return writeSaveForUser(targetUser, entry.gameKey, entry.checkpoint.data, {
           savedAt: entry.checkpoint.clientSavedAt,
           createdAt: entry.checkpoint.clientCreatedAt,
