@@ -3,7 +3,7 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   base: "./",
-  publicDir: false,
+  publicDir: "public",
   server: {
     fs: { allow: [fileURLToPath(new URL("..", import.meta.url))] },
   },
