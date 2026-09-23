@@ -24,7 +24,8 @@ service cloud.firestore {
         'gravity-planet',
         'dice-tower-defense',
         'harvest-clicker',
-        'happy-aquarium'
+        'happy-aquarium',
+        'magic-bubble'
       ];
     }
 

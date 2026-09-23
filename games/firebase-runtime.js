@@ -16,7 +16,8 @@
     "gravity-planet",
     "dice-tower-defense",
     "harvest-clicker",
-    "happy-aquarium"
+    "happy-aquarium",
+    "magic-bubble"
   ];
   const SHARE_KEYS = new Set(["harvest-clicker"]);
   const SHARE_REVISION_FIELD = "__shareSourceRevision";

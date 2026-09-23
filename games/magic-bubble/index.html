@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#100b28" />
+    <meta name="description" content="魔法氣泡：旋轉雙顆元素氣泡，串起華麗連鎖，挑戰魔法高塔。" />
+    <link rel="canonical" href="https://qq076qq076.github.io/puzzle/games/magic-bubble/" />
+    <meta property="og:title" content="魔法氣泡 · Magic Bubbles" />
+    <meta property="og:description" content="旋轉雙顆元素氣泡，串起華麗連鎖，挑戰魔法高塔。" />
+    <meta property="og:image" content="https://qq076qq076.github.io/puzzle/og-image.png" />
+    <meta property="og:url" content="https://qq076qq076.github.io/puzzle/games/magic-bubble/" />
+    <title>魔法氣泡 · Magic Bubbles</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <main class="game-app">
+      <header class="topbar">
+        <a class="back-link" href="../../index.html"><span aria-hidden="true">←</span> 遊戲大廳</a>
+        <div class="brand"><span aria-hidden="true">✦</span><strong>魔法氣泡</strong><small>MAGIC BUBBLES</small></div>
+        <div class="top-actions">
+          <button id="mute-button" type="button" aria-pressed="false">靜音</button>
+          <button id="fullscreen-button" type="button">全螢幕</button>
+        </div>
+      </header>
+
+      <section class="game-layout" aria-label="魔法氣泡遊戲">
+        <aside class="side-panel side-panel-left">
+          <span class="panel-kicker">CURRENT TRIAL</span>
+          <h1 id="mode-label">準備施法</h1>
+          <p id="objective-text">選擇闖關或無盡模式開始遊戲。</p>
+          <div class="progress-track"><span id="objective-bar"></span></div>
+          <div class="spell-guide">
+            <span class="guide-title">操作</span>
+            <p><kbd>←</kbd><kbd>→</kbd> 移動　<kbd>Z</kbd><kbd>X</kbd> 旋轉</p>
+            <p><kbd>↓</kbd> 加速　<kbd>Space</kbd> 硬降</p>
+          </div>
+        </aside>
+
+        <section class="board-column">
+          <div class="board-heading">
+            <span>ARCANE CHAMBER</span>
+            <button id="pause-button" type="button" disabled>暫停</button>
+          </div>
+          <div class="game-stage" id="game-stage">
+            <canvas id="game-canvas" tabindex="0" aria-label="魔法氣泡棋盤。使用方向鍵移動，Z、X 旋轉，空白鍵快速落下。"></canvas>
+            <div class="danger-label" aria-hidden="true"><span></span>DANGER LINE</div>
+            <div class="chain-banner" id="chain-banner" hidden>2 CHAIN!</div>
+          </div>
+        </section>
+
+        <aside class="side-panel side-panel-right">
+          <div class="next-panel">
+            <span class="panel-kicker">NEXT SPELL</span>
+            <div class="next-pair" aria-label="下一組氣泡">
+              <span class="preview-bubble" id="next-satellite">✦</span>
+              <span class="preview-bubble" id="next-pivot">◆</span>
+            </div>
+          </div>
+          <div class="stats-grid">
+            <div><span>SCORE</span><strong id="score">0</strong></div>
+            <div><span>BEST</span><strong id="best">0</strong></div>
+            <div><span>SPEED</span><strong id="speed-level">01</strong></div>
+            <div><span>CHAIN</span><strong id="max-chain">0×</strong></div>
+          </div>
+          <button class="restart-link" id="restart-button" type="button">重新開始</button>
+        </aside>
+      </section>
+
+      <nav class="touch-controls" id="touch-controls" aria-label="觸控操作">
+        <button data-command="MOVE_LEFT" type="button" aria-label="向左">←</button>
+        <button data-command="ROTATE_CCW" type="button" aria-label="逆時針旋轉">↺</button>
+        <button class="drop-control" data-command="SOFT_DROP" type="button" aria-label="快速下降">↓</button>
+        <button data-command="ROTATE_CW" type="button" aria-label="順時針旋轉">↻</button>
+        <button data-command="MOVE_RIGHT" type="button" aria-label="向右">→</button>
+        <button class="hard-drop-control" data-command="HARD_DROP" type="button">落下</button>
+      </nav>
+
+      <section class="cover menu-cover" id="menu-cover" aria-labelledby="menu-title">
+        <div class="cover-card hero-card">
+          <span class="cover-kicker">THE ARCANE ACADEMY</span>
+          <h2 id="menu-title">讓元素，<em>連鎖成魔法。</em></h2>
+          <p>移動與旋轉雙顆氣泡。四顆同色相連就會消除，利用重力引發更長的連鎖。</p>
+          <div class="menu-bubbles" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+          <div class="cover-actions">
+            <button class="secondary-button" id="start-tutorial" type="button">新生教學 <span>4 個課程</span></button>
+            <button class="primary-button" id="open-stages" type="button">魔法高塔 <span>12 關</span></button>
+            <button class="secondary-button" id="start-endless" type="button">無盡修練 <span>挑戰最高分</span></button>
+          </div>
+        </div>
+      </section>
+
+      <section class="cover" id="stage-select" hidden aria-labelledby="stage-select-title">
+        <div class="cover-card stage-select-card">
+          <div class="cover-heading"><div><span class="cover-kicker">ARCANE TOWER</span><h2 id="stage-select-title">選擇試煉</h2></div><button id="stage-back" type="button">返回</button></div>
+          <div class="stage-grid" id="stage-grid"></div>
+        </div>
+      </section>
+
+      <section class="cover" id="pause-cover" hidden aria-labelledby="pause-title">
+        <div class="cover-card compact-card">
+          <span class="cover-kicker">SPELL SUSPENDED</span>
+          <h2 id="pause-title">魔法暫停中</h2>
+          <p>盤面已安全封存，準備好再繼續施法。</p>
+          <div class="cover-actions"><button class="primary-button" id="resume-button" type="button">繼續遊戲</button><button class="secondary-button" id="pause-menu" type="button">返回選單</button></div>
+        </div>
+      </section>
+
+      <section class="cover" id="result-cover" hidden aria-labelledby="result-title">
+        <div class="cover-card compact-card">
+          <span class="cover-kicker" id="result-kicker">SPELL COMPLETE</span>
+          <h2 id="result-title">試煉完成！</h2>
+          <p id="result-copy">新的魔法試煉已解鎖。</p>
+          <div class="result-grid"><div><span>分數</span><strong id="result-score">0</strong></div><div><span>最高連鎖</span><strong id="result-chain">0×</strong></div><div><span>評價</span><strong id="result-stars">★★★</strong></div></div>
+          <div class="cover-actions"><button class="primary-button" id="result-next" type="button">下一關</button><button class="secondary-button" id="result-retry" type="button">再試一次</button><button class="text-button" id="result-menu" type="button">返回選單</button></div>
+        </div>
+      </section>
+
+      <section class="cover error-cover" id="load-error" hidden>
+        <div class="cover-card compact-card"><span class="cover-kicker">WEBGL ERROR</span><h2>魔法陣無法啟動</h2><p>無法載入遊戲。</p><a class="primary-button" href="../../index.html">返回遊戲大廳</a></div>
+      </section>
+
+      <div class="sr-only" id="live-region" aria-live="polite"></div>
+    </main>
+
+    <script src="../firebase-config.js"></script>
+    <script src="../firebase-runtime.js"></script>
+    <script src="../save-system.js"></script>
+    <script type="module" src="main.mjs"></script>
+  </body>
+</html>
