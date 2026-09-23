@@ -7,6 +7,9 @@ const MAX_PARTICLES = 220;
 const POP_DURATION_MS = 110;
 const DROP_DURATION_MS = 190;
 const STEP_DURATION_MS = POP_DURATION_MS + DROP_DURATION_MS;
+const SCREEN_SHAKE_DURATION_MS = 160;
+const SCREEN_SHAKE_AMPLITUDE = 0.035;
+const LANDING_EFFECT_START = 0.62;
 
 function worldPosition(x, y, z = 0) {
   return new THREE.Vector3(x - (BOARD.columns - 1) / 2, (BOARD.visibleRows - 1) / 2 - y, z);
@@ -92,7 +95,8 @@ export class MagicBubbleRenderer {
     this.container = container;
     this.scene = new THREE.Scene();
     this.camera = new THREE.OrthographicCamera(-4, 4, 7, -7, 0.1, 60);
-    this.camera.position.set(0, 0.1, 18);
+    this.cameraRestPosition = new THREE.Vector3(0, 0.1, 18);
+    this.camera.position.copy(this.cameraRestPosition);
     this.camera.lookAt(0, 0, 0);
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: "high-performance" });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
@@ -105,6 +109,7 @@ export class MagicBubbleRenderer {
     this.ghostMeshes = new Map();
     this.particles = [];
     this.resolutionAnimation = null;
+    this.screenShake = null;
     this.lastTime = 0;
     this.tempMatrix = new THREE.Matrix4();
     this.tempPosition = new THREE.Vector3();
@@ -228,7 +233,8 @@ export class MagicBubbleRenderer {
   }
 
   setInstance(mesh, index, position, scale = 1) {
-    this.tempScale.setScalar(scale);
+    if (typeof scale === "number") this.tempScale.setScalar(scale);
+    else this.tempScale.set(scale.x ?? 1, scale.y ?? 1, scale.z ?? 1);
     this.tempMatrix.compose(position, this.tempQuaternion.identity(), this.tempScale);
     mesh.setMatrixAt(index, this.tempMatrix);
   }
@@ -255,10 +261,15 @@ export class MagicBubbleRenderer {
         const override = cell.boardIndex === undefined ? null : positionOverrides?.get(cell.boardIndex);
         const x = override?.x ?? cell.x;
         const y = override?.y ?? cell.y;
-        const scale = cell.boardIndex === undefined ? 1 : scaleOverrides?.get(cell.boardIndex) ?? 1;
+        const scaleKey = cell.boardIndex === undefined ? `${cell.x},${cell.y}` : cell.boardIndex;
+        const scale = scaleOverrides?.get(scaleKey) ?? 1;
         const position = worldPosition(x, y, cell.role ? 0.08 : 0);
-        this.setInstance(mesh, index, position, Math.max(0.001, 0.98 * scale));
-        this.setInstance(symbols, index, position.clone().setZ(0.43), Math.max(0.001, scale));
+        const meshScale = typeof scale === "number"
+          ? Math.max(0.001, 0.98 * scale)
+          : { x: Math.max(0.001, 0.98 * scale.x), y: Math.max(0.001, 0.98 * scale.y), z: 0.98 };
+        const symbolScale = typeof scale === "number" ? scale : { x: scale.x, y: scale.y, z: 1 };
+        this.setInstance(mesh, index, position, meshScale);
+        this.setInstance(symbols, index, position.clone().setZ(0.43), symbolScale);
       });
       mesh.count = cells.length;
       symbols.count = cells.length;
@@ -282,6 +293,7 @@ export class MagicBubbleRenderer {
 
   update(state, events = []) {
     const chainSteps = events.filter((event) => event.type === "CHAIN_STEP");
+    if (chainSteps.length) this.startScreenShake(performance.now(), chainSteps.length);
     if (!chainSteps.length || document.documentElement.classList.contains("reduce-motion")) {
       this.resolutionAnimation = null;
       this.drawState(state);
@@ -313,6 +325,31 @@ export class MagicBubbleRenderer {
     const futurePhases = animation.phase === "pop" ? DROP_DURATION_MS : 0;
     const futureSteps = Math.max(0, animation.steps.length - animation.stepIndex - 1) * STEP_DURATION_MS;
     return currentRemaining + futurePhases + futureSteps;
+  }
+
+  startScreenShake(now, chainCount = 1) {
+    if (document.documentElement.classList.contains("reduce-motion")) return;
+    this.screenShake = {
+      startedAt: now,
+      duration: SCREEN_SHAKE_DURATION_MS,
+      amplitude: Math.min(0.045, SCREEN_SHAKE_AMPLITUDE + Math.max(0, chainCount - 1) * 0.004)
+    };
+  }
+
+  updateScreenShake(now) {
+    const shake = this.screenShake;
+    let x = 0;
+    let y = 0;
+    if (shake) {
+      const progress = Math.min(1, (now - shake.startedAt) / shake.duration);
+      const envelope = (1 - progress) ** 2;
+      const phase = progress * Math.PI * 7;
+      x = Math.sin(phase) * shake.amplitude * envelope;
+      y = Math.cos(phase * 0.9) * shake.amplitude * 0.58 * envelope;
+      if (progress >= 1) this.screenShake = null;
+    }
+    this.camera.position.set(this.cameraRestPosition.x + x, this.cameraRestPosition.y + y, this.cameraRestPosition.z);
+    this.camera.lookAt(0, 0, 0);
   }
 
   spawnClearParticles(step) {
@@ -356,6 +393,7 @@ export class MagicBubbleRenderer {
     const progress = Math.min(1, (now - animation.phaseStartedAt) / DROP_DURATION_MS);
     const eased = 1 - ((1 - progress) ** 3);
     const positionOverrides = new Map();
+    const scaleOverrides = new Map();
     for (const transition of step.gravityTransitions) {
       const from = indexToCell(transition.from);
       const to = indexToCell(transition.to);
@@ -363,8 +401,24 @@ export class MagicBubbleRenderer {
         x: from.x + (to.x - from.x) * eased,
         y: from.y + (to.y - from.y) * eased
       });
+      const hasLanded = to.y >= BOARD.visibleRows - 1
+        || step.afterGravityBoard[transition.to + BOARD.columns] !== CELL.empty;
+      if (hasLanded && progress >= LANDING_EFFECT_START) {
+        const landingProgress = (progress - LANDING_EFFECT_START) / (1 - LANDING_EFFECT_START);
+        const squash = landingProgress < 0.2
+          ? landingProgress / 0.2
+          : Math.max(0, (1 - landingProgress) / 0.8);
+        const rebound = landingProgress > 0.2 && landingProgress < 0.75
+          ? Math.sin(((landingProgress - 0.2) / 0.55) * Math.PI) * 0.1
+          : 0;
+        scaleOverrides.set(transition.from, {
+          x: 1 + squash * 0.07 - rebound * 0.35,
+          y: 1 - squash * 0.14 + rebound,
+          z: 1
+        });
+      }
     }
-    this.drawBoard(step.afterClearBoard, null, positionOverrides, null, false);
+    this.drawBoard(step.afterClearBoard, null, positionOverrides, scaleOverrides, false);
     if (progress < 1) return;
 
     animation.stepIndex += 1;
@@ -405,6 +459,7 @@ export class MagicBubbleRenderer {
     const delta = this.lastTime ? Math.min(0.05, (now - this.lastTime) / 1000) : 0;
     this.lastTime = now;
     this.updateResolutionAnimation(now);
+    this.updateScreenShake(now);
     this.updateParticles(delta);
     this.magicRings[0].rotation.z = now * 0.00008;
     this.magicRings[1].rotation.z = -now * 0.000055;
