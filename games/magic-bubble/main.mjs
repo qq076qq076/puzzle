@@ -38,6 +38,7 @@ const elements = {
   muteButton: document.getElementById("mute-button"),
   fullscreenButton: document.getElementById("fullscreen-button")
 };
+const gameApp = document.querySelector(".game-app");
 
 const defaultProfile = () => ({
   version: 1,
@@ -164,7 +165,7 @@ function updateHud() {
 }
 
 function isPlayable() {
-  return Boolean(state && (state.phase === "active" || state.phase === "locking"));
+  return Boolean(state && !renderer?.isAnimating() && (state.phase === "active" || state.phase === "locking"));
 }
 
 function announce(text) {
@@ -225,15 +226,25 @@ function showResult(kind) {
 }
 
 function syncGame(result = { events: [] }) {
-  renderer.update(state);
-  renderer.playEvents(result.events || []);
-  audio.playEvents(result.events || []);
-  if (result.events?.some((event) => event.type === "CHAIN_STEP" || event.type === "STAGE_CLEAR" || event.type === "GAME_OVER")) {
-    // Avoid playing effects twice while still routing UI-only reactions.
-    for (const event of result.events) {
-      if (event.type === "CHAIN_STEP") { showChain(event.chain); announce(`${event.chain} 連鎖，獲得 ${event.score} 分`); }
-      if (event.type === "STAGE_CLEAR") window.setTimeout(() => showResult("clear"), profile.settings.reducedMotion ? 60 : 450);
-      if (event.type === "GAME_OVER") window.setTimeout(() => showResult("over"), profile.settings.reducedMotion ? 60 : 450);
+  const events = result.events || [];
+  renderer.update(state, events);
+  audio.playEvents(events);
+  if (events.some((event) => event.type === "CHAIN_STEP" || event.type === "STAGE_CLEAR" || event.type === "GAME_OVER")) {
+    let chainOffset = 0;
+    const completionDelay = profile.settings.reducedMotion
+      ? 60
+      : events.filter((event) => event.type === "CHAIN_STEP").length * 300 + 80;
+    for (const event of events) {
+      if (event.type === "CHAIN_STEP") {
+        const delay = profile.settings.reducedMotion ? 0 : chainOffset * 300;
+        window.setTimeout(() => {
+          showChain(event.chain);
+          announce(`${event.chain} 連鎖，獲得 ${event.score} 分`);
+        }, delay);
+        chainOffset += 1;
+      }
+      if (event.type === "STAGE_CLEAR") window.setTimeout(() => showResult("clear"), completionDelay);
+      if (event.type === "GAME_OVER") window.setTimeout(() => showResult("over"), completionDelay);
     }
   }
   updateHud();
@@ -257,6 +268,7 @@ function startGame(mode, levelId = null) {
   elements.stageSelect.hidden = true;
   elements.pause.hidden = true;
   elements.result.hidden = true;
+  gameApp.classList.remove("is-menu");
   elements.stage.classList.remove("is-paused");
   syncGame(created);
   elements.canvas.focus({ preventScroll: true });
@@ -305,7 +317,7 @@ function renderStageGrid() {
 function frame(now) {
   const delta = Math.min(TIMING.maxFrameDeltaMs, now - lastNow);
   lastNow = now;
-  if (state && state.phase !== "paused" && state.phase !== "gameOver" && state.phase !== "stageClear") {
+  if (state && !renderer.isAnimating() && state.phase !== "paused" && state.phase !== "gameOver" && state.phase !== "stageClear") {
     input.update(delta);
     accumulator += delta;
     let steps = 0;
@@ -350,6 +362,7 @@ function installUi() {
   document.getElementById("pause-menu").addEventListener("click", () => {
     elements.pause.hidden = true;
     elements.menu.hidden = false;
+    gameApp.classList.add("is-menu");
     state = null;
     updateHud();
   });
@@ -358,6 +371,7 @@ function installUi() {
   document.getElementById("result-menu").addEventListener("click", () => {
     elements.result.hidden = true;
     elements.menu.hidden = false;
+    gameApp.classList.add("is-menu");
     state = null;
   });
   elements.resultNext.addEventListener("click", () => {

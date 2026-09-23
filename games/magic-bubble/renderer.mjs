@@ -4,6 +4,9 @@ import { getHardDropDistance, getPairCells, indexToCell } from "./core.mjs";
 
 const MAX_INSTANCES = BOARD.columns * BOARD.totalRows + 2;
 const MAX_PARTICLES = 220;
+const POP_DURATION_MS = 110;
+const DROP_DURATION_MS = 190;
+const STEP_DURATION_MS = POP_DURATION_MS + DROP_DURATION_MS;
 
 function worldPosition(x, y, z = 0) {
   return new THREE.Vector3(x - (BOARD.columns - 1) / 2, (BOARD.visibleRows - 1) / 2 - y, z);
@@ -101,6 +104,7 @@ export class MagicBubbleRenderer {
     this.symbolMeshes = new Map();
     this.ghostMeshes = new Map();
     this.particles = [];
+    this.resolutionAnimation = null;
     this.lastTime = 0;
     this.tempMatrix = new THREE.Matrix4();
     this.tempPosition = new THREE.Vector3();
@@ -229,24 +233,32 @@ export class MagicBubbleRenderer {
     mesh.setMatrixAt(index, this.tempMatrix);
   }
 
-  update(state) {
+  drawState(state) {
+    this.drawBoard(state.board, state.activePair, null, null, true);
+  }
+
+  drawBoard(board, activePair = null, positionOverrides = null, scaleOverrides = null, showGhost = false) {
     const solidBuckets = new Map([...this.solidMeshes.keys()].map((type) => [type, []]));
-    for (let index = 0; index < state.board.length; index += 1) {
-      const value = state.board[index];
+    for (let index = 0; index < board.length; index += 1) {
+      const value = board[index];
       if (!solidBuckets.has(value)) continue;
       const cell = indexToCell(index);
-      if (cell.y >= 0) solidBuckets.get(value).push(cell);
+      if (cell.y >= 0) solidBuckets.get(value).push({ ...cell, boardIndex: index });
     }
-    if (state.activePair) {
-      for (const cell of getPairCells(state.activePair)) solidBuckets.get(cell.color)?.push(cell);
+    if (activePair) {
+      for (const cell of getPairCells(activePair)) solidBuckets.get(cell.color)?.push(cell);
     }
     for (const [type, cells] of solidBuckets) {
       const mesh = this.solidMeshes.get(type);
       const symbols = this.symbolMeshes.get(type);
       cells.forEach((cell, index) => {
-        const position = worldPosition(cell.x, cell.y, cell.role ? 0.08 : 0);
-        this.setInstance(mesh, index, position, 0.98);
-        this.setInstance(symbols, index, position.clone().setZ(0.43), 1);
+        const override = cell.boardIndex === undefined ? null : positionOverrides?.get(cell.boardIndex);
+        const x = override?.x ?? cell.x;
+        const y = override?.y ?? cell.y;
+        const scale = cell.boardIndex === undefined ? 1 : scaleOverrides?.get(cell.boardIndex) ?? 1;
+        const position = worldPosition(x, y, cell.role ? 0.08 : 0);
+        this.setInstance(mesh, index, position, Math.max(0.001, 0.98 * scale));
+        this.setInstance(symbols, index, position.clone().setZ(0.43), Math.max(0.001, scale));
       });
       mesh.count = cells.length;
       symbols.count = cells.length;
@@ -255,10 +267,10 @@ export class MagicBubbleRenderer {
     }
 
     for (const [type, mesh] of this.ghostMeshes) mesh.count = 0;
-    if (state.activePair) {
-      const distance = getHardDropDistance(state);
+    if (showGhost && activePair) {
+      const distance = getHardDropDistance({ board, activePair });
       const ghostBuckets = new Map([...this.ghostMeshes.keys()].map((type) => [type, []]));
-      for (const cell of getPairCells(state.activePair)) ghostBuckets.get(cell.color)?.push({ ...cell, y: cell.y + distance });
+      for (const cell of getPairCells(activePair)) ghostBuckets.get(cell.color)?.push({ ...cell, y: cell.y + distance });
       for (const [type, cells] of ghostBuckets) {
         const mesh = this.ghostMeshes.get(type);
         cells.forEach((cell, index) => this.setInstance(mesh, index, worldPosition(cell.x, cell.y, -0.02), 1.03));
@@ -268,25 +280,103 @@ export class MagicBubbleRenderer {
     }
   }
 
-  playEvents(events) {
-    for (const event of events) {
-      if (event.type !== "CHAIN_STEP") continue;
-      const cells = [...event.clearedCells, ...event.garbageCells];
-      for (const cell of cells) {
-        const config = colorConfig(cell.value);
-        const color = new THREE.Color(config?.color || 0xb8aecb);
-        for (let count = 0; count < 5 && this.particles.length < MAX_PARTICLES; count += 1) {
-          const position = worldPosition(cell.x, cell.y, 0.5);
-          this.particles.push({
-            position,
-            velocity: new THREE.Vector3((Math.random() - 0.5) * 2.8, (Math.random() - 0.2) * 3, 0.3 + Math.random()),
-            color,
-            life: 0.55 + Math.random() * 0.35,
-            maxLife: 0.9
-          });
-        }
+  update(state, events = []) {
+    const chainSteps = events.filter((event) => event.type === "CHAIN_STEP");
+    if (!chainSteps.length || document.documentElement.classList.contains("reduce-motion")) {
+      this.resolutionAnimation = null;
+      this.drawState(state);
+      if (chainSteps.length) chainSteps.forEach((step) => this.spawnClearParticles(step));
+      return;
+    }
+    this.resolutionAnimation = {
+      steps: chainSteps,
+      stepIndex: 0,
+      phase: "pop",
+      phaseStartedAt: performance.now(),
+      finalState: {
+        board: new Uint8Array(state.board),
+        activePair: state.activePair ? { ...state.activePair } : null
+      }
+    };
+    this.drawBoard(chainSteps[0].beforeBoard);
+  }
+
+  isAnimating() {
+    return this.resolutionAnimation !== null;
+  }
+
+  remainingAnimationMs(now = performance.now()) {
+    const animation = this.resolutionAnimation;
+    if (!animation) return 0;
+    const currentDuration = animation.phase === "pop" ? POP_DURATION_MS : DROP_DURATION_MS;
+    const currentRemaining = Math.max(0, currentDuration - (now - animation.phaseStartedAt));
+    const futurePhases = animation.phase === "pop" ? DROP_DURATION_MS : 0;
+    const futureSteps = Math.max(0, animation.steps.length - animation.stepIndex - 1) * STEP_DURATION_MS;
+    return currentRemaining + futurePhases + futureSteps;
+  }
+
+  spawnClearParticles(step) {
+    const cells = [...step.clearedCells, ...step.garbageCells];
+    for (const cell of cells) {
+      const config = colorConfig(cell.value);
+      const color = new THREE.Color(config?.color || 0xb8aecb);
+      for (let count = 0; count < 5 && this.particles.length < MAX_PARTICLES; count += 1) {
+        const position = worldPosition(cell.x, cell.y, 0.5);
+        this.particles.push({
+          position,
+          velocity: new THREE.Vector3((Math.random() - 0.5) * 2.8, (Math.random() - 0.2) * 3, 0.3 + Math.random()),
+          color,
+          life: 0.55 + Math.random() * 0.35,
+          maxLife: 0.9
+        });
       }
     }
+  }
+
+  updateResolutionAnimation(now) {
+    const animation = this.resolutionAnimation;
+    if (!animation) return;
+    const step = animation.steps[animation.stepIndex];
+    if (animation.phase === "pop") {
+      const progress = Math.min(1, (now - animation.phaseStartedAt) / POP_DURATION_MS);
+      const scaleOverrides = new Map();
+      const popScale = progress < 0.4
+        ? 1 + Math.sin(progress / 0.4 * Math.PI) * 0.18
+        : Math.max(0.001, 1 - (progress - 0.4) / 0.6);
+      for (const cell of [...step.clearedCells, ...step.garbageCells]) scaleOverrides.set(cell.index, popScale);
+      this.drawBoard(step.beforeBoard, null, null, scaleOverrides, false);
+      if (progress >= 1) {
+        this.spawnClearParticles(step);
+        animation.phase = "drop";
+        animation.phaseStartedAt = now;
+      }
+      return;
+    }
+
+    const progress = Math.min(1, (now - animation.phaseStartedAt) / DROP_DURATION_MS);
+    const eased = 1 - ((1 - progress) ** 3);
+    const positionOverrides = new Map();
+    for (const transition of step.gravityTransitions) {
+      const from = indexToCell(transition.from);
+      const to = indexToCell(transition.to);
+      positionOverrides.set(transition.from, {
+        x: from.x + (to.x - from.x) * eased,
+        y: from.y + (to.y - from.y) * eased
+      });
+    }
+    this.drawBoard(step.afterClearBoard, null, positionOverrides, null, false);
+    if (progress < 1) return;
+
+    animation.stepIndex += 1;
+    if (animation.stepIndex < animation.steps.length) {
+      animation.phase = "pop";
+      animation.phaseStartedAt = now;
+      this.drawBoard(animation.steps[animation.stepIndex].beforeBoard);
+      return;
+    }
+    const finalState = animation.finalState;
+    this.resolutionAnimation = null;
+    this.drawState(finalState);
   }
 
   updateParticles(deltaSeconds) {
@@ -314,6 +404,7 @@ export class MagicBubbleRenderer {
   render(now = performance.now()) {
     const delta = this.lastTime ? Math.min(0.05, (now - this.lastTime) / 1000) : 0;
     this.lastTime = now;
+    this.updateResolutionAnimation(now);
     this.updateParticles(delta);
     this.magicRings[0].rotation.z = now * 0.00008;
     this.magicRings[1].rotation.z = -now * 0.000055;
@@ -345,4 +436,3 @@ export class MagicBubbleRenderer {
     this.renderer.dispose();
   }
 }
-

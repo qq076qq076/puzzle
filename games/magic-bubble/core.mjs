@@ -304,6 +304,7 @@ export function resolveBoard(sourceBoard) {
   while (true) {
     const groups = findClearGroups(board);
     if (!groups.length) break;
+    const beforeBoard = new Uint8Array(board);
     chain += 1;
     const colorIndexes = groups.flatMap((group) => group.indexes);
     const garbageIndexes = collectAdjacentGarbage(board, colorIndexes);
@@ -316,11 +317,24 @@ export function resolveBoard(sourceBoard) {
       for (const index of group.indexes) board[index] = CELL.empty;
     }
     for (const index of garbageIndexes) board[index] = CELL.empty;
+    const afterClearBoard = new Uint8Array(board);
     const gravityTransitions = applyGravity(board);
+    const afterGravityBoard = new Uint8Array(board);
     totalScore += score;
     totalColoredCleared += colorIndexes.length;
     totalGarbageCleared += garbageIndexes.length;
-    steps.push({ chain, groups, clearedCells, garbageCells, colors, score, gravityTransitions });
+    steps.push({
+      chain,
+      groups,
+      clearedCells,
+      garbageCells,
+      colors,
+      score,
+      gravityTransitions,
+      beforeBoard,
+      afterClearBoard,
+      afterGravityBoard
+    });
   }
   return { board, steps, totalScore, finalChain: chain, totalColoredCleared, totalGarbageCleared, clearedByColor };
 }

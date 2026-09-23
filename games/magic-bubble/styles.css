@@ -52,6 +52,12 @@ button:focus-visible, a:focus-visible, canvas:focus-visible {
   isolation: isolate;
 }
 
+.game-app.is-menu > .topbar,
+.game-app.is-menu > .game-layout,
+.game-app.is-menu > .touch-controls {
+  display: none;
+}
+
 .topbar {
   width: min(1180px, 100%);
   min-height: 58px;

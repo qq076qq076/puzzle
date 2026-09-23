@@ -87,6 +87,10 @@ test("盤面解析能產生正確的二連鎖與分數", () => {
   assert.equal(result.steps.length, 2);
   assert.equal(result.totalScore, 360);
   assert.equal(result.totalColoredCleared, 8);
+  assert.equal(result.steps[0].beforeBoard[boardIndex(3, 10)], CELL.red);
+  assert.equal(result.steps[0].afterClearBoard[boardIndex(3, 10)], CELL.empty);
+  assert.equal(result.steps[0].afterGravityBoard[boardIndex(3, 11)], CELL.green);
+  assert.ok(result.steps[0].gravityTransitions.some((transition) => transition.from === boardIndex(3, 9) && transition.to === boardIndex(3, 11)));
   assert.ok(result.board.every((value) => value === CELL.empty));
 });
 
